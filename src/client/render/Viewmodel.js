@@ -43,6 +43,7 @@ export class Viewmodel {
     this.base = new THREE.Vector3(...fp.pos);
     this.baseRot = new THREE.Euler(...(fp.rot || [0, 0, 0]));
     this.holder = new THREE.Group();
+    this.holder.scale.setScalar(0.58);
     this.holder.add(w);
     this.weapon = w;
     w.scale.setScalar(fp.scale || 1);
@@ -68,7 +69,8 @@ export class Viewmodel {
     this.holder.add(this.armR);
     this.armL = arm(0.6, thick);
     if (md.melee) {
-      this.armL.position.set(-0.32, -0.12, 0.25);
+      this.armL.position.set(-0.22, -0.2, -0.05);
+      this.armL.scale.setScalar(0.58);
       this.armL.rotation.set(0.5, -0.3, 0);
       this.rig.add(this.armL);
       this.armL.userData.free = true;
@@ -172,7 +174,7 @@ export class Viewmodel {
     if (st.ability > 0 && this.armL) {
       const a = Math.sin(st.ability * Math.PI);
       p.y -= a * 0.08;
-      if (this.armL.userData.free) this.armL.position.y = -0.12 + a * 0.15;
+      if (this.armL.userData.free) this.armL.position.y = -0.2 + a * 0.12;
     }
     // rotary spin
     if (this.weapon.userData.spin) {

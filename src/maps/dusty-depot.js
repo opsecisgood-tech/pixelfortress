@@ -84,12 +84,14 @@ export function buildDustyDepot() {
 
     // ---------------- CONTAINER YARD ----------------
     s.container(-22, 0, -20, true, 'blue');
-    s.container(-22, 2.6, -20, true, 'yellow');
+    s.container(-20, 2.6, -20, true, 'yellow');
+    s.crate(-24, 2.6, -20, 1.3);
     s.container(-30, 0, -23, false, 'red');
     s.container(-24.5, 0, -6.5, false, 'green');
     s.container(-33.5, 0, 9, true, 'orange');
     s.container(-33.5, 0, 17, true, 'blue');
-    s.container(-33.5, 2.6, 17, true, 'red');
+    s.container(-35.5, 2.6, 17, true, 'red');
+    s.crate(-31.6, 2.6, 17, 1.3);
     s.container(-23, 0, 15, false, 'yellow');
     s.container(-27, 0, 31, true, 'green');
     s.container(-36.5, 0, -15, false, 'green');
@@ -107,14 +109,14 @@ export function buildDustyDepot() {
     s.prop('craneCab', -35, 11.5, -6, {});
     s.prop('craneHook', -35, 6.5, 3, {});
     s.pickup('ammo', 'medium', -28, 0.05, -1);
-    s.pickup('health', 'small', -22, 5.25, -20);
-    s.pickup('health', 'medium', -33.5, 5.25, 17);
+    s.pickup('health', 'small', -20, 5.25, -20);
+    s.pickup('health', 'medium', -35.5, 5.25, 17);
 
     // ---------------- LOADING DOCK (zmin edge) ----------------
     s.aabb(-40, 0, -37.5, -14, 1.6, -30.5, 'concrete');
     s.aabb(-40, 1.6, -30.6, -14, 1.75, -30.4, 'hazard', { col: false, shot: false });
-    s.stairs(-14, 0, -34, '-x', 3, 1.6, 'concrete');
-    s.stairs(-24, 0, -30.5, '-z', 3, 1.6, 'concrete');
+    s.stairs(-12, 0, -34, '-x', 3, 1.6, 'concrete');
+    s.stairs(-24, 0, -28.5, '-z', 3, 1.6, 'concrete');
     // dock roof canopy on posts
     for (const x of [-38, -30, -22]) s.box(x, 1.6, -37, 0.4, 4.2, 0.4, 'metal');
     s.aabb(-40, 5.8, -38, -20, 6.1, -33, 'roof');

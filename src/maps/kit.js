@@ -121,3 +121,56 @@ export function cliffBorder(b, minX, maxX, minZ, maxZ, mat, h = 12, seed = 1, sk
     b.aabb(minX, 0, z, minX + w, hh, z + d, mat);
   }
 }
+
+// Ground slab (top at y) with rectangular holes [x0,z0,x1,z1]. Call OUTSIDE sym() with all holes listed.
+export function slabWithHoles(b, x0, z0, x1, z1, y, thick, mat, holes) {
+  const xs = [x0, x1];
+  for (const h of holes) xs.push(Math.max(x0, Math.min(x1, h[0])), Math.max(x0, Math.min(x1, h[2])));
+  const ux = [...new Set(xs)].sort((a, c) => a - c);
+  for (let i = 0; i < ux.length - 1; i++) {
+    const a = ux[i], c = ux[i + 1];
+    if (c - a < 0.01) continue;
+    const mid = (a + c) / 2;
+    const hs = holes.filter((h) => mid > h[0] && mid < h[2]).map((h) => [h[1], h[3]]).sort((p, q) => p[0] - q[0]);
+    let cz = z0;
+    for (const [hz0, hz1] of hs) {
+      if (hz0 > cz) b.aabb(a, y - thick, cz, c, y, hz0, mat);
+      cz = Math.max(cz, hz1);
+    }
+    if (cz < z1) b.aabb(a, y - thick, cz, c, y, z1, mat);
+  }
+}
+
+/**
+ * Underground tunnel along X at depth (floor at y = -depth). Author inside sym().
+ * entries: [{ x, dir: '+x' | '-x' }] stairwells (3 wide, 5.5 long) rising to the surface in direction dir.
+ * Returns the hole rectangles that must be cut from the ground slab (for both symmetric copies).
+ */
+export function tunnelX(b, xa, xb, z, depth, mats, entries) {
+  const w = 4, ceil = -1;
+  const fy = -depth;
+  b.aabb(xa, fy - 0.5, z - w / 2 - 0.5, xb, fy, z + w / 2 + 0.5, mats.floor);
+  b.aabb(xa, fy, z - w / 2 - 0.5, xb, ceil, z - w / 2, mats.wall);
+  b.aabb(xa, fy, z + w / 2, xb, ceil, z + w / 2 + 0.5, mats.wall);
+  b.aabb(xa - 0.5, fy, z - w / 2, xa, ceil, z + w / 2, mats.wall);
+  b.aabb(xb, fy, z - w / 2, xb + 0.5, ceil, z + w / 2, mats.wall);
+  const holes = [];
+  const run = Math.ceil(depth / 0.42) * 0.5;
+  for (const e of entries) {
+    // stairs ascend from tunnel floor toward the surface
+    if (e.dir === '-x') {
+      b.stairs(e.x, fy, z, '-x', 3, depth, mats.stair);
+      holes.push([e.x - run - 0.6, z - 1.5, e.x + 0.2, z + 1.5]);
+      b.aabb(e.x - 0.2, 0, z - 1.7, e.x + 0.2, 1, z + 1.7, mats.rim);
+    } else {
+      b.stairs(e.x, fy, z, '+x', 3, depth, mats.stair);
+      holes.push([e.x - 0.2, z - 1.5, e.x + run + 0.6, z + 1.5]);
+      b.aabb(e.x - 0.2, 0, z - 1.7, e.x + 0.2, 1, z + 1.7, mats.rim);
+    }
+    b.light(e.x, fy + 2.6, z, mats.light || 0x9fd8ff, 0.8, 9);
+  }
+  for (let x = xa + 4; x < xb; x += 10) b.light(x, fy + 2.7, z, mats.light || 0x9fd8ff, 0.6, 8);
+  b.soundZone(xa, fy, z - w / 2, xb, ceil, z + w / 2, 'interior');
+  // mirror holes too (sym copy)
+  return [...holes, ...holes.map((h) => [-h[2], -h[3], -h[0], -h[1]])];
+}
