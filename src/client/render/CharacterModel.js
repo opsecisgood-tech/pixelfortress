@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { makeCanvas, hexToRgb, rgbStr } from './textures.js';
 import { colorMat, boxGeo } from './blocks.js';
 import { buildWeapon, WEAPON_MODELS } from './WeaponModels.js';
+import { voxelCells, VOXEL_MATERIAL } from './voxel.js';
 import { TEAM_COLORS_HEX, TEAM_DARK_HEX } from '../../shared/constants.js';
 import { getClass } from '../../shared/config/classes.js';
 import { mulberry32, damp } from '../../shared/math.js';
@@ -221,11 +222,151 @@ function paintPart(classId, team, part, dims, gloves) {
     if (classId === 'marksman') band(5, 2, '#5a4a30');
     band(0, 1, st.tc);
   }
+  shadeAtlas(c, L, false);
   const tex = new THREE.CanvasTexture(cv);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   return { tex, L };
+}
+
+// Hand-drawn style shading: lit top rows, shaded bottom rows, darker face borders.
+function shadeAtlas(c, L, alphaOnly) {
+  for (const f of ['top', 'bottom', 'right', 'front', 'left', 'back']) {
+    const [x0, y0, w, h] = L[f];
+    if (!w || !h) continue;
+    const img = c.getImageData(x0, y0, w, h);
+    const d = img.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (alphaOnly && d[i + 3] < 128) continue;
+      let k;
+      if (f === 'top') k = 1.12;
+      else if (f === 'bottom') k = 0.68;
+      else k = 1.1 - 0.26 * (h > 1 ? y / (h - 1) : 0);
+      if (f !== 'top' && f !== 'bottom') {
+        if (x === 0 || x === w - 1) k *= 0.88;
+        if (y === 0) k *= 1.06;
+        if (y === h - 1) k *= 0.85;
+      }
+      if (f === 'left') k *= 0.94;
+      d[i] = Math.min(255, d[i] * k); d[i + 1] = Math.min(255, d[i + 1] * k); d[i + 2] = Math.min(255, d[i + 2] * k);
+    }
+    c.putImageData(img, x0, y0);
+  }
+}
+
+// Outer layer (like a second skin layer): sleeves, coats, vests, boot cuffs, hair fringe.
+function paintOverlay(classId, team, part, dims) {
+  const [w, h, d] = dims;
+  const L = layout(w, h, d);
+  const cv = makeCanvas(L.W, L.H);
+  const c = cv.getContext('2d');
+  const st = styleFor(classId, team);
+  const rnd = mulberry32(classId.length * 53 + part.length * 11 + team * 3);
+  const sides = ['right', 'front', 'left', 'back'];
+  let painted = false;
+  const rows = (y0, n, col, which = sides) => {
+    painted = true;
+    for (const f of which) { const [x, y, fw] = L[f]; noise(c, x, y + y0, fw, n, col, 0.1, rnd); }
+  };
+  const cap = (col, face = 'top') => { painted = true; const [x, y, fw, fh] = L[face]; noise(c, x, y, fw, fh, col, 0.1, rnd); };
+  const sleeve = {
+    scout: [4, st.sleeve], spy: [h - 3, 0x2a2c33], marksman: [6, 0x7a6a48], mechanic: [6, st.tc], doctor: [h - 3, 0xe8ecef],
+    juggernaut: [4, st.tc], incinerator: [h - 4, 0xc9a14a], demolitionist: [7, 0x545c3c],
+  }[classId];
+  if (part === 'arm') {
+    const [n, col] = sleeve;
+    rows(0, n, col); cap(col);
+    rows(n - 1, 1, shadeNum(col, 0.72));
+    if (classId === 'spy') rows(n - 1, 1, st.tc);
+    if (classId === 'incinerator') { rows(h - 4, 4, 0x2e2e2e); cap(0x2e2e2e, 'bottom'); rows(h - 4, 1, st.tc); }
+  } else if (part === 'body') {
+    rows(0, 1, shadeNum(st.shirt, 0.85));
+    const [fx, fy, fw, fh] = L.front;
+    const [bx, by, bw, bh] = L.back;
+    if (classId === 'doctor' || classId === 'spy') {
+      const col = classId === 'doctor' ? 0xe8ecef : 0x2a2c33;
+      rows(0, h, col, ['right', 'left', 'back']); cap(col);
+      noise(c, fx, fy, 2, fh, col, 0.1, rnd); noise(c, fx + fw - 2, fy, 2, fh, col, 0.1, rnd);
+      P(c, fx + 2, fy, 1, 3, shadeNum(col, 0.7)); P(c, fx + fw - 3, fy, 1, 3, shadeNum(col, 0.7));
+      if (classId === 'doctor') { P(c, bx + 2, by + 2, bw - 4, 1, st.tc); P(c, fx, fy + 3, 2, 2, st.tc); }
+      else P(c, fx + 1, fy + 3, 1, 1, st.tc);
+    } else if (classId === 'marksman' || classId === 'demolitionist') {
+      const col = classId === 'marksman' ? 0x5a4a30 : 0x3a4028;
+      noise(c, fx, fy + 1, fw, fh - 3, col, 0.12, rnd); noise(c, bx, by + 1, bw, bh - 3, col, 0.12, rnd);
+      P(c, fx + 1, fy + fh - 5, 2, 2, shadeNum(col, 0.75)); P(c, fx + fw - 3, fy + fh - 5, 2, 2, shadeNum(col, 0.75));
+      P(c, fx + Math.floor(fw / 2) - 1, fy + 2, 2, 2, st.tc);
+    } else if (classId === 'juggernaut') {
+      for (let i = 0; i < fw; i++) { P(c, fx + i, fy + 1 + Math.floor(i * (fh - 4) / fw), 1, 2, i % 2 ? 0xc9a14a : 0x8a6a2a); P(c, bx + i, by + fh - 3 - Math.floor(i * (fh - 4) / fw), 1, 2, i % 2 ? 0xc9a14a : 0x8a6a2a); }
+    } else if (classId === 'mechanic') {
+      rows(h - 3, 2, 0x3a2e22); P(c, fx + 1, fy + h - 3, 2, 2, 0xc0a040); P(c, fx + fw - 3, fy + h - 3, 2, 2, 0x808890);
+    } else if (classId === 'scout') {
+      rows(h - 2, 1, 0x2a2a2a); P(c, fx + 2, fy + 2, 3, 3, 0xffffff); P(c, fx + 3, fy + 3, 1, 1, st.tc);
+    } else if (classId === 'incinerator') {
+      rows(5, 1, 0xa8862e); rows(h - 3, 2, 0x3a3a3a);
+    }
+    painted = true;
+  } else if (part === 'leg') {
+    rows(h - 4, 2, shadeNum(st.pants, 0.8));
+    if (classId === 'mechanic' || classId === 'demolitionist') { const [fx, fy, fw] = L.front; P(c, fx, fy + 5, fw, 2, 0x2e2e2e); }
+  } else if (part === 'head') {
+    if (classId === 'scout' || classId === 'doctor') {
+      const [fx, fy, fw] = L.front;
+      for (let x = 0; x < fw; x++) { const n = classId === 'scout' ? 1 + Math.floor(rnd() * 2.2) : 1; P(c, fx + x, fy, 1, n, st.hair); }
+      for (const f of ['right', 'left']) { const [x0, y0, ww] = L[f]; for (let x = 0; x < ww; x++) P(c, x0 + x, y0, 1, 2 + Math.floor(rnd() * 2), st.hair); }
+      const [bx, by, bw] = L.back; for (let x = 0; x < bw; x++) P(c, bx + x, by, 1, 4 + Math.floor(rnd() * 2), st.hair);
+      cap(st.hair);
+      painted = true;
+    }
+  }
+  if (!painted) return null;
+  shadeAtlas(c, L, true);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return { tex, L };
+}
+
+function shadeNum(hexNum, f) {
+  const r = Math.min(255, ((hexNum >> 16) & 255) * f), g = Math.min(255, ((hexNum >> 8) & 255) * f), b = Math.min(255, (hexNum & 255) * f);
+  return (r << 16) | (g << 8) | b;
+}
+
+const overlayCache = new Map();
+function overlayTexture(classId, team, part, dims) {
+  const key = `${classId}|${team}|${part}`;
+  if (!overlayCache.has(key)) overlayCache.set(key, paintOverlay(classId, team, part, dims));
+  return overlayCache.get(key);
+}
+
+// Messy voxel hair (scout) / short cropped hair (doctor) sitting on top of the head.
+function hairVoxels(classId, team, s, flatten) {
+  const st = styleFor(classId, team);
+  if (classId !== 'scout' && classId !== 'doctor') return null;
+  const rnd = mulberry32(classId === 'scout' ? 4242 : 777);
+  const cells = [];
+  const base = st.hair;
+  const col = (k) => shadeNum(base, k * (0.92 + rnd() * 0.16));
+  const messy = classId === 'scout' && !flatten;
+  for (let x = -1; x <= 8; x++) for (let z = -1; z <= 8; z++) {
+    const ring = x === -1 || x === 8 || z === -1 || z === 8;
+    const top = messy ? 1 + Math.floor(rnd() * 2.6) : 1;
+    if (!ring || !messy || rnd() < 0.9) for (let y = 8; y < 8 + (ring ? Math.max(1, top - 1) : top); y++) cells.push({ x, y, z, c: col(1.05 + (y - 8) * 0.06) });
+    if (ring) {
+      // sides and back come down further; front only a ragged fringe
+      const down = z === 8 ? (messy ? 4 + Math.floor(rnd() * 2) : 3) : z === -1 ? (messy && rnd() < 0.45 ? 2 : 0) : (messy ? 2 + Math.floor(rnd() * 2) : 2);
+      for (let y = 8 - down; y < 8; y++) cells.push({ x, y, z, c: col(0.85) });
+    }
+  }
+  // a few spikes sticking up / out
+  if (messy) for (let i = 0; i < 7; i++) {
+    const x = Math.floor(rnd() * 8), z = Math.floor(rnd() * 7);
+    cells.push({ x, y: 11, z, c: col(1.2) });
+    if (rnd() < 0.5) cells.push({ x, y: 12, z: z + 1, c: col(1.25) });
+  }
+  return voxelCells(cells, s, [-4 * s, 0, -4 * s]);
 }
 
 const texCache = new Map();
@@ -249,8 +390,11 @@ function accessories(classId, team, j, s, prop) {
   const hat = [];
   switch (classId) {
     case 'scout':
-      hat.push(A(j.head, 0, 8.4, 0, 8.4, 1.4, 8.4, tc), A(j.head, 0, 7.9, -5, 7, 0.6, 3, tc));
-      A(j.head, 4.3, 4, 0, 0.8, 3, 3, 0x2a2a2a); A(j.head, 4.4, 4, -2.2, 0.6, 0.6, 2, 0x2a2a2a);
+      A(j.head, 0, 4.6, -4.35, 8.8, 1.8, 0.7, 0x151515);
+      A(j.head, -2, 4.55, -4.75, 2.8, 1.2, 0.15, 0x3f7fd6, true);
+      A(j.head, 2, 4.55, -4.75, 2.8, 1.2, 0.15, 0x3f7fd6, true);
+      A(j.head, -2.6, 4.85, -4.86, 0.8, 0.4, 0.1, 0xd8f0ff, true);
+      A(j.head, 4.45, 4.6, -2.5, 0.5, 0.8, 4, 0x151515); A(j.head, -4.45, 4.6, -2.5, 0.5, 0.8, 4, 0x151515);
       A(j.torso, 0, bh * 0.6, bd / 2 + 1, 5, 6, 2, 0x3d454c);
       break;
     case 'spy':
@@ -269,7 +413,9 @@ function accessories(classId, team, j, s, prop) {
       A(j.torso, 2.5, bh * 0.45 + 5.2, bd / 2 + 2, 1, 3, 1, 0x80868c);
       break;
     case 'doctor':
-      A(j.head, -3, 8.4, -2, 3, 0.4, 3, 0xd8e8f0); // head mirror
+      A(j.head, 0, 7.1, 0, 8.7, 0.6, 8.7, 0x3a3a3a); A(j.head, -2.2, 7.1, -4.6, 2.4, 2.4, 0.5, 0xd8e8f0); A(j.head, -2.2, 7.1, -4.9, 1.2, 1.2, 0.1, 0xffffff, true); // head mirror
+      A(j.head, 0, 4.4, -4.25, 7, 0.4, 0.5, 0x555555); A(j.head, -2, 4.0, -4.3, 2.6, 1.6, 0.4, 0x555555); A(j.head, 2, 4.0, -4.3, 2.6, 1.6, 0.4, 0x555555);
+      A(j.head, -2, 4.0, -4.52, 1.8, 0.9, 0.05, 0xbfe6ff, true); A(j.head, 2, 4.0, -4.52, 1.8, 0.9, 0.05, 0xbfe6ff, true);
       A(j.torso, 0, bh * 0.5, bd / 2 + 1.8, 6, 8, 3.6, 0xe8ecef);
       A(j.torso, 0, bh * 0.5 + 1, bd / 2 + 3.7, 3, 3, 0.4, tc);
       A(j.torso, 0, bh * 0.5 + 1, bd / 2 + 3.75, 1, 3, 0.4, 0xffffff, true);
@@ -342,6 +488,8 @@ function cosmeticsOn(j, s, cos, team, classHat) {
 }
 
 // ---------------------------------------------------------------- rig
+const _qx = new THREE.Quaternion(), _qy = new THREE.Quaternion();
+const _X = new THREE.Vector3(1, 0, 0), _Y = new THREE.Vector3(0, 1, 0);
 export class CharacterRig {
   constructor(classId, team, opts = {}) {
     this.classId = classId;
@@ -370,6 +518,14 @@ export class CharacterRig {
       this.materials.push(mat);
       const m = new THREE.Mesh(atlasGeometry(dims[0], dims[1], dims[2], s, L), mat);
       m.castShadow = true;
+      const ov = overlayTexture(this.classId, this.team, part, dims);
+      if (ov) {
+        const om = new THREE.MeshLambertMaterial({ map: ov.tex, alphaTest: 0.5 });
+        this.materials.push(om);
+        const o = new THREE.Mesh(atlasGeometry(dims[0] + 1, dims[1] + 1, dims[2] + 1, s, ov.L), om);
+        o.castShadow = true;
+        m.add(o);
+      }
       return m;
     };
     const j = {};
@@ -398,8 +554,20 @@ export class CharacterRig {
     j.bodyH = prop.body[1]; j.bodyW = prop.body[0]; j.bodyD = prop.body[2];
     this.j = j;
     this.classHat = accessories(this.classId, this.team, j, s, prop);
+    const hatOn = !!(this.opts.cosmetics?.hat && this.opts.cosmetics.hat !== 'none');
+    const hairGeo = hairVoxels(this.classId, this.team, s, hatOn);
+    if (hairGeo) {
+      const hair = new THREE.Mesh(hairGeo, VOXEL_MATERIAL);
+      hair.castShadow = true;
+      j.head.add(hair);
+    }
     cosmeticsOn(j, s, this.opts.cosmetics, this.team, this.classHat);
     this.armLen = (prop.arm[1] - prop.arm[0] / 2) * s;
+    // both hands converge on a point in front of the chest (rigid arms can't bend)
+    const sx = armX, reachZ = Math.sqrt(Math.max(0.01, this.armLen ** 2 - (sx * 0.85) ** 2));
+    const px = sx * 0.15;
+    this.holdR = Math.atan2(sx - px, reachZ);
+    this.holdL = Math.atan2(sx + px, reachZ);
     this.shoulderY = prop.leg[1] * s + armY;
     void cls;
   }
@@ -412,9 +580,10 @@ export class CharacterRig {
     const w = buildWeapon(weaponId, { team: this.team, skin });
     const def = WEAPON_MODELS[weaponId];
     this.melee = !!def?.melee;
+    this.twoHand = !!(def && !def.melee && Math.abs(def.muzzle3[2]) > 0.35);
     if (this.melee) { w.rotation.x = -Math.PI / 2; w.position.set(0, 0, 0); }
     else { w.rotation.x = -Math.PI / 2; w.position.set(0, 0, 0.02); }
-    const sc = this.classId === 'juggernaut' ? 1.15 : 1;
+    const sc = (this.classId === 'juggernaut' ? 1.15 : 1) * 1.3;
     w.scale.setScalar(sc);
     this.weapon = w;
     this.j.handR.add(w);
@@ -442,7 +611,7 @@ export class CharacterRig {
     a.crouch = damp(a.crouch, st.crouch ? 1 : 0, k, dt);
     a.air = damp(a.air, st.grounded ? 0 : 1, 10, dt);
     if (a.air > 0.05) { legL = -0.7 * a.air + (st.vy < 0 ? 0.3 : 0); legR = 0.35 * a.air; }
-    if (a.crouch > 0.05) { legL = legL * 0.4 - 0.9 * a.crouch; legR = legR * 0.4 + 0.5 * a.crouch; }
+    if (a.crouch > 0.05) { legL = legL * 0.3 - 0.62 * a.crouch; legR = legR * 0.3 + 0.62 * a.crouch; }
     a.legL = damp(a.legL, legL, k, dt);
     a.legR = damp(a.legR, legR, k, dt);
     j.legL.rotation.x = a.legL;
@@ -451,7 +620,9 @@ export class CharacterRig {
     a.land = Math.max(0, a.land - dt * 4);
     const bob = moving ? Math.abs(Math.sin(a.phase)) * 0.05 * (heavy ? 0.7 : 1) : Math.sin(performance.now() / 600) * 0.008;
     const baseHip = this.prop.leg[1] * this.scale;
-    j.hips.position.y = baseHip - a.crouch * baseHip * 0.32 - a.land * 0.12 + bob;
+    // keep feet on the ground: rigid legs swung by angle t reach baseHip*cos(t)
+    const reach = Math.cos(Math.min(1.2, Math.max(Math.abs(a.legL), Math.abs(a.legR))));
+    j.hips.position.y = baseHip * (1 - (a.crouch + a.land * 0.4) * (1 - reach)) + bob * (1 - a.crouch);
     // torso lean
     const lean = (running ? 0.18 : moving ? 0.08 : 0) + a.crouch * 0.35 + (heavy && st.spun ? 0.1 : 0);
     a.torsoX = damp(a.torsoX, -lean, 10, dt);
@@ -479,10 +650,10 @@ export class CharacterRig {
       lx = 0.3 + armSwing; ly = 0; lz = -0.1;
     } else {
       rx = Math.PI / 2 + pitch - a.kick * 0.25;
-      lx = Math.PI / 2 + pitch - a.kick * 0.15;
-      ly = -0.55;
+      lx = Math.PI / 2 + pitch - a.kick * 0.15 - 0.08;
+      ly = -this.holdL;
       lz = 0;
-      ry = 0.08;
+      ry = this.holdR;
       if (st.reloading) {
         a.reload += dt;
         lx = Math.PI / 2 + pitch - 0.6 + Math.sin(a.reload * 9) * 0.15;
@@ -495,6 +666,14 @@ export class CharacterRig {
     a.armRx = damp(a.armRx, rx, 18, dt);
     a.armLx = damp(a.armLx, lx, 18, dt);
     j.armR.rotation.set(a.armRx, ry, rz);
+    // cancel the arm's inward yaw on the weapon so it always points where the player aims:
+    // hand = Rx(rx)^-1 * Ry(-ry) * Rx(rx)
+    if (this.melee) j.handR.quaternion.identity();
+    else {
+      _qx.setFromAxisAngle(_X, a.armRx);
+      _qy.setFromAxisAngle(_Y, -ry);
+      j.handR.quaternion.copy(_qx).invert().multiply(_qy).multiply(_qx);
+    }
     j.armL.rotation.set(a.armLx, ly, lz);
     if (this.weapon && this.weapon.userData.spin) {
       a.spin = damp(a.spin, st.spun ? (st.firing ? 30 : 12) : 0, 4, dt);
@@ -536,6 +715,33 @@ function poseAngles(pose, t) {
     case 'dab': return [2.9, 1.2, 0.2, -1.2];
     default: return [0.2, 0.2, 0, 0];
   }
+}
+
+// First-person arm: same painted skin and sleeve overlay as the third-person model.
+// Hand end at the origin, sleeve extends toward +Z (toward the camera).
+export function buildArmMesh(classId, team, gloves, len) {
+  const prop = PROPORTIONS[classId] || PROPORTIONS.marksman;
+  const dims = prop.arm;
+  const s = len / dims[1];
+  const g = new THREE.Group();
+  const { tex, L } = partTexture(classId, team, 'arm', dims, gloves);
+  const mats = [];
+  const base = new THREE.MeshLambertMaterial({ map: tex });
+  mats.push(base);
+  const m = new THREE.Mesh(atlasGeometry(dims[0], dims[1], dims[2], s, L), base);
+  const ov = overlayTexture(classId, team, 'arm', dims);
+  if (ov) {
+    const om = new THREE.MeshLambertMaterial({ map: ov.tex, alphaTest: 0.5 });
+    mats.push(om);
+    m.add(new THREE.Mesh(atlasGeometry(dims[0] + 1, dims[1] + 1, dims[2] + 1, s, ov.L), om));
+  }
+  m.rotation.x = Math.PI / 2;
+  m.position.z = len / 2 - dims[0] * s * 0.3;
+  // slimmer cross-section in first person so the arm frames the weapon instead of covering it
+  g.scale.set(0.5, 0.5, 1);
+  g.add(m);
+  g.userData.thick = dims[0] * s * 0.5;
+  return g;
 }
 
 export { PROPORTIONS };

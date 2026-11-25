@@ -3,7 +3,7 @@
 // recoil kick per weapon, magazine & shell reloads, melee swings, rotary spin, ability gestures, scope.
 import * as THREE from 'three';
 import { buildWeapon, WEAPON_MODELS } from './WeaponModels.js';
-import { colorMat, boxGeo } from './blocks.js';
+import { buildArmMesh } from './CharacterModel.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 import { WEAPONS } from '../../shared/config/weapons.js';
 import { damp } from '../../shared/math.js';
@@ -18,10 +18,12 @@ export class Viewmodel {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(66, 1, 0.01, 10);
     this.scene.add(this.camera);
-    const amb = new THREE.HemisphereLight(0xffffff, 0x666666, 1.6);
-    const dir = new THREE.DirectionalLight(0xffffff, 1.6);
+    const amb = new THREE.HemisphereLight(0xffffff, 0x777777, 1.9);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.4);
     dir.position.set(0.5, 1, 0.3);
-    this.scene.add(amb, dir);
+    const fill = new THREE.DirectionalLight(0xffffff, 1.3);
+    fill.position.set(-0.6, 0.4, 1);
+    this.scene.add(amb, dir, fill);
     this.light = amb;
     this.rig = new THREE.Group();       // animated root
     this.camera.add(this.rig);
@@ -42,6 +44,11 @@ export class Viewmodel {
     const fp = md.fp || { pos: [0.2, -0.2, -0.4], scale: 1 };
     this.base = new THREE.Vector3(...fp.pos);
     this.baseRot = new THREE.Euler(...(fp.rot || [0, 0, 0]));
+    if (!md.melee) {
+      // angle guns so their pixel-art side profile faces the camera
+      this.baseRot.y += 0.34; this.baseRot.z += 0.05; this.baseRot.x += 0.03;
+      this.base.x += 0.05; this.base.z -= 0.12; this.base.y -= 0.01;
+    }
     this.holder = new THREE.Group();
     this.holder.scale.setScalar(0.58);
     this.holder.add(w);
@@ -49,25 +56,12 @@ export class Viewmodel {
     w.scale.setScalar(fp.scale || 1);
     this.rig.add(this.holder);
     // arms
-    const [sleeve, handCol0] = SLEEVES[classId] || SLEEVES.scout;
-    const handCol = gloves === 'black' ? 0x222222 : gloves === 'team' ? TEAM_COLORS_HEX[team] : gloves === 'gold' ? 0xd8a830 : handCol0;
-    const arm = (len, thick) => {
-      const g = new THREE.Group();
-      const s = new THREE.Mesh(boxGeo(thick, thick, len), colorMat(sleeve));
-      s.position.z = len / 2 + 0.05;
-      const cuff = new THREE.Mesh(boxGeo(thick * 1.08, thick * 1.08, 0.04), colorMat(TEAM_COLORS_HEX[team]));
-      cuff.position.z = 0.07;
-      const h = new THREE.Mesh(boxGeo(thick * 0.95, thick * 0.95, 0.09), colorMat(handCol));
-      h.position.z = 0.0;
-      g.add(s, cuff, h);
-      return g;
-    };
-    const thick = classId === 'juggernaut' ? 0.11 : classId === 'scout' || classId === 'spy' ? 0.07 : 0.085;
-    this.armR = arm(0.6, thick);
+    const arm = () => buildArmMesh(classId, team, gloves, 0.75);
+    this.armR = arm();
     this.armR.position.set(0, -0.03, 0.06);
     this.armR.rotation.set(0.35, 0.25, 0);
     this.holder.add(this.armR);
-    this.armL = arm(0.6, thick);
+    this.armL = arm();
     if (md.melee) {
       this.armL.position.set(-0.22, -0.2, -0.05);
       this.armL.scale.setScalar(0.58);
@@ -75,8 +69,8 @@ export class Viewmodel {
       this.rig.add(this.armL);
       this.armL.userData.free = true;
     } else {
-      const twoHand = (md.muzzle && Math.abs(md.muzzle[2]) > 0.35) || weaponId === 'cyclone';
-      if (twoHand) { this.armL.position.set(-0.01, -0.02, md.muzzle[2] * 0.45); this.armL.rotation.set(0.45, -0.7, 0); }
+      const twoHand = (md.muzzle3 && Math.abs(md.muzzle3[2]) > 0.35) || weaponId === 'cyclone';
+      if (twoHand) { this.armL.position.set(-0.01, -0.04, md.muzzle3[2] * 0.45); this.armL.rotation.set(0.45, -0.7, 0); }
       else { this.armL.position.set(-0.03, -0.08, 0.04); this.armL.rotation.set(0.35, -0.35, 0); }
       this.holder.add(this.armL);
     }

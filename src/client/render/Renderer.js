@@ -109,7 +109,7 @@ export class Renderer {
     // weapons: side view, orthographic
     const wrt = new THREE.WebGLRenderTarget(size, size / 2, { colorSpace: THREE.SRGBColorSpace });
     const ocam = new THREE.OrthographicCamera(-0.6, 0.6, 0.3, -0.3, 0.1, 10);
-    const iconLight = new THREE.DirectionalLight(0xffffff, 2.5); iconLight.position.set(-3, 2, 1); scene.add(iconLight);
+    const iconLight = new THREE.DirectionalLight(0xffffff, 2.5); iconLight.position.set(3, 2, 1); scene.add(iconLight);
     for (const id of WEAPON_IDS) {
       const w = buildWeapon(id, { team: 0 });
       const g = new THREE.Group(); g.add(w);
@@ -123,7 +123,7 @@ export class Renderer {
       ocam.updateProjectionMatrix();
       g.position.sub(c);
       scene.add(g);
-      ocam.position.set(-3, 0, 0); ocam.lookAt(0, 0, 0);
+      ocam.position.set(3, 0, 0); ocam.lookAt(0, 0, 0);
       this.gl.setRenderTarget(wrt);
       this.gl.clear();
       this.gl.render(scene, ocam);
@@ -153,7 +153,7 @@ class Showcase {
     const key = new THREE.DirectionalLight(0xffe6c0, 2.6); key.position.set(-3, 5, -4);
     key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
     const rim = new THREE.DirectionalLight(0x6aa0ff, 1.8); rim.position.set(4, 3, 4);
-    this.teamLight = new THREE.PointLight(0xd8473b, 18, 9, 1.8); this.teamLight.position.set(0, 0.6, -1.2);
+    this.teamLight = new THREE.PointLight(0xd8473b, 7, 6, 1.8); this.teamLight.position.set(0, 0.3, -1.4);
     this.scene.add(hemi, key, rim, this.teamLight);
     this.buildSet();
     this.pivot = new THREE.Group();

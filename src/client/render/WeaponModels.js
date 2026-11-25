@@ -1,221 +1,327 @@
-// Blocky, exaggerated weapon models (original designs). Defined as box lists in metres; the barrel points
-// toward -Z, the grip is near the origin. Melee weapons point up (+Y). Used for viewmodels, third-person
-// models, kill-feed icons and the loadout inspector. Weapon skins recolour palette keys.
+// Voxel weapon models. Every weapon is a small pixel-art sprite (side view, muzzle to the right)
+// drawn with the PixelSprite DSL and extruded into chunky voxels with outlines and edge shading.
+// Guns: barrel points -Z, grip pixel at the origin. Melee: tip points +Y, grip at the origin.
+// Weapon skins recolour palette keys.
 import * as THREE from 'three';
+import { PixelSprite, voxelizeSprite, VOXEL_MATERIAL, VOXEL_GLOW_MATERIAL } from './voxel.js';
 import { colorMat, boxGeo } from './blocks.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 
 const BASE = {
-  metal: 0x5d636b, dark: 0x2b2e33, light: 0xaab1b8, wood: 0x8a5a32, grip: 0x3a2a20, tape: 0xdedede,
-  orange: 0xe2852a, yellow: 0xe2b12a, red: 0xc8402f, green: 0x5aa04a, white: 0xe8ecef, olive: 0x5e6a3a,
-  glow: 0x7fffb0, cyan: 0x3ff2ff, fire: 0xff8a2a, glass: 0x9fd3ea, brass: 0xc9a14a, black: 0x1a1a1a, steel: 0xc8ced4,
+  metal: 0x7c838c, dark: 0x34373d, light: 0xd7dbe0, wood: 0x9a6232, woodDark: 0x6e4220, grip: 0x3d2b20, tape: 0xe6e2d6,
+  orange: 0xe8892c, yellow: 0xe8b32a, red: 0xcc3b2c, green: 0x5aa04a, white: 0xeef0f2, olive: 0x66733d, glow: 0x86ffb8,
+  cyan: 0x52f0ff, fire: 0xffa23a, brass: 0xd0a446, black: 0x222326, steel: 0xc8cdd2, gunmetal: 0x52575f, khaki: 0xb08a54,
 };
+const GLOW = new Set(['glow', 'cyan', 'fire']);
 
 const SKINS = {
   none: {},
-  camo: { metal: 0xa08a5a, dark: 0x6a5a3a, olive: 0x8a7a4a, black: 0x4a3f2a },
-  carbon: { metal: 0x2e2f33, dark: 0x18191b, light: 0x45474c, wood: 0x2a2a2a, olive: 0x232427 },
-  candy: { metal: 0xf2f2f2, dark: 0xd8384a, light: 0xffffff, wood: 0xff9ac8, olive: 0xf2f2f2 },
-  neon: { metal: 0x241a3a, dark: 0x120c1f, light: 0xff3fa8, wood: 0x2a1a44, olive: 0x241a3a, glow: 0xff3fa8, cyan: 0xff3fa8 },
-  gold: { metal: 0xd8a830, dark: 0xa07818, light: 0xffe08a, wood: 0x8a5a20, olive: 0xc89a28, steel: 0xffe08a },
+  camo: { metal: 0xa88f5c, dark: 0x6a5a3a, light: 0xc9b688, olive: 0x8a7a4a, black: 0x4a3f2a, gunmetal: 0x7d6c48, white: 0xd8c8a0 },
+  carbon: { metal: 0x3a3c41, dark: 0x1d1e21, light: 0x5a5d63, wood: 0x2e2f33, woodDark: 0x1f2023, olive: 0x2a2b2f, gunmetal: 0x2f3135, white: 0x5a5d63 },
+  candy: { metal: 0xf4f4f4, dark: 0xd8384a, light: 0xffffff, wood: 0xff9ac8, woodDark: 0xe0609a, olive: 0xf4f4f4, gunmetal: 0xd8384a },
+  neon: { metal: 0x2c2046, dark: 0x140d24, light: 0xff4fb0, wood: 0x34205a, woodDark: 0x22143a, olive: 0x2c2046, glow: 0xff4fb0, cyan: 0xff4fb0, gunmetal: 0x3a2a5e },
+  gold: { metal: 0xe0b03a, dark: 0xa07818, light: 0xffe48a, wood: 0x8a5a20, olive: 0xd0a030, steel: 0xffe48a, gunmetal: 0xc09028, white: 0xffe8a0 },
 };
 
-// [x, y, z, w, h, d, colorKey, opts?]  (centre-anchored boxes)
+// ------------------------------------------------------------------ sprites
+// Each entry: { w, h, px (metres per pixel), grip:[x,y], muzzle:[x,y], draw(S), melee?, fp, spin? }
 export const WEAPON_MODELS = {
+  // ---------------- SCOUT
   scattershot: {
-    muzzle: [0, 0.07, -0.62],
-    parts: [
-      [0, 0.02, 0.22, 0.07, 0.11, 0.3, 'wood'], [0, 0.05, -0.02, 0.09, 0.12, 0.22, 'dark'],
-      [-0.025, 0.08, -0.36, 0.045, 0.045, 0.52, 'metal'], [0.025, 0.08, -0.36, 0.045, 0.045, 0.52, 'metal'],
-      [0, 0.02, -0.3, 0.08, 0.05, 0.3, 'wood'], [0, -0.06, 0.02, 0.05, 0.12, 0.06, 'grip'], [0, 0.12, -0.08, 0.02, 0.02, 0.05, 'light'],
-    ],
-    fp: { pos: [0.2, -0.2, -0.36], scale: 1 },
+    w: 42, h: 16, px: 0.0175, grip: [13, 11], muzzle: [41, 5],
+    draw(S) {
+      S.poly([[8, 6], [11, 3], [26, 3], [26, 9], [12, 9], [8, 8]], 'light', 5);
+      S.rect(14, 4, 8, 3, 'dark', 5); S.rect(15, 5, 6, 1, 'hl', 5);
+      S.poly([[10, 9], [17, 9], [14, 16], [7, 16]], 'wood', 5);
+      S.line(11, 10, 9, 15, 'woodDark'); S.line(14, 10, 12, 15, 'woodDark');
+      S.rect(17, 9, 1, 3, 'dark', 3); S.rect(17, 11, 4, 1, 'dark', 3); S.rect(20, 9, 1, 3, 'dark', 3); S.px(19, 10, 'dark', 1);
+      S.rect(26, 4, 15, 2, 'metal', 3); S.rect(26, 6, 13, 2, 'gunmetal', 3); S.px(39, 3, 'dark', 1);
+      S.rect(29, 6, 7, 3, 'wood', 5); for (const x of [30, 32, 34]) S.line(x, 6, x, 8, 'woodDark');
+    },
+    fp: { pos: [0.2, -0.2, -0.38], scale: 1 },
   },
   sidekick: {
-    muzzle: [0, 0.06, -0.22],
-    parts: [
-      [0, 0.06, -0.06, 0.05, 0.06, 0.28, 'metal'], [0, -0.03, 0.03, 0.045, 0.14, 0.07, 'dark', { rx: 0.2 }],
-      [0, 0.0, -0.03, 0.04, 0.03, 0.08, 'dark'], [0, 0.1, -0.18, 0.012, 0.015, 0.02, 'light'], [0, 0.08, 0.06, 0.03, 0.02, 0.02, 'light'],
-    ],
-    fp: { pos: [0.18, -0.17, -0.32], scale: 1.1 },
+    w: 22, h: 15, px: 0.0145, grip: [6, 10], muzzle: [21, 3],
+    draw(S) {
+      S.rect(4, 2, 17, 4, 'metal', 3); for (const x of [6, 8, 10]) S.px(x, 3, 'dark');
+      S.px(19, 1, 'dark', 1); S.px(5, 1, 'dark', 1);
+      S.rect(4, 6, 13, 2, 'dark', 3);
+      S.poly([[3, 8], [9, 8], [8, 15], [2, 15]], 'black', 3); S.rect(4, 9, 3, 4, 'grip', 3);
+      S.line(9, 8, 9, 10, 'dark', 1); S.line(9, 10, 12, 10, 'dark', 1); S.line(12, 8, 12, 10, 'dark', 1); S.px(10, 9, 'dark', 1);
+    },
+    fp: { pos: [0.18, -0.17, -0.33], scale: 1.1 },
   },
   streetbat: {
-    melee: true,
-    parts: [
-      [0, 0.06, 0, 0.045, 0.16, 0.045, 'tape'], [0, 0.32, 0, 0.055, 0.4, 0.055, 'wood'], [0, 0.62, 0, 0.075, 0.3, 0.075, 'wood'],
-      [0, -0.03, 0, 0.06, 0.02, 0.06, 'dark'], [0, 0.55, 0, 0.078, 0.03, 0.078, 'red'],
-    ],
+    w: 46, h: 8, px: 0.0175, grip: [5, 3], melee: true,
+    draw(S) {
+      S.rect(0, 2, 1, 4, 'dark', 5);
+      S.rect(1, 3, 12, 2, 'tape', 3); for (const x of [3, 6, 9, 12]) S.line(x, 3, x, 4, 'khaki');
+      S.poly([[13, 3], [26, 2], [45, 1], [45, 7], [26, 6], [13, 5]], 'wood', 5);
+      S.line(18, 3, 44, 2, 'hl'); S.rect(28, 2, 2, 4, 'red', 5);
+      S.line(33, 5, 43, 6, 'woodDark');
+    },
     fp: { pos: [0.24, -0.3, -0.42], scale: 1, rot: [-0.25, 0.2, -0.4] },
   },
+  // ---------------- SPY
   silencedpistol: {
-    muzzle: [0, 0.06, -0.42],
-    parts: [
-      [0, 0.06, -0.05, 0.05, 0.06, 0.24, 'dark'], [0, 0.06, -0.3, 0.04, 0.04, 0.22, 'black'], [0, -0.03, 0.03, 0.045, 0.14, 0.07, 'grip', { rx: 0.2 }],
-      [0, 0.1, -0.12, 0.012, 0.015, 0.02, 'light'], [0, 0.0, -0.04, 0.04, 0.025, 0.07, 'dark'],
-    ],
+    w: 32, h: 15, px: 0.0145, grip: [6, 10], muzzle: [31, 4],
+    draw(S) {
+      S.rect(4, 2, 16, 4, 'dark', 3); for (const x of [6, 8]) S.px(x, 3, 'black');
+      S.rect(20, 2, 11, 4, 'black', 5); for (const x of [23, 26, 29]) S.line(x, 2, x, 5, 'gunmetal');
+      S.rect(4, 6, 13, 2, 'gunmetal', 3);
+      S.poly([[3, 8], [9, 8], [8, 15], [2, 15]], 'black', 3); S.rect(4, 9, 3, 4, 'team', 3);
+      S.line(9, 8, 9, 10, 'dark', 1); S.line(9, 10, 12, 10, 'dark', 1); S.line(12, 8, 12, 10, 'dark', 1);
+    },
     fp: { pos: [0.18, -0.17, -0.34], scale: 1.05 },
   },
   revolver: {
-    muzzle: [0, 0.075, -0.36],
-    parts: [
-      [0, 0.075, -0.2, 0.035, 0.035, 0.3, 'metal'], [0, 0.07, -0.02, 0.07, 0.07, 0.1, 'light'], [0, 0.09, 0.05, 0.04, 0.05, 0.1, 'metal'],
-      [0, -0.02, 0.07, 0.045, 0.14, 0.06, 'wood', { rx: 0.35 }], [0, 0.12, -0.33, 0.01, 0.02, 0.02, 'light'], [0, 0.025, 0.0, 0.035, 0.02, 0.05, 'dark'],
-    ],
+    w: 28, h: 16, px: 0.0145, grip: [5, 11], muzzle: [27, 4],
+    draw(S) {
+      S.rect(11, 3, 16, 3, 'metal', 3); S.rect(11, 6, 14, 1, 'gunmetal', 3); S.px(26, 2, 'metal', 1);
+      S.poly([[5, 3], [11, 3], [11, 9], [6, 9], [4, 6]], 'gunmetal', 3);
+      S.rect(7, 4, 5, 5, 'light', 5); S.line(8, 5, 8, 7, 'metal', 5); S.line(10, 5, 10, 7, 'metal', 5);
+      S.px(4, 2, 'dark', 1); S.px(3, 2, 'dark', 1);
+      S.line(8, 9, 8, 11, 'dark', 1); S.line(8, 11, 11, 11, 'dark', 1); S.line(11, 9, 11, 11, 'dark', 1); S.px(9, 10, 'dark', 1);
+      S.poly([[4, 9], [8, 9], [6, 16], [1, 16], [2, 12]], 'wood', 3); S.line(5, 10, 3, 14, 'woodDark'); S.px(4, 12, 'brass');
+    },
     fp: { pos: [0.18, -0.17, -0.33], scale: 1.1 },
   },
   shadowblade: {
-    melee: true,
-    parts: [
-      [0, 0.04, 0, 0.035, 0.12, 0.045, 'dark'], [0, 0.11, 0, 0.09, 0.02, 0.05, 'metal'], [0, 0.24, 0, 0.015, 0.24, 0.045, 'steel'],
-      [0, 0.37, 0.008, 0.015, 0.04, 0.025, 'steel'], [0, 0.04, 0, 0.038, 0.03, 0.048, 'team'],
-    ],
-    fp: { pos: [0.22, -0.22, -0.36], scale: 1.1, rot: [-0.9, 0.1, -0.2] },
+    w: 30, h: 9, px: 0.0145, grip: [4, 4], melee: true,
+    draw(S) {
+      S.rect(0, 3, 9, 3, 'black', 3); S.px(2, 4, 'gunmetal'); S.px(5, 4, 'gunmetal'); S.rect(7, 3, 1, 3, 'team', 3);
+      S.rect(9, 1, 2, 7, 'dark', 5);
+      S.poly([[11, 2], [25, 2], [29, 4], [25, 7], [11, 7]], 'steel', 3);
+      S.line(12, 6, 25, 6, 'hl'); S.line(12, 3, 22, 3, 'light');
+      for (let x = 12; x < 20; x += 2) S.px(x, 2, 'dark');
+    },
+    fp: { pos: [0.22, -0.22, -0.36], scale: 1.15, rot: [-0.9, 0.1, -0.2] },
   },
+  // ---------------- MARKSMAN
   longshot: {
-    muzzle: [0, 0.06, -0.95],
-    scope: true,
-    parts: [
-      [0, 0.0, 0.3, 0.07, 0.12, 0.34, 'wood'], [0, 0.04, -0.02, 0.07, 0.09, 0.34, 'wood'], [0, 0.06, -0.55, 0.035, 0.035, 0.75, 'metal'],
-      [0, 0.15, -0.05, 0.06, 0.06, 0.34, 'dark'], [0, 0.15, -0.23, 0.075, 0.075, 0.03, 'dark'], [0, 0.15, 0.12, 0.07, 0.07, 0.03, 'dark'],
-      [0, 0.1, -0.05, 0.03, 0.04, 0.05, 'dark'], [0, -0.06, 0.05, 0.045, 0.1, 0.05, 'grip'], [0.045, 0.06, 0.05, 0.04, 0.02, 0.02, 'light'],
-      [0, 0.15, -0.235, 0.05, 0.05, 0.02, 'cyan', { glow: true }],
-    ],
+    w: 60, h: 16, px: 0.0168, grip: [17, 10], muzzle: [59, 6], scope: true,
+    draw(S) {
+      S.poly([[0, 7], [4, 4], [19, 4], [19, 9], [11, 10], [3, 13], [0, 12]], 'wood', 5);
+      S.line(3, 8, 10, 6, 'woodDark'); S.rect(0, 7, 1, 5, 'dark', 5);
+      S.poly([[14, 9], [19, 9], [18, 14], [13, 14]], 'wood', 5);
+      S.rect(19, 4, 10, 4, 'dark', 3); S.px(23, 3, 'light', 1); S.px(24, 3, 'light', 1);
+      S.rect(29, 5, 30, 2, 'metal', 3); S.rect(56, 4, 3, 4, 'dark', 3);
+      S.rect(29, 7, 12, 2, 'wood', 3);
+      S.rect(18, 1, 13, 2, 'black', 3); S.rect(30, 0, 3, 4, 'black', 5); S.rect(16, 0, 2, 4, 'black', 5);
+      S.rect(31, 1, 1, 2, 'cyan', 5); S.rect(20, 3, 2, 1, 'dark', 3); S.rect(27, 3, 2, 1, 'dark', 3);
+      S.line(19, 8, 19, 11, 'dark', 1); S.line(19, 11, 22, 11, 'dark', 1);
+    },
     fp: { pos: [0.19, -0.2, -0.42], scale: 1 },
   },
   compactsmg: {
-    muzzle: [0, 0.07, -0.36],
-    parts: [
-      [0, 0.06, -0.08, 0.07, 0.1, 0.32, 'dark'], [0, 0.07, -0.29, 0.035, 0.035, 0.1, 'metal'], [0, -0.07, -0.1, 0.04, 0.16, 0.05, 'metal'],
-      [0, -0.04, 0.05, 0.045, 0.12, 0.05, 'grip', { rx: 0.25 }], [0, 0.03, 0.17, 0.03, 0.03, 0.14, 'metal'], [0, 0.13, -0.08, 0.02, 0.025, 0.1, 'light'],
-    ],
+    w: 30, h: 18, px: 0.0155, grip: [8, 10], muzzle: [29, 4],
+    draw(S) {
+      S.rect(5, 3, 18, 5, 'dark', 3); S.line(7, 2, 20, 2, 'gunmetal', 1);
+      S.rect(23, 4, 6, 2, 'metal', 3); S.rect(27, 3, 2, 4, 'black', 3);
+      S.poly([[13, 8], [17, 8], [18, 17], [14, 17]], 'metal', 3);
+      S.poly([[6, 8], [10, 8], [9, 15], [5, 15]], 'grip', 3);
+      S.rect(0, 4, 5, 1, 'metal', 1); S.rect(0, 4, 1, 5, 'metal', 1);
+      S.rect(9, 4, 4, 1, 'team', 3);
+    },
     fp: { pos: [0.19, -0.2, -0.36], scale: 1 },
   },
   utilityknife: {
-    melee: true,
-    parts: [[0, 0.06, 0, 0.035, 0.16, 0.05, 'yellow'], [0, 0.06, 0, 0.037, 0.03, 0.052, 'dark'], [0, 0.18, 0.008, 0.012, 0.09, 0.035, 'steel']],
-    fp: { pos: [0.22, -0.22, -0.34], scale: 1.2, rot: [-0.9, 0.1, -0.2] },
+    w: 22, h: 7, px: 0.013, grip: [5, 3], melee: true,
+    draw(S) {
+      S.rect(0, 1, 13, 5, 'yellow', 3); S.rect(3, 2, 7, 3, 'dark', 3); S.px(11, 3, 'gunmetal');
+      S.poly([[13, 2], [19, 2], [22, 4], [13, 5]], 'steel', 1); S.line(14, 4, 19, 4, 'hl');
+    },
+    fp: { pos: [0.22, -0.22, -0.34], scale: 1.25, rot: [-0.9, 0.1, -0.2] },
   },
+  // ---------------- MECHANIC
   rivetgun: {
-    muzzle: [0, 0.08, -0.46],
-    parts: [
-      [0, 0.08, -0.12, 0.1, 0.12, 0.4, 'yellow'], [0, 0.08, -0.38, 0.06, 0.06, 0.12, 'dark'], [0, 0.18, -0.1, 0.07, 0.07, 0.3, 'metal'],
-      [0, -0.04, 0.02, 0.05, 0.14, 0.06, 'grip', { rx: 0.2 }], [0, -0.06, -0.2, 0.06, 0.1, 0.12, 'dark'], [0.06, 0.08, -0.12, 0.02, 0.06, 0.2, 'orange'],
-      [0, 0.08, -0.45, 0.04, 0.04, 0.02, 'fire', { glow: true }],
-    ],
+    w: 34, h: 18, px: 0.0155, grip: [10, 11], muzzle: [33, 6],
+    draw(S) {
+      S.rect(6, 3, 18, 6, 'yellow', 5); S.line(6, 6, 23, 6, 'orange');
+      S.rect(24, 4, 9, 4, 'dark', 3); S.rect(31, 3, 2, 6, 'gunmetal', 3);
+      S.rect(8, 0, 12, 3, 'metal', 5); S.rect(8, 0, 1, 3, 'dark', 5); S.rect(19, 0, 1, 3, 'dark', 5);
+      S.poly([[8, 9], [13, 9], [12, 17], [7, 17]], 'grip', 5);
+      S.rect(16, 9, 6, 5, 'dark', 3); for (const x of [17, 19, 21]) S.px(x, 10, 'brass');
+      S.px(33, 6, 'fire', 1);
+    },
     fp: { pos: [0.2, -0.21, -0.36], scale: 1 },
   },
   constructor: {
-    muzzle: [0, 0.1, -0.38],
-    parts: [
-      [0, 0.06, -0.08, 0.12, 0.12, 0.28, 'yellow'], [0, 0.08, -0.28, 0.07, 0.07, 0.14, 'dark'], [0, 0.08, -0.37, 0.09, 0.09, 0.04, 'cyan', { glow: true }],
-      [0.07, 0.15, -0.0, 0.015, 0.2, 0.015, 'dark'], [0.07, 0.26, 0.0, 0.03, 0.03, 0.03, 'red', { glow: true }],
-      [0, -0.05, 0.03, 0.05, 0.13, 0.06, 'grip'], [-0.07, 0.07, -0.08, 0.02, 0.08, 0.16, 'cyan', { glow: true }],
-    ],
+    w: 30, h: 20, px: 0.0155, grip: [9, 15], muzzle: [29, 9],
+    draw(S) {
+      S.rect(6, 6, 14, 7, 'yellow', 5); S.rect(6, 6, 14, 1, 'orange', 5);
+      S.rect(20, 7, 6, 5, 'dark', 3); S.rect(26, 6, 3, 7, 'cyan', 3);
+      S.line(16, 5, 16, 1, 'dark', 1); S.px(16, 0, 'fire', 1);
+      S.rect(8, 8, 9, 2, 'cyan', 5);
+      S.poly([[8, 13], [12, 13], [11, 19], [7, 19]], 'grip', 3);
+    },
     fp: { pos: [0.2, -0.2, -0.35], scale: 1 },
   },
   wrench: {
-    melee: true,
-    parts: [
-      [0, 0.15, 0, 0.04, 0.36, 0.025, 'metal'], [0, 0.36, 0, 0.12, 0.08, 0.03, 'metal'], [0.035, 0.42, 0, 0.035, 0.06, 0.03, 'metal'],
-      [-0.035, 0.42, 0, 0.035, 0.06, 0.03, 'metal'], [0, 0.04, 0, 0.05, 0.1, 0.035, 'red'],
-    ],
+    w: 36, h: 14, px: 0.016, grip: [4, 7], melee: true,
+    draw(S) {
+      S.rect(0, 5, 26, 4, 'metal', 3); S.rect(0, 5, 9, 4, 'red', 3); S.line(10, 6, 25, 6, 'hl');
+      S.poly([[25, 3], [29, 0], [35, 0], [35, 14], [29, 14], [25, 11]], 'metal', 3);
+      S.clear(30, 4, 6, 6); S.px(29, 7, 'gunmetal');
+    },
     fp: { pos: [0.24, -0.28, -0.4], scale: 1.1, rot: [-0.3, 0.2, -0.4] },
   },
+  // ---------------- DOCTOR
   syringelauncher: {
-    muzzle: [0, 0.08, -0.5],
-    parts: [
-      [0, 0.08, -0.15, 0.09, 0.09, 0.56, 'white'], [0, 0.08, -0.45, 0.06, 0.06, 0.1, 'metal'],
-      [0.055, 0.13, -0.15, 0.04, 0.04, 0.34, 'glow', { glow: true }], [-0.055, 0.13, -0.15, 0.04, 0.04, 0.34, 'glow', { glow: true }],
-      [0, -0.04, 0.02, 0.05, 0.13, 0.06, 'grip'], [0, 0.0, 0.15, 0.06, 0.06, 0.12, 'red'],
-    ],
+    w: 40, h: 16, px: 0.016, grip: [9, 11], muzzle: [39, 6],
+    draw(S) {
+      S.rect(6, 4, 26, 5, 'white', 5); S.line(7, 8, 31, 8, 'light');
+      S.rect(32, 5, 7, 3, 'metal', 3); S.px(38, 4, 'dark', 1);
+      for (const x0 of [10, 19]) { S.rect(x0, 1, 6, 3, 'glow', 3); S.rect(x0, 1, 1, 3, 'dark', 3); S.rect(x0 + 5, 1, 1, 3, 'dark', 3); }
+      S.poly([[8, 9], [12, 9], [11, 15], [7, 15]], 'grip', 3);
+      S.rect(0, 3, 6, 7, 'red', 5); S.rect(2, 5, 2, 3, 'white', 5);
+    },
     fp: { pos: [0.2, -0.21, -0.38], scale: 1 },
   },
   medbeam: {
-    muzzle: [0, 0.09, -0.4],
-    parts: [
-      [0, 0.08, -0.08, 0.12, 0.12, 0.32, 'white'], [0, 0.09, -0.3, 0.07, 0.07, 0.14, 'metal'], [0, 0.09, -0.38, 0.09, 0.09, 0.03, 'glow', { glow: true }],
-      [0, 0.17, -0.06, 0.06, 0.05, 0.18, 'red'], [0, 0.17, -0.06, 0.02, 0.06, 0.08, 'white'], [0, -0.04, 0.03, 0.05, 0.13, 0.06, 'grip'],
-      [0, 0.04, 0.16, 0.1, 0.18, 0.1, 'metal'],
-    ],
+    w: 34, h: 18, px: 0.0155, grip: [9, 14], muzzle: [33, 8],
+    draw(S) {
+      S.rect(6, 5, 16, 7, 'white', 5);
+      S.rect(11, 6, 5, 5, 'red', 5); S.line(13, 6, 13, 10, 'white'); S.line(11, 8, 15, 8, 'white');
+      S.rect(22, 6, 7, 5, 'metal', 3); S.rect(29, 5, 3, 7, 'glow', 3);
+      S.rect(0, 4, 6, 9, 'metal', 5); S.rect(0, 4, 6, 1, 'team', 5);
+      S.poly([[8, 12], [12, 12], [11, 18], [7, 18]], 'grip', 3);
+    },
     fp: { pos: [0.2, -0.2, -0.35], scale: 1 },
   },
   surgicalsaw: {
-    melee: true,
-    parts: [[0, 0.06, 0, 0.04, 0.16, 0.05, 'dark'], [0, 0.26, 0.02, 0.012, 0.26, 0.09, 'steel'], [0, 0.26, -0.03, 0.014, 0.26, 0.02, 'metal'], [0, 0.06, 0, 0.042, 0.03, 0.052, 'red']],
+    w: 32, h: 12, px: 0.0145, grip: [4, 6], melee: true,
+    draw(S) {
+      S.rect(0, 4, 9, 4, 'dark', 3); S.rect(6, 4, 1, 4, 'red', 3);
+      S.rect(9, 2, 22, 6, 'steel', 1); S.line(10, 3, 29, 3, 'hl');
+      for (let x = 9; x < 31; x += 2) S.px(x, 8, 'steel', 1);
+      S.rect(9, 1, 22, 1, 'metal', 3);
+    },
     fp: { pos: [0.22, -0.24, -0.38], scale: 1.1, rot: [-0.7, 0.15, -0.25] },
   },
+  // ---------------- JUGGERNAUT
   cyclone: {
-    muzzle: [0, 0.02, -0.92],
-    spin: [0, 0.02, -0.55],
-    parts: [
-      [0, 0.02, -0.05, 0.22, 0.24, 0.42, 'dark'], [0, 0.17, -0.05, 0.08, 0.06, 0.3, 'metal'], [0, -0.13, 0.1, 0.06, 0.12, 0.08, 'grip'],
-      [0.13, 0.02, -0.02, 0.06, 0.2, 0.22, 'olive'], [0, 0.02, -0.26, 0.26, 0.26, 0.04, 'metal'], [0, 0.02, -0.85, 0.24, 0.24, 0.04, 'metal'],
-      [0, 0.15, 0.2, 0.14, 0.1, 0.12, 'brass'],
-    ],
-    spinParts: (() => {
-      const a = [];
-      for (let i = 0; i < 6; i++) { const t = i / 6 * Math.PI * 2; a.push([Math.cos(t) * 0.07, Math.sin(t) * 0.07, 0, 0.04, 0.04, 0.62, 'metal']); }
-      a.push([0, 0, 0, 0.05, 0.05, 0.66, 'dark']);
-      return a;
-    })(),
+    w: 58, h: 24, px: 0.0175, grip: [5, 13], muzzle: [57, 11], spin: { from: 25, to: 56, y: 11, r: 4 },
+    draw(S) {
+      S.rect(4, 4, 19, 13, 'dark', 7); S.rect(4, 4, 19, 1, 'gunmetal', 7);
+      S.rect(7, 17, 11, 6, 'olive', 5); S.rect(8, 18, 9, 1, 'brass', 5);
+      S.rect(9, 1, 10, 1, 'metal', 3); S.rect(9, 1, 1, 3, 'metal', 3); S.rect(18, 1, 1, 3, 'metal', 3);
+      S.rect(23, 5, 2, 12, 'metal', 7);
+      S.poly([[1, 10], [5, 10], [5, 17], [2, 17]], 'grip', 3);
+      S.rect(10, 8, 6, 4, 'team', 7);
+    },
     fp: { pos: [0.2, -0.28, -0.5], scale: 1 },
   },
   breacher: {
-    muzzle: [0, 0.07, -0.66],
-    parts: [
-      [0, 0.02, 0.24, 0.07, 0.12, 0.28, 'dark'], [0, 0.05, -0.02, 0.08, 0.1, 0.24, 'metal'], [0, 0.08, -0.38, 0.045, 0.045, 0.56, 'metal'],
-      [0, 0.02, -0.3, 0.07, 0.06, 0.18, 'wood'], [0, -0.06, 0.04, 0.05, 0.12, 0.06, 'grip'],
-    ],
+    w: 46, h: 16, px: 0.0175, grip: [14, 11], muzzle: [45, 5],
+    draw(S) {
+      S.poly([[0, 6], [9, 5], [12, 9], [2, 12], [0, 11]], 'dark', 5); S.rect(0, 6, 1, 5, 'black', 5);
+      S.poly([[9, 4], [26, 3], [26, 9], [12, 9]], 'black', 5); S.rect(15, 5, 7, 1, 'gunmetal', 5);
+      S.poly([[11, 9], [17, 9], [15, 15], [10, 15]], 'grip', 5);
+      S.rect(26, 4, 19, 2, 'metal', 3); S.rect(26, 6, 16, 2, 'gunmetal', 3); S.px(43, 3, 'dark', 1);
+      S.rect(29, 6, 8, 3, 'wood', 5); for (const x of [30, 32, 34, 36]) S.line(x, 6, x, 8, 'woodDark');
+      S.line(17, 9, 17, 11, 'dark', 1); S.line(17, 11, 20, 11, 'dark', 1);
+    },
     fp: { pos: [0.2, -0.22, -0.38], scale: 1 },
   },
   foundryhammer: {
-    melee: true,
-    parts: [[0, 0.3, 0, 0.05, 0.64, 0.05, 'wood'], [0, 0.66, 0, 0.12, 0.14, 0.3, 'dark'], [0, 0.66, 0, 0.13, 0.04, 0.31, 'orange'], [0, 0.03, 0, 0.06, 0.08, 0.06, 'grip']],
+    w: 44, h: 17, px: 0.0175, grip: [4, 8], melee: true,
+    draw(S) {
+      S.rect(0, 7, 34, 3, 'wood', 3); S.rect(0, 7, 8, 3, 'grip', 3); S.line(9, 7, 33, 7, 'hl');
+      S.rect(34, 0, 9, 17, 'dark', 7); S.rect(34, 7, 9, 3, 'orange', 7); S.rect(34, 0, 9, 1, 'gunmetal', 7);
+    },
     fp: { pos: [0.26, -0.34, -0.46], scale: 1, rot: [-0.2, 0.25, -0.45] },
   },
+  // ---------------- INCINERATOR
   thermal: {
-    muzzle: [0, 0.06, -0.72],
-    flame: true,
-    parts: [
-      [0, 0.06, -0.3, 0.08, 0.08, 0.66, 'metal'], [0, 0.06, -0.66, 0.11, 0.11, 0.08, 'dark'], [0, -0.02, -0.08, 0.13, 0.18, 0.3, 'red'],
-      [0, 0.12, -0.12, 0.04, 0.06, 0.2, 'dark'], [0, -0.07, 0.08, 0.05, 0.12, 0.06, 'grip'], [0, 0.12, -0.6, 0.025, 0.025, 0.06, 'fire', { glow: true }],
-      [0, -0.05, -0.38, 0.05, 0.08, 0.06, 'dark'],
-    ],
+    w: 52, h: 20, px: 0.0168, grip: [12, 15], muzzle: [51, 9], flame: true,
+    draw(S) {
+      S.rect(6, 5, 16, 9, 'red', 7); S.rect(6, 5, 16, 1, 'orange', 7); S.rect(9, 6, 2, 7, 'dark', 7); S.rect(17, 6, 2, 7, 'dark', 7);
+      S.rect(22, 8, 24, 3, 'metal', 3); S.rect(30, 7, 2, 5, 'dark', 3); S.rect(38, 7, 2, 5, 'dark', 3);
+      S.rect(46, 6, 5, 7, 'dark', 5); S.px(48, 5, 'fire', 1);
+      S.poly([[10, 14], [15, 14], [14, 20], [9, 20]], 'grip', 3);
+      S.line(4, 9, 0, 13, 'black', 3); S.rect(12, 3, 4, 2, 'gunmetal', 3);
+    },
     fp: { pos: [0.21, -0.24, -0.42], scale: 1 },
   },
   flarelauncher: {
-    muzzle: [0, 0.08, -0.3],
-    parts: [[0, 0.08, -0.12, 0.07, 0.07, 0.32, 'orange'], [0, 0.08, -0.28, 0.08, 0.08, 0.04, 'dark'], [0, -0.03, 0.04, 0.05, 0.14, 0.07, 'orange', { rx: 0.25 }], [0, 0.12, 0.02, 0.03, 0.03, 0.06, 'dark']],
+    w: 24, h: 16, px: 0.0155, grip: [6, 10], muzzle: [23, 5],
+    draw(S) {
+      S.rect(8, 3, 15, 5, 'orange', 5); S.rect(21, 2, 2, 7, 'dark', 5); S.line(9, 4, 20, 4, 'hl');
+      S.rect(4, 3, 5, 6, 'dark', 5); S.px(3, 2, 'dark', 1);
+      S.poly([[4, 8], [9, 8], [7, 16], [2, 16]], 'orange', 5); S.line(5, 10, 4, 14, 'red');
+      S.line(9, 8, 9, 10, 'dark', 1); S.line(9, 10, 12, 10, 'dark', 1);
+    },
     fp: { pos: [0.18, -0.18, -0.33], scale: 1.15 },
   },
   furnaceaxe: {
-    melee: true,
-    parts: [[0, 0.28, 0, 0.045, 0.6, 0.045, 'wood'], [0, 0.56, -0.06, 0.03, 0.16, 0.16, 'red'], [0, 0.56, -0.15, 0.02, 0.2, 0.04, 'steel'], [0, 0.6, 0.06, 0.03, 0.06, 0.08, 'dark']],
+    w: 40, h: 18, px: 0.0168, grip: [4, 9], melee: true,
+    draw(S) {
+      S.rect(0, 8, 33, 3, 'wood', 3); S.rect(0, 8, 7, 3, 'grip', 3); S.line(8, 8, 32, 8, 'hl');
+      S.poly([[29, 6], [35, 1], [39, 0], [39, 18], [35, 17], [29, 12]], 'red', 3);
+      S.line(39, 0, 39, 17, 'steel', 3); S.line(38, 1, 38, 16, 'steel', 3);
+      S.rect(25, 7, 4, 5, 'dark', 3);
+    },
     fp: { pos: [0.25, -0.32, -0.44], scale: 1, rot: [-0.25, 0.2, -0.45] },
   },
+  // ---------------- DEMOLITIONIST
   blastcaster: {
-    muzzle: [0, 0.1, -0.72],
-    parts: [
-      [0, 0.1, -0.16, 0.15, 0.15, 1.0, 'olive'], [0, 0.1, -0.67, 0.18, 0.18, 0.08, 'dark'], [0, 0.1, 0.36, 0.18, 0.18, 0.06, 'dark'],
-      [0.1, 0.18, -0.1, 0.05, 0.07, 0.12, 'dark'], [0.1, 0.18, -0.17, 0.04, 0.04, 0.02, 'red', { glow: true }],
-      [0, -0.04, 0.0, 0.05, 0.13, 0.06, 'grip'], [0, -0.03, -0.28, 0.05, 0.11, 0.06, 'grip'], [0, 0.1, -0.4, 0.155, 0.04, 0.155, 'yellow'],
-    ],
+    w: 60, h: 19, px: 0.0175, grip: [21, 14], muzzle: [59, 7],
+    draw(S) {
+      S.rect(4, 4, 51, 7, 'olive', 7); S.line(5, 5, 54, 5, 'hl');
+      S.rect(54, 2, 5, 11, 'dark', 7); S.rect(0, 2, 5, 11, 'dark', 7);
+      S.rect(40, 4, 2, 7, 'yellow', 7); S.rect(28, 1, 6, 3, 'dark', 3); S.px(32, 1, 'fire', 1);
+      S.rect(19, 11, 4, 6, 'grip', 3); S.rect(34, 11, 4, 6, 'grip', 3);
+      S.rect(10, 6, 6, 3, 'team', 7);
+    },
     fp: { pos: [0.22, -0.22, -0.32], scale: 1 },
   },
   chargelauncher: {
-    muzzle: [0, 0.08, -0.5],
-    parts: [
-      [0, 0.08, -0.3, 0.09, 0.09, 0.36, 'metal'], [0, 0.06, -0.02, 0.18, 0.18, 0.16, 'dark'], [0, 0.06, -0.02, 0.19, 0.06, 0.06, 'brass'],
-      [0, -0.02, 0.18, 0.07, 0.1, 0.24, 'wood'], [0, -0.06, 0.06, 0.05, 0.13, 0.06, 'grip'], [0, 0.14, -0.4, 0.02, 0.04, 0.02, 'light'],
-    ],
+    w: 42, h: 18, px: 0.0168, grip: [15, 14], muzzle: [41, 7],
+    draw(S) {
+      S.poly([[0, 6], [10, 5], [12, 10], [2, 13], [0, 12]], 'wood', 5); S.line(2, 9, 9, 7, 'woodDark');
+      S.rect(12, 4, 3, 7, 'dark', 5);
+      S.rect(15, 2, 9, 11, 'gunmetal', 7); S.rect(15, 7, 9, 1, 'brass', 7); S.rect(15, 2, 9, 1, 'metal', 7);
+      S.rect(24, 5, 17, 4, 'metal', 5); S.rect(39, 4, 2, 6, 'dark', 5);
+      S.poly([[13, 11], [17, 11], [16, 17], [12, 17]], 'grip', 3);
+      S.px(36, 3, 'dark', 1);
+    },
     fp: { pos: [0.2, -0.22, -0.38], scale: 1 },
   },
   demohammer: {
-    melee: true,
-    parts: [[0, 0.34, 0, 0.045, 0.7, 0.045, 'wood'], [0, 0.72, 0, 0.14, 0.14, 0.34, 'metal'], [0, 0.72, 0.18, 0.1, 0.1, 0.05, 'yellow'], [0, 0.03, 0, 0.055, 0.08, 0.055, 'grip']],
+    w: 48, h: 16, px: 0.0175, grip: [4, 7], melee: true,
+    draw(S) {
+      S.rect(0, 6, 38, 3, 'wood', 3); S.rect(0, 6, 8, 3, 'grip', 3); S.line(9, 6, 37, 6, 'hl');
+      S.rect(38, 1, 9, 14, 'metal', 7); S.rect(46, 3, 2, 10, 'yellow', 7); S.rect(38, 1, 9, 1, 'light', 7);
+    },
     fp: { pos: [0.26, -0.34, -0.46], scale: 1, rot: [-0.2, 0.25, -0.45] },
   },
 };
+
+// Precompute muzzle offsets in metres (used by the viewmodel / third-person rigs).
+for (const m of Object.values(WEAPON_MODELS)) {
+  if (m.melee) m.muzzle3 = [0, (m.w - m.grip[0]) * m.px, 0];
+  else m.muzzle3 = [0, -(m.muzzle[1] - m.grip[1]) * m.px, -(m.muzzle[0] - m.grip[0]) * m.px];
+}
+
+const geoCache = new Map();
+
+function buildGeometry(id, skin, team) {
+  const key = `${id}|${skin || 'none'}|${team}`;
+  if (geoCache.has(key)) return geoCache.get(key);
+  const def = WEAPON_MODELS[id];
+  const pal = { ...BASE, ...(SKINS[skin] || {}), team: TEAM_COLORS_HEX[team ?? 0] };
+  const S = new PixelSprite(def.w, def.h);
+  def.draw(S);
+  const px = def.px;
+  const [gx, gy] = def.grip;
+  const map = def.melee
+    ? (x, y, l) => [l * px, (x - gx) * px, (y - gy) * px]
+    : (x, y, l) => [l * px, -(y - gy) * px, -(x - gx) * px];
+  const g = voxelizeSprite(S, pal, { size: px, map, glowKeys: GLOW, seed: id.length * 97 });
+  geoCache.set(key, g);
+  return g;
+}
 
 /**
  * Build a THREE.Group for a weapon.
@@ -224,37 +330,40 @@ export const WEAPON_MODELS = {
  */
 export function buildWeapon(id, opts = {}) {
   const def = WEAPON_MODELS[id] || WEAPON_MODELS.sidekick;
-  const pal = { ...BASE, ...(SKINS[opts.skin] || {}), team: TEAM_COLORS_HEX[opts.team ?? 0] };
+  const geo = buildGeometry(WEAPON_MODELS[id] ? id : 'sidekick', opts.skin, opts.team);
   const g = new THREE.Group();
-  const addParts = (parent, parts) => {
-    for (const p of parts) {
-      const [x, y, z, w, h, d, key, o] = p;
-      const col = pal[key] ?? key;
-      const glow = o && o.glow;
-      const m = new THREE.Mesh(boxGeo(w, h, d), glow ? colorMat(col, { basic: true }) : colorMat(col));
-      m.position.set(x, y, z);
-      if (o && o.rx) m.rotation.x = o.rx;
-      m.castShadow = opts.shadow !== false;
-      parent.add(m);
-    }
-  };
-  addParts(g, def.parts);
+  const solid = new THREE.Mesh(geo.solid, VOXEL_MATERIAL);
+  solid.castShadow = opts.shadow !== false;
+  g.add(solid);
+  if (geo.glow) g.add(new THREE.Mesh(geo.glow, VOXEL_GLOW_MATERIAL));
   let spin = null;
-  if (def.spinParts) {
+  if (def.spin) {
+    // rotary barrel cluster: six outlined voxel rods around the bore axis
+    const pal = { ...BASE, ...(SKINS[opts.skin] || {}) };
     spin = new THREE.Group();
-    spin.position.set(...def.spin);
-    addParts(spin, def.spinParts);
+    const px = def.px;
+    const len = (def.spin.to - def.spin.from) * px;
+    spin.position.set(0, -(def.spin.y - def.grip[1]) * px, -((def.spin.from + def.spin.to) / 2 - def.grip[0]) * px);
+    const rodMat = colorMat(pal.metal), edgeMat = colorMat(0x17181b, { flat: true });
+    for (let i = 0; i < 6; i++) {
+      const t = (i / 6) * Math.PI * 2;
+      const r = def.spin.r * px * 0.75;
+      const rod = new THREE.Mesh(boxGeo(px * 1.6, px * 1.6, len), rodMat);
+      rod.position.set(Math.cos(t) * r, Math.sin(t) * r, 0);
+      spin.add(rod);
+    }
+    const core = new THREE.Mesh(boxGeo(px * 1.4, px * 1.4, len * 1.02), edgeMat);
+    spin.add(core);
+    for (const z of [-len / 2 + px, len / 2 - px * 2, 0]) {
+      const ring = new THREE.Mesh(boxGeo(px * 8, px * 8, px * 1.4), colorMat(pal.dark));
+      ring.position.z = z;
+      spin.add(ring);
+    }
     g.add(spin);
   }
   const muzzle = new THREE.Object3D();
-  muzzle.position.set(...(def.muzzle || [0, 0.4, 0]));
+  muzzle.position.set(...def.muzzle3);
   g.add(muzzle);
-  if (opts.skin === 'candy' || opts.skin === 'neon') {
-    // stripe accent
-    const s = new THREE.Mesh(boxGeo(0.005, 0.02, 0.2), colorMat(opts.skin === 'neon' ? 0x3ff2ff : 0xffffff, { basic: true }));
-    s.position.set(0.05, 0.08, -0.1);
-    g.add(s);
-  }
   g.userData = { muzzle, spin, def };
   if (opts.scale) g.scale.setScalar(opts.scale);
   return g;
