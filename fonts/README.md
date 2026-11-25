@@ -16,4 +16,4 @@ your Team Fortress 2 install: `Team Fortress 2/tf/resource/`.
 No code changes are needed. They're picked up on the next page load. They're Valve's fonts, so keep the project
 non-commercial if you publish them.
 
-Until the files are here, the game falls back to Lilita One, Nunito and Oswald (free Google Fonts) and Verdana.
+Until the files are here, the game falls back to League Spartan, Barlow Semi Condensed and Oswald (free Google Fonts) and Verdana.

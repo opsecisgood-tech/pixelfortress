@@ -459,7 +459,7 @@ export class Game {
     const c = document.createElement('canvas');
     c.width = 160; c.height = 40;
     const ctx = c.getContext('2d');
-    ctx.font = 'bold 15px "Chakra Petch", monospace';
+    ctx.font = 'bold 14px Verdana, "DejaVu Sans", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     const tw = Math.min(156, ctx.measureText(name).width + 12);
