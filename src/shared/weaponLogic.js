@@ -207,7 +207,10 @@ export function stepWeapons(ws, cmd, ctx) {
   if ((pressed & BTN.RELOAD) && ready) startReload();
 
   // ---- Firing ------------------------------------------------------------
-  const wantsFire = def.auto ? fireHeld : firePressed || (fireHeld && def.type !== 'hitscan' && def.type !== 'projectile');
+  // semi-auto trigger presses are buffered while deploying / between shots (released trigger clears it)
+  if (!fireHeld) ws.queued = 0;
+  else if (firePressed && (!ready || t < w.next || w.rel > 0)) ws.queued = 1;
+  const wantsFire = def.auto ? fireHeld : firePressed || (fireHeld && ws.queued === 1) || (fireHeld && def.type !== 'hitscan' && def.type !== 'projectile');
   if (def.type === 'melee') {
     if (w.melee >= 0 && t >= w.melee) {
       w.melee = -1;
@@ -234,6 +237,7 @@ export function stepWeapons(ws, cmd, ctx) {
         // catch-up cadence for automatic weapons at low command rates
         w.next = (t - w.next < def.fireInterval * 0.5 ? w.next : t) + def.fireInterval;
         ws.shots++;
+        ws.queued = 0;
         ws.lastFire = t;
         const spread = computeSpread(def, ctx, ws);
         let charge = 0;
@@ -262,12 +266,12 @@ export function stepWeapons(ws, cmd, ctx) {
 // Serialize weapon state for owner reconciliation (compact).
 export function packWeaponState(ws) {
   return [
-    +ws.time.toFixed(4), ws.slot, +ws.ready.toFixed(4), ws.shots, ws.prevButtons, ws.scoped ? 1 : 0,
+    +ws.time.toFixed(4), ws.slot, +ws.ready.toFixed(4), ws.shots, ws.prevButtons, (ws.scoped ? 1 : 0) | (ws.queued ? 2 : 0),
     ws.w.map((w) => [w.clip, w.reserve, +w.next.toFixed(4), w.rel, +w.relT.toFixed(4), +w.spin.toFixed(3), +w.charge.toFixed(3), +w.melee.toFixed(4), +(w.scopeStart || 0).toFixed(4)]),
   ];
 }
 export function unpackWeaponState(ws, a) {
-  ws.time = a[0]; ws.slot = a[1]; ws.ready = a[2]; ws.shots = a[3]; ws.prevButtons = a[4]; ws.scoped = !!a[5];
+  ws.time = a[0]; ws.slot = a[1]; ws.ready = a[2]; ws.shots = a[3]; ws.prevButtons = a[4]; ws.scoped = !!(a[5] & 1); ws.queued = a[5] & 2 ? 1 : 0;
   a[6].forEach((x, i) => {
     const w = ws.w[i];
     if (!w) return;
