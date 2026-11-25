@@ -1,0 +1,611 @@
+// Menus and screens: main menu with 3D showcase, play (practice / host / join / browse / dedicated),
+// class select, loadout & cosmetics, profile, statistics & achievements, settings, pause, team menu,
+// results/MVP screen and loading overlay.
+import { Hud, keyName, crosshairSVG } from './Hud.js';
+import { CLASS_IDS, CLASSES, getClass } from '../../shared/config/classes.js';
+import { WEAPONS } from '../../shared/config/weapons.js';
+import { MODES } from '../../shared/config/modes.js';
+import { ACHIEVEMENTS, COSMETICS, COSMETIC_SLOTS, levelFromXp } from '../../shared/config/progression.js';
+import { mapList, MAP_IDS, getMap } from '../../maps/index.js';
+import { TEAM_NAMES, GAME_VERSION } from '../../shared/constants.js';
+import { saveSettings, resolveQuality, KEY_LABELS, DEFAULT_KEYS, CROSSHAIRS } from '../settings.js';
+import { browsePublicRooms, WSClient, defaultServerUrl } from '../net/transports.js';
+
+const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ICON = { skull: '☠', hands: '✋', flag: '⚑', shield: '⛨', cross: '✚', gear: '⚙', scope: '◎', bolt: '⚡', knife: '🗡', medal: '🎖', trophy: '🏆', star: '★' };
+const SLOT_LABELS = { hat: 'Hats', mask: 'Masks', accessory: 'Accessories', weaponSkin: 'Weapon skins', gloves: 'Gloves', victoryPose: 'Victory poses', elimEffect: 'Elimination effects', banner: 'Profile banners' };
+const BANNERS = {
+  steel: 'linear-gradient(135deg,#3a4048,#23272d)', hazard: 'repeating-linear-gradient(-45deg,#f0b429 0 12px,#222 12px 24px)',
+  circuit: 'linear-gradient(90deg,#123 0 2px,transparent 2px) 0 0/14px 14px, linear-gradient(#123 0 2px,transparent 2px) 0 0/14px 14px, #1e4a3a',
+  sunset: 'linear-gradient(180deg,#f3b04b,#d8473b 60%,#5a2a4a)', frost: 'linear-gradient(180deg,#d8f0fb,#6aa0c8)', neon: 'linear-gradient(135deg,#ff3fa8,#3ff2ff)',
+};
+const MODE_ART = {
+  tdm: 'repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 8px, transparent 8px 16px), linear-gradient(90deg, #d8473b 0 50%, #3f7fd6 50%)',
+  ctf: 'repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 8px, transparent 8px 16px), linear-gradient(135deg, #d8473b 0 30%, #e9e2d0 30% 34%, #3a4048 34% 66%, #e9e2d0 66% 70%, #3f7fd6 70%)',
+};
+const TIPS = [
+  'Scouts can jump a second time in mid-air — and steer while doing it.',
+  'Medical Beam healing builds Overcharge. Pop it with E when your patient is under fire.',
+  'A Spy disguise breaks when you attack or take 20+ damage. Strike from behind.',
+  'Juggernaut Suppression Mode trades mobility for a 35% damage reduction.',
+  'Thermal Burst destroys enemy projectiles — save it for incoming blast shells.',
+  'Wrench hits repair your turret and refill its ammo.',
+  'Scoped Longshot shots charge up to 150 damage. Headshots double it.',
+  'In Capture the Flag you can only score while your own flag is at home.',
+  'Resupply cabinets in your spawn room refill health and ammo.',
+  'Detonation charges stick to walls. Press E again to blow them.',
+];
+
+export class UI {
+  constructor(app) {
+    this.app = app;
+    this.root = document.getElementById('ui');
+    this.hud = new Hud(app, this.root);
+    this.menuOpen = false;
+    this.screen = null;
+    this.sheet = null;
+    this.toasts = h('div', 'toast-stack');
+    this.root.appendChild(this.toasts);
+    this.previewTeam = 0;
+  }
+
+  sfx(kind) { if (kind === 'hover') this.app.audio.uiHover(); else this.app.audio.uiClick(); }
+  wireSounds(root) {
+    root.querySelectorAll('button, .class-card, .mode-card, .map-card, .cos').forEach((b) => {
+      b.addEventListener('mouseenter', () => this.sfx('hover'));
+      b.addEventListener('click', () => this.sfx('click'));
+    });
+  }
+
+  toast(html, ms = 4000) {
+    const t = h('div', 'toast plate', html);
+    this.toasts.appendChild(t);
+    setTimeout(() => t.remove(), ms);
+  }
+
+  // ================================================================ MAIN MENU
+  showMainMenu() {
+    this.closeSheet();
+    this.hud.show(false);
+    if (this.menuEl) this.menuEl.remove();
+    const p = this.app.profile;
+    const cls = getClass(p.data.selectedClass);
+    const m = h('div', 'menu');
+    m.innerHTML = `
+      <div class="menu-left">
+        <div class="logo-sign plate stripe-edge"><div class="logo">PIXEL<br>FORTRESS</div><div class="logo-tag">Eight classes. Two teams. One fortress each.</div></div>
+        <nav class="nav">
+          <button class="btn primary play" data-go="play">Play</button>
+          <button class="btn" data-go="class">Class select</button>
+          <button class="btn" data-go="loadout">Loadout</button>
+          <button class="btn" data-go="profile">Profile</button>
+          <button class="btn" data-go="stats">Statistics</button>
+          <button class="btn" data-go="settings">Settings</button>
+        </nav>
+      </div>
+      <div class="menu-center"><div class="showcase-label"></div></div>
+      <div class="menu-right"></div>
+      <div class="menu-bottom"><span class="ver">v${GAME_VERSION}</span><span class="conn">${navigator.onLine ? 'Online' : 'Offline — practice mode only'}</span><span class="news"><span>Season one is live: six maps, eight classes, Team Deathmatch and Capture the Flag · Host a match and share the room code with friends · Check Settings for touch layout and crosshair editors · Earn XP to unlock hats, weapon skins and elimination effects</span></span></div>`;
+    this.root.appendChild(m);
+    this.menuEl = m;
+    m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => this.openSheet(b.dataset.go)));
+    this.renderProfileCard();
+    this.renderShowcaseLabel();
+    this.wireSounds(m);
+    this.updateShowcase();
+    this.screen = 'menu';
+    this.app.audio.startMusic('menu');
+    // drag to rotate showcase
+    const center = m.querySelector('.menu-center');
+    void center;
+    if (!p.name) setTimeout(() => this.promptName(), 300);
+  }
+
+  hideMainMenu() { if (this.menuEl) { this.menuEl.remove(); this.menuEl = null; } }
+
+  updateShowcase(offsetX = 0) {
+    const p = this.app.profile;
+    const cos = p.cosmetics();
+    const sc = this.app.renderer.showcase;
+    sc.setCharacters([{ classId: p.data.selectedClass, team: this.previewTeam, cosmetics: cos, weaponId: this.previewWeapon || getClass(p.data.selectedClass).weapons[0], skin: cos.weaponSkin }]);
+    sc.offsetX = offsetX;
+  }
+
+  renderShowcaseLabel() {
+    if (!this.menuEl) return;
+    const cls = getClass(this.app.profile.data.selectedClass);
+    const el = this.menuEl.querySelector('.showcase-label');
+    el.innerHTML = `<div class="cls">${esc(cls.displayName)}</div><div class="role">${esc(cls.role)}</div><div class="team-toggle"><button class="btn ${this.previewTeam === 0 ? 'red' : 'ghost'}" data-t="0">Red</button><button class="btn ${this.previewTeam === 1 ? 'blue' : 'ghost'}" data-t="1">Blue</button></div>`;
+    el.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => { this.previewTeam = +b.dataset.t; this.renderShowcaseLabel(); this.updateShowcase(); }));
+  }
+
+  renderProfileCard() {
+    if (!this.menuEl) return;
+    const p = this.app.profile;
+    const L = p.levelInfo();
+    const s = p.data.stats;
+    const cls = getClass(p.data.selectedClass);
+    const icons = this.app.icons;
+    const kd = s.deaths ? (s.kills / s.deaths).toFixed(2) : s.kills.toFixed(2);
+    const right = this.menuEl.querySelector('.menu-right');
+    right.innerHTML = `
+      <div class="idcard plate" style="background-image:${BANNERS[p.data.cosmetics.banner] || BANNERS.steel};background-blend-mode:multiply">
+        <div class="row"><img class="avatar" src="${icons.portraits[`${cls.id}_${this.previewTeam}`]}" alt=""><div><div class="name">${esc(p.name || 'Recruit')}</div><div class="lvl"><b>${L.level}</b><span class="muted small">Level · ${L.into} / ${L.need} XP</span></div></div></div>
+        <div class="xpbar"><i style="width:${L.into / L.need * 100}%"></i></div>
+        <div class="statgrid"><div class="stat"><b>${s.matches}</b><span>Matches</span></div><div class="stat"><b>${s.wins}</b><span>Wins</span></div><div class="stat"><b>${kd}</b><span>K/D</span></div><div class="stat"><b>${s.kills}</b><span>Eliminations</span></div><div class="stat"><b>${s.captures}</b><span>Captures</span></div><div class="stat"><b>${p.data.achievements.length}</b><span>Badges</span></div></div>
+      </div>
+      <div class="loadout-mini plate"><h3 style="margin-bottom:6px">${esc(cls.displayName)} loadout</h3>${cls.weapons.map((w, i) => `<div class="w"><img src="${icons.weapons[w]}" alt=""><div><div>${esc(WEAPONS[w].name)}</div><div class="slot">${['Primary', 'Secondary', 'Melee'][i]} · ${esc(WEAPONS[w].category)}</div></div></div>`).join('')}
+      <div class="w"><div style="width:84px;text-align:center;font-family:var(--display);color:var(--hazard)">E</div><div><div>${esc(cls.ability.name)}</div><div class="slot">${esc(cls.passive.name)} (passive)</div></div></div></div>`;
+  }
+
+  promptName() {
+    const wrap = h('div', 'sheet-wrap');
+    wrap.innerHTML = `<div class="sheet plate stripe-edge" style="width:min(460px,100%)"><div class="sheet-head"><h2>Who's fighting?</h2></div><div class="sheet-body"><div class="field"><label>Callsign shown to other players</label><input class="input" maxlength="16" placeholder="Callsign"></div><div class="row-btns"><button class="btn primary">Enlist</button></div></div></div>`;
+    this.root.appendChild(wrap);
+    const inp = wrap.querySelector('input');
+    inp.value = `Recruit${Math.floor(1000 + Math.random() * 9000)}`;
+    inp.select();
+    const done = () => { const v = inp.value.replace(/[^\w \-.[\]]/g, '').trim().slice(0, 16) || 'Recruit'; this.app.profile.name = v; wrap.remove(); this.renderProfileCard(); };
+    wrap.querySelector('button').addEventListener('click', done);
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') done(); });
+    setTimeout(() => inp.focus(), 50);
+  }
+
+  // ================================================================ SHEETS
+  openSheet(kind, opts = {}) {
+    this.closeSheet();
+    const wrap = h('div', `sheet-wrap${kind === 'loadout' ? ' right' : ''}`);
+    if (kind === 'loadout') { wrap.style.placeItems = 'center end'; wrap.style.background = 'linear-gradient(90deg, transparent 25%, rgba(10,12,15,.75) 45%)'; }
+    const sheet = h('div', 'sheet plate stripe-edge');
+    if (kind === 'loadout') sheet.style.width = 'min(760px, 100%)';
+    wrap.appendChild(sheet);
+    this.root.appendChild(wrap);
+    this.sheet = wrap;
+    this.sheetKind = kind;
+    this.menuOpen = true;
+    const titles = { play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
+    sheet.innerHTML = `<div class="sheet-head"><h2>${titles[kind] || ''}</h2><button class="btn ghost close-x" aria-label="Close">✕</button></div><div class="sheet-body"></div>`;
+    const body = sheet.querySelector('.sheet-body');
+    sheet.querySelector('.close-x').addEventListener('click', () => this.closeSheet(true));
+    wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) this.closeSheet(true); });
+    const fn = { play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
+    if (fn) fn();
+    this.wireSounds(sheet);
+    if (kind === 'loadout') this.updateShowcase(-1.6);
+    if (this.menuEl) this.menuEl.querySelectorAll('.nav .btn').forEach((b) => b.classList.toggle('active', b.dataset.go === kind));
+    this.onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); this.closeSheet(true); } };
+    window.addEventListener('keydown', this.onKey);
+  }
+
+  closeSheet(user = false) {
+    if (this.onKey) window.removeEventListener('keydown', this.onKey);
+    if (this.classKeys) { window.removeEventListener('keydown', this.classKeys); this.classKeys = null; }
+    if (this.sheet) { this.sheet.remove(); this.sheet = null; }
+    const wasKind = this.sheetKind;
+    this.sheetKind = null;
+    this.menuOpen = false;
+    if (this.menuEl) {
+      this.menuEl.querySelectorAll('.nav .btn').forEach((b) => b.classList.remove('active'));
+      if (wasKind === 'loadout' || wasKind === 'class') { this.previewWeapon = null; this.updateShowcase(0); }
+    }
+    if (user && this.app.game && this.app.state === 'game' && !this.resultsEl) {
+      if (!this.app.input.touchActive()) this.app.input.requestLock();
+    }
+  }
+
+  // ---------------------------------------------------------------- PLAY
+  renderPlay(body) {
+    const st = this.app.settings;
+    const maps = mapList();
+    this.playSel = this.playSel || { mode: st.lastMode || 'tdm', map: st.lastMap || 'dusty_depot', tab: 'practice' };
+    const sel = this.playSel;
+    body.innerHTML = `
+      <div class="mode-grid">${Object.values(MODES).map((m) => `<button class="mode-card ${sel.mode === m.id ? 'sel' : ''}" data-mode="${m.id}"><div class="art" style="background:${MODE_ART[m.id]}"><b>${esc(m.name)}</b></div><div class="info">${esc(m.description)}<div class="meta"><span>Up to ${m.maxPlayers} players</span><span>${m.duration / 60} min</span><span>${m.id === 'tdm' ? `First to ${m.scoreLimit}` : `First to ${m.scoreLimit} captures`}</span><span style="color:var(--good)">Available</span></div></div></button>`).join('')}</div>
+      <h3 style="margin:18px 0 10px">Map</h3>
+      <div class="map-grid">${maps.map((m) => `<button class="map-card ${sel.map === m.id ? 'sel' : ''}" data-map="${m.id}"><span class="sw">${m.preview.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span class="nm">${esc(m.name)}</span><span class="th">${esc(m.theme)}</span></button>`).join('')}</div>
+      <div class="play-cols">
+        <div>
+          <div class="tabs" style="margin-bottom:14px">
+            <button class="btn ${sel.tab === 'practice' ? 'active' : ''}" data-tab="practice">Practice with bots</button>
+            <button class="btn ${sel.tab === 'host' ? 'active' : ''}" data-tab="host">Host online</button>
+            <button class="btn ${sel.tab === 'join' ? 'active' : ''}" data-tab="join">Join with code</button>
+            <button class="btn ${sel.tab === 'browse' ? 'active' : ''}" data-tab="browse">Public matches</button>
+            <button class="btn ${sel.tab === 'server' ? 'active' : ''}" data-tab="server">Dedicated server</button>
+          </div>
+          <div class="tab-body"></div>
+        </div>
+        <div class="map-info plate thin" style="padding:16px"></div>
+      </div>`;
+    const info = body.querySelector('.map-info');
+    const renderInfo = () => {
+      const m = getMap(sel.map);
+      info.innerHTML = `<h3>${esc(m.name)}</h3><p class="note" style="margin:8px 0 12px">${esc(m.description)}</p><div class="note">${m.spawns.length / 2} spawn points per team · ${m.pickups.length} supply pickups · ${MODES[sel.mode].name}: ${MODES[sel.mode].description}</div>`;
+    };
+    renderInfo();
+    body.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { sel.mode = b.dataset.mode; this.renderPlay(body); this.wireSounds(body); }));
+    body.querySelectorAll('[data-map]').forEach((b) => b.addEventListener('click', () => { sel.map = b.dataset.map; this.renderPlay(body); this.wireSounds(body); }));
+    body.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { sel.tab = b.dataset.tab; this.renderPlay(body); this.wireSounds(body); }));
+    const tb = body.querySelector('.tab-body');
+    const botField = `<div class="field"><label>Fill empty slots with bots: <b class="bf">${st.botFill}</b> players total</label><input type="range" min="0" max="16" step="2" value="${st.botFill}" class="botfill"></div>
+      <div class="field"><label>Bot skill: <b class="bd">${Math.round(st.botDifficulty * 100)}%</b></label><input type="range" min="0.15" max="1" step="0.05" value="${st.botDifficulty}" class="botdiff"></div>`;
+    const status = '<div class="status-line"></div>';
+    const bindBots = () => {
+      const bf = tb.querySelector('.botfill'); const bd = tb.querySelector('.botdiff');
+      if (bf) bf.addEventListener('input', () => { st.botFill = +bf.value; tb.querySelector('.bf').textContent = st.botFill; saveSettings(st); });
+      if (bd) bd.addEventListener('input', () => { st.botDifficulty = +bd.value; tb.querySelector('.bd').textContent = Math.round(st.botDifficulty * 100) + '%'; saveSettings(st); });
+    };
+    const setStatus = (t, cls = '') => { const s = tb.querySelector('.status-line'); if (s) { s.className = `status-line ${cls}`; s.textContent = t; } };
+    const remember = () => { st.lastMode = sel.mode; st.lastMap = sel.map; saveSettings(st); };
+    if (sel.tab === 'practice') {
+      tb.innerHTML = `<p class="note">Runs the full authoritative server on this device. Bots play every class and both objectives. Works offline.</p>${botField}<button class="btn primary big go">Start practice</button>${status}`;
+      bindBots();
+      tb.querySelector('.go').addEventListener('click', () => { remember(); this.app.startHost({ mode: sel.mode, mapId: sel.map, online: false }); });
+    } else if (sel.tab === 'host') {
+      tb.innerHTML = `<p class="note">Your browser becomes the server. Friends join with the room code over a direct peer-to-peer connection. Keep this tab open while hosting.</p>
+        <div class="field"><label>Room name</label><input class="input rn" maxlength="28" value="${esc((this.app.profile.name || 'Recruit') + "'s fortress")}"></div>
+        <label class="note" style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" class="pub" checked style="width:20px;height:20px;accent-color:var(--hazard)"> List in public matches</label>
+        ${botField}<button class="btn primary big go">Host match</button>${status}`;
+      bindBots();
+      tb.querySelector('.go').addEventListener('click', () => { remember(); this.app.startHost({ mode: sel.mode, mapId: sel.map, online: true, public: tb.querySelector('.pub').checked, roomName: tb.querySelector('.rn').value.slice(0, 28) }); });
+    } else if (sel.tab === 'join') {
+      tb.innerHTML = `<p class="note">Enter the five-character code shown on the host's screen.</p><div class="field"><input class="input code-input" maxlength="5" placeholder="ABCDE"></div><button class="btn primary big go">Join match</button>${status}`;
+      const inp = tb.querySelector('input');
+      inp.addEventListener('keydown', (e) => e.stopPropagation());
+      const go = async () => {
+        const code = inp.value.trim().toUpperCase();
+        if (code.length !== 5) { setStatus('Room codes are five characters long.', 'err'); return; }
+        setStatus('Connecting to host…');
+        try { await this.app.joinPeer(code); } catch (e) { setStatus(String(e.message || e), 'err'); }
+      };
+      tb.querySelector('.go').addEventListener('click', go);
+      inp.addEventListener('keyup', (e) => { if (e.key === 'Enter') go(); });
+    } else if (sel.tab === 'browse') {
+      tb.innerHTML = `<p class="note">Matches hosted by other players who chose to list them publicly.</p><div class="row-btns" style="margin-bottom:12px"><button class="btn refresh">Refresh list</button></div><div class="room-list"><div class="note">Press refresh to search.</div></div>${status}`;
+      const list = tb.querySelector('.room-list');
+      const refresh = async () => {
+        list.innerHTML = '<div class="note">Searching…</div>';
+        try {
+          const rooms = await browsePublicRooms();
+          if (!rooms.length) { list.innerHTML = '<div class="note">No public matches right now. Host one from the Host online tab.</div>'; return; }
+          list.innerHTML = '';
+          for (const r of rooms) {
+            const row = h('div', 'room', `<div><b>${esc(r.name || r.room)}</b><div class="note">${esc(getMap(r.mapId).name)} · ${esc(MODES[r.mode]?.name)}</div></div><span class="note">${r.players}/${r.maxPlayers} players</span><button class="btn primary">Join</button>`);
+            row.querySelector('button').addEventListener('click', async () => { setStatus('Connecting…'); try { await this.app.joinPeer(r.code); } catch (e) { setStatus(String(e.message || e), 'err'); } });
+            list.appendChild(row);
+          }
+        } catch (e) { list.innerHTML = ''; setStatus(`Could not reach the matchmaking relay: ${e.message || e}`, 'err'); }
+      };
+      tb.querySelector('.refresh').addEventListener('click', refresh);
+      refresh();
+    } else if (sel.tab === 'server') {
+      const url = st.serverUrl || defaultServerUrl();
+      tb.innerHTML = `<p class="note">Connect to a Node.js dedicated server (run <code>npm start</code> in the repository).</p>
+        <div class="field"><label>Server address</label><input class="input su" value="${esc(url)}"></div>
+        <div class="row-btns" style="margin-bottom:12px"><button class="btn list">List rooms</button><button class="btn primary quick">Quick play</button><button class="btn create">Create room</button></div>
+        <div class="room-list"></div>${status}`;
+      const su = tb.querySelector('.su');
+      su.addEventListener('keydown', (e) => e.stopPropagation());
+      su.addEventListener('change', () => { st.serverUrl = su.value.trim(); saveSettings(st); });
+      const list = tb.querySelector('.room-list');
+      const withWs = async (fn) => {
+        setStatus('Connecting…');
+        const ws = new WSClient(su.value.trim());
+        try { await ws.open(); await fn(ws); } catch (e) { ws.close(); setStatus(String(e.message || e), 'err'); }
+      };
+      tb.querySelector('.list').addEventListener('click', () => withWs(async (ws) => {
+        const r = await ws.request({ t: 'lobby', action: 'list' }, ['rooms']);
+        ws.close();
+        setStatus(`${r.rooms.length} room(s)`, 'ok');
+        list.innerHTML = '';
+        for (const room of r.rooms) {
+          const row = h('div', 'room', `<div><b>${esc(room.room)}</b><div class="note">${esc(getMap(room.mapId).name)} · ${esc(MODES[room.mode]?.name)} · ${esc(room.state)}</div></div><span class="note">${room.players}/${room.maxPlayers} · ${room.bots} bots</span><button class="btn primary">Join</button>`);
+          row.querySelector('button').addEventListener('click', () => withWs((ws2) => this.app.joinServer(ws2, { action: 'join', room: room.id })));
+          list.appendChild(row);
+        }
+      }));
+      tb.querySelector('.quick').addEventListener('click', () => withWs((ws) => this.app.joinServer(ws, { action: 'quick', mode: sel.mode, mapId: sel.map })));
+      tb.querySelector('.create').addEventListener('click', () => withWs((ws) => this.app.joinServer(ws, { action: 'create', mode: sel.mode, mapId: sel.map, botFill: st.botFill, name: `${this.app.profile.name}'s room` })));
+    }
+  }
+
+  // ---------------------------------------------------------------- CLASS SELECT
+  renderClass(body, opts) {
+    const inGame = !!opts.inGame;
+    const p = this.app.profile;
+    const icons = this.app.icons;
+    const team = inGame && this.app.game?.net.me ? this.app.game.net.me.team : this.previewTeam;
+    let cur = inGame && this.app.game?.net.me ? this.app.game.net.me.ncls : p.data.selectedClass;
+    const roster = inGame ? [...(this.app.game?.net.roster.values() || [])] : [];
+    const render = () => {
+      const cls = getClass(cur);
+      body.innerHTML = `<div class="class-grid">${CLASS_IDS.map((id, i) => {
+        const c = CLASSES[id];
+        const count = roster.filter((r) => r.team === team && r.cls === id).length;
+        const full = inGame && c.limit && count >= c.limit && id !== this.app.game?.net.me?.cls;
+        return `<button class="class-card t${team} ${id === cur ? 'sel' : ''}" data-c="${id}"><span class="key">${i + 1}</span>${full ? '<span class="full">Full</span>' : ''}<img class="portrait" src="${icons.portraits[`${id}_${team}`]}" alt=""><span class="nm">${esc(c.displayName)}</span><span class="rl">${esc(c.role)}</span><span class="bars"><span class="bar">Health<i style="--v:${c.health / 300 * 100}%"></i></span><span class="bar">Speed<i style="--v:${(c.speed - 0.6) / 0.6 * 100}%"></i></span><span class="bar">Difficulty<i style="--v:${c.difficulty / 4 * 100}%"></i></span></span></button>`;
+      }).join('')}</div>
+      <div class="class-detail"><div><img src="${icons.portraits[`${cls.id}_${team}`]}" alt=""><div class="row-btns" style="margin-top:10px"><button class="btn primary big pick" style="width:100%">${inGame ? 'Deploy as ' : 'Select '}${esc(cls.displayName)}</button></div></div>
+      <div><h3>${esc(cls.displayName)} <span class="muted small" style="font-family:var(--ui)">${esc(cls.role)}</span></h3><p class="note" style="margin:6px 0 0;font-size:14px">${esc(cls.description)}</p>
+      <div class="note" style="margin-top:8px">Health <b style="color:var(--bone)">${cls.health}</b> · Speed <b style="color:var(--bone)">${Math.round(cls.speed * 100)}%</b> · Difficulty <b style="color:var(--bone)">${esc(cls.difficultyLabel)}</b></div>
+      <div class="ab"><b>${esc(cls.ability.name)}</b> — ${esc(cls.ability.description)}<br><span class="note"><b>${esc(cls.passive.name)}:</b> ${esc(cls.passive.description)}</span></div>
+      <div class="weap-row">${cls.weapons.map((w) => { const d = WEAPONS[w]; return `<div class="weap"><img src="${icons.weapons[w]}" alt=""><div class="nm">${esc(d.name)}</div><div class="d">${esc(d.description)}</div></div>`; }).join('')}</div></div></div>`;
+      body.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { cur = b.dataset.c; render(); this.wireSounds(body); if (!inGame) { p.data.selectedClass = cur; p.save(); this.previewWeapon = null; this.updateShowcase(); this.renderShowcaseLabel(); this.renderProfileCard(); } }));
+      body.querySelector('.pick').addEventListener('click', () => {
+        p.data.selectedClass = cur; p.save();
+        if (inGame) { this.app.game?.net.requestClass(cur); this.closeSheet(true); }
+        else { this.closeSheet(); this.updateShowcase(); this.renderShowcaseLabel(); this.renderProfileCard(); }
+      });
+    };
+    render();
+    this.classKeys = (e) => { const n = parseInt(e.key, 10); if (n >= 1 && n <= 8 && this.sheetKind === 'class') { cur = CLASS_IDS[n - 1]; render(); } };
+    window.addEventListener('keydown', this.classKeys, { once: false });
+    const prevClose = this.closeSheet.bind(this);
+    void prevClose;
+  }
+
+  openClassMenu(inGame) {
+    this.app.input.exitLock();
+    this.openSheet('class', { inGame });
+  }
+  openPause() { this.app.input.exitLock(); this.openSheet('pause'); }
+  openTeamMenu() { this.app.input.exitLock(); this.openSheet('team'); }
+
+  // ---------------------------------------------------------------- LOADOUT
+  renderLoadout(body) {
+    const p = this.app.profile;
+    const cls = getClass(p.data.selectedClass);
+    const icons = this.app.icons;
+    this.loadoutSlot = this.loadoutSlot || 'hat';
+    this.inspectW = this.inspectW && cls.weapons.includes(this.inspectW) ? this.inspectW : cls.weapons[0];
+    const d = WEAPONS[this.inspectW];
+    const stat = (k, v) => `<div>${k}: <b>${v}</b></div>`;
+    const dps = d.type === 'melee' || d.type === 'hitscan' || d.type === 'projectile' || d.type === 'flame' ? Math.round(d.damage * d.pellets / d.fireInterval) : 0;
+    body.innerHTML = `
+      <p class="note" style="margin-top:0">${esc(cls.displayName)} — select a weapon to inspect it. Cosmetics are visual only.</p>
+      <div class="inspect">${cls.weapons.map((w, i) => `<div class="weap ${w === this.inspectW ? 'sel' : ''}" data-w="${w}" style="${w === this.inspectW ? 'border-color:var(--hazard)' : ''}"><img src="${icons.weapons[w]}" alt=""><div class="nm">${esc(WEAPONS[w].name)}</div><div class="d">${['Primary', 'Secondary', 'Melee'][i]} · ${esc(WEAPONS[w].category)}</div></div>`).join('')}</div>
+      <div class="weapon-stats">${stat('Damage', d.pellets > 1 ? `${d.damage} × ${d.pellets}` : d.type === 'beam' ? `${d.beam.healRate} HP/s heal` : d.damage)}${dps ? stat('Damage / sec', dps) : ''}${stat('Fire rate', `${(1 / d.fireInterval).toFixed(1)}/s`)}${d.clip > 0 ? stat('Magazine', `${d.clip} + ${d.reserve}`) : stat('Ammo', d.clip < 0 ? 'Unlimited' : '—')}${d.clip > 0 ? stat('Reload', `${d.reloadMode === 'single' ? `${d.reloadTime}s / round` : `${d.reloadTime}s`}`) : ''}${d.type === 'hitscan' ? stat('Effective range', `${d.effectiveRange} m`) : ''}${d.headshotMult > 1 ? stat('Headshot', `×${d.headshotMult}`) : ''}${d.projectile ? stat('Projectile speed', `${d.projectile.speed} m/s`) : ''}${d.melee ? stat('Reach', `${d.melee.range} m`) : ''}${stat('Switch time', `${d.deployTime}s`)}</div>
+      <div class="tabs" style="margin-bottom:12px">${COSMETIC_SLOTS.map((s) => `<button class="btn ${s === this.loadoutSlot ? 'active' : ''}" data-s="${s}">${SLOT_LABELS[s]}</button>`).join('')}</div>
+      <div class="cos-grid">${COSMETICS[this.loadoutSlot].map((it) => {
+        const un = p.isUnlocked(this.loadoutSlot, it.id);
+        const req = it.unlock.level ? `Level ${it.unlock.level}` : `Badge: ${ACHIEVEMENTS.find((a) => a.id === it.unlock.achievement)?.name}`;
+        const swatch = this.loadoutSlot === 'banner' ? `<span style="display:block;height:26px;margin-bottom:6px;background:${BANNERS[it.id]}"></span>` : '';
+        return `<button class="cos ${p.data.cosmetics[this.loadoutSlot] === it.id ? 'sel' : ''} ${un ? '' : 'locked'}" data-i="${it.id}" ${un ? '' : 'aria-disabled="true"'}>${swatch}${esc(it.name)}<small>${un ? (p.data.cosmetics[this.loadoutSlot] === it.id ? 'Equipped' : 'Unlocked') : `Locked · ${req}`}</small></button>`;
+      }).join('')}</div>`;
+    body.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => { this.inspectW = b.dataset.w; this.previewWeapon = this.inspectW; this.updateShowcase(-1.6); this.renderLoadout(body); this.wireSounds(body); }));
+    body.querySelectorAll('[data-s]').forEach((b) => b.addEventListener('click', () => { this.loadoutSlot = b.dataset.s; this.renderLoadout(body); this.wireSounds(body); }));
+    body.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => {
+      if (!p.equip(this.loadoutSlot, b.dataset.i)) return;
+      this.renderLoadout(body); this.wireSounds(body); this.updateShowcase(-1.6); this.renderProfileCard();
+      if (this.loadoutSlot === 'victoryPose') { this.app.renderer.showcase.rigs[0].anim.pose = b.dataset.i; setTimeout(() => { if (this.app.renderer.showcase.rigs[0]) this.app.renderer.showcase.rigs[0].anim.pose = null; }, 2500); }
+      this.app.game?.net.send({ t: 'cos', cosmetics: p.cosmetics() });
+    }));
+  }
+
+  // ---------------------------------------------------------------- PROFILE
+  renderProfile(body) {
+    const p = this.app.profile;
+    const L = p.levelInfo();
+    const fav = getClass(p.favoriteClass());
+    const s = p.data.stats;
+    body.innerHTML = `
+      <div class="play-cols" style="margin-top:0">
+        <div>
+          <div class="field"><label>Callsign</label><input class="input nm" maxlength="16" value="${esc(p.name)}"></div>
+          <div class="idcard plate" style="background-image:${BANNERS[p.data.cosmetics.banner]};background-blend-mode:multiply"><div class="row"><img class="avatar" src="${this.app.icons.portraits[`${fav.id}_0`]}" alt=""><div><div class="name">${esc(p.name)}</div><div class="lvl"><b>${L.level}</b><span class="muted small">${L.into} / ${L.need} XP to level ${L.level + 1}</span></div></div></div><div class="xpbar"><i style="width:${L.into / L.need * 100}%"></i></div></div>
+          <p class="note">Favorite class: <b style="color:var(--bone)">${esc(fav.displayName)}</b> · Total XP ${p.data.xp} · ${s.wins} wins / ${s.losses} losses / ${s.draws} draws</p>
+        </div>
+        <div><h3 style="margin-bottom:8px">Recent matches</h3>${p.data.recent.length ? `<table class="tbl"><thead><tr><th>Result</th><th>Map</th><th>Class</th><th class="num">K/D/A</th><th class="num">XP</th></tr></thead><tbody>${p.data.recent.map((r) => `<tr><td style="color:${r.won ? 'var(--good)' : r.draw ? 'var(--bone)' : 'var(--bad)'}">${r.won ? 'Win' : r.draw ? 'Draw' : 'Loss'}</td><td>${esc(getMap(r.map).name)} <span class="muted small">${esc(MODES[r.mode]?.short)}</span></td><td>${esc(getClass(r.cls).displayName)}</td><td class="num">${r.k}/${r.d}/${r.a}</td><td class="num">+${r.xp}</td></tr>`).join('')}</tbody></table>` : '<p class="note">Play a match to see it here.</p>'}</div>
+      </div>`;
+    const nm = body.querySelector('.nm');
+    nm.addEventListener('keydown', (e) => e.stopPropagation());
+    nm.addEventListener('change', () => { p.name = nm.value.replace(/[^\w \-.[\]]/g, '').trim().slice(0, 16) || p.name; this.renderProfileCard(); });
+  }
+
+  // ---------------------------------------------------------------- STATISTICS
+  renderStats(body) {
+    const p = this.app.profile;
+    const s = p.data.stats;
+    const tot = [['Matches', s.matches], ['Wins', s.wins], ['Eliminations', s.kills], ['Assists', s.assists], ['Deaths', s.deaths], ['Captures', s.captures], ['Flag returns', s.returns], ['Healing', s.healing], ['Damage', s.damage], ['Headshot kills', s.headshotKills], ['Back attacks', s.backstabs], ['Turrets built', s.turretsBuilt], ['Best streak', s.bestStreak], ['Awards', s.awards]];
+    body.innerHTML = `
+      <div class="statgrid" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin-top:0">${tot.map(([k, v]) => `<div class="stat"><b>${v.toLocaleString()}</b><span>${k}</span></div>`).join('')}</div>
+      <h3 style="margin:20px 0 8px">By class</h3>
+      <table class="tbl"><thead><tr><th>Class</th><th class="num">Matches</th><th class="num">Eliminations</th><th class="num">Deaths</th><th class="num">Assists</th><th class="num">Damage</th><th class="num">Healing</th></tr></thead><tbody>${CLASS_IDS.map((id) => { const c = s.classStats[id]; return `<tr><td>${esc(CLASSES[id].displayName)}</td><td class="num">${c.matches}</td><td class="num">${c.kills}</td><td class="num">${c.deaths}</td><td class="num">${c.assists}</td><td class="num">${c.damage}</td><td class="num">${c.healing}</td></tr>`; }).join('')}</tbody></table>
+      <h3 style="margin:20px 0 8px">Achievements · ${p.data.achievements.length}/${ACHIEVEMENTS.length}</h3>
+      <div class="ach-grid">${ACHIEVEMENTS.map((a) => { const pr = p.achievementProgress(a); return `<div class="ach ${pr.done ? 'done' : ''}"><div class="ic">${ICON[a.icon] || '★'}</div><div><b>${esc(a.name)}</b><div class="note">${esc(a.desc)}</div><div class="pg"><i style="width:${pr.pct * 100}%"></i></div><div class="note small">${Math.min(pr.value, a.goal).toLocaleString()} / ${a.goal.toLocaleString()}</div></div></div>`; }).join('')}</div>`;
+  }
+
+  // ---------------------------------------------------------------- SETTINGS
+  renderSettings(body) {
+    const st = this.app.settings;
+    this.setTab = this.setTab || 'controls';
+    const tabs = [['controls', 'Controls'], ['graphics', 'Graphics'], ['audio', 'Audio'], ['crosshair', 'Crosshair'], ['mobile', 'Touch'], ['access', 'Accessibility'], ['network', 'Network']];
+    body.innerHTML = `<div class="tabs" style="margin-bottom:14px">${tabs.map(([k, l]) => `<button class="btn ${k === this.setTab ? 'active' : ''}" data-tab="${k}">${l}</button>`).join('')}</div><div class="set-body"></div>`;
+    body.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { this.setTab = b.dataset.tab; this.renderSettings(body); this.wireSounds(body); }));
+    const sb = body.querySelector('.set-body');
+    const save = () => { saveSettings(st); this.app.applySettings(); };
+    const rows = [];
+    const range = (label, get, set, min, max, step, fmt = (v) => v) => rows.push({ label, html: `<div><input type="range" min="${min}" max="${max}" step="${step}" value="${get()}"><div class="val">${fmt(get())}</div></div>`, bind: (el) => { const i = el.querySelector('input'); i.addEventListener('input', () => { set(+i.value); el.querySelector('.val').textContent = fmt(+i.value); save(); }); } });
+    const check = (label, get, set) => rows.push({ label, html: `<input type="checkbox" ${get() ? 'checked' : ''}>`, bind: (el) => { const i = el.querySelector('input'); i.addEventListener('change', () => { set(i.checked); save(); }); } });
+    const select = (label, get, set, opts) => rows.push({ label, html: `<select class="input">${opts.map(([v, l]) => `<option value="${v}" ${String(get()) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`, bind: (el) => { const i = el.querySelector('select'); i.addEventListener('change', () => { set(i.value); save(); }); } });
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    const ov = (k, def) => st.overrides[k] ?? resolveQuality({ ...st, overrides: {} })[k] ?? def;
+    switch (this.setTab) {
+      case 'controls':
+        range('Mouse sensitivity', () => st.sensitivity, (v) => { st.sensitivity = v; }, 0.1, 4, 0.05, (v) => v.toFixed(2));
+        range('Horizontal multiplier', () => st.sensX, (v) => { st.sensX = v; }, 0.25, 2, 0.05, (v) => v.toFixed(2));
+        range('Vertical multiplier', () => st.sensY, (v) => { st.sensY = v; }, 0.25, 2, 0.05, (v) => v.toFixed(2));
+        check('Invert vertical look', () => st.invertY, (v) => { st.invertY = v; });
+        range('Field of view', () => st.fov, (v) => { st.fov = v; }, 70, 110, 1, (v) => `${v}°`);
+        for (const [k, label] of Object.entries(KEY_LABELS)) rows.push({ label, html: `<button class="btn keybind">${esc(keyName(st.keys[k]))}</button>`, bind: (el) => { const b = el.querySelector('button'); b.addEventListener('click', () => { b.classList.add('wait'); b.textContent = 'Press a key…'; const on = (e) => { e.preventDefault(); e.stopPropagation(); window.removeEventListener('keydown', on, true); if (e.code !== 'Escape') { st.keys[k] = e.code; save(); } b.classList.remove('wait'); b.textContent = keyName(st.keys[k]); }; window.addEventListener('keydown', on, true); }); } });
+        rows.push({ label: 'Restore default keys', html: '<button class="btn">Reset</button>', bind: (el) => el.querySelector('button').addEventListener('click', () => { st.keys = { ...DEFAULT_KEYS }; save(); this.renderSettings(body); }) });
+        break;
+      case 'graphics':
+        select('Quality preset', () => st.quality, (v) => { st.quality = v; st.overrides = {}; this.renderSettings(body); }, [['auto', 'Auto'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']]);
+        range('Resolution scale', () => st.resolutionScale, (v) => { st.resolutionScale = v; }, 0.5, 1.5, 0.05, pct);
+        check('Shadows', () => ov('shadows'), (v) => { st.overrides.shadows = v; });
+        select('Shadow resolution', () => ov('shadowSize'), (v) => { st.overrides.shadowSize = +v; }, [[512, '512'], [1024, '1024'], [2048, '2048'], [4096, '4096']]);
+        range('Particle density', () => ov('particleMult'), (v) => { st.overrides.particleMult = v; }, 0.2, 1.5, 0.05, pct);
+        range('Dynamic lights', () => ov('maxLights'), (v) => { st.overrides.maxLights = v; }, 0, 12, 1);
+        check('Weather effects', () => ov('weather'), (v) => { st.overrides.weather = v; });
+        check('Impact decals', () => ov('decals'), (v) => { st.overrides.decals = v; st.overrides.maxDecals = v ? 60 : 0; });
+        check('Anti-aliasing (reload required)', () => ov('antialias'), (v) => { st.overrides.antialias = v; });
+        range('View distance', () => ov('fogMult'), (v) => { st.overrides.fogMult = v; }, 0.6, 1.6, 0.05, pct);
+        check('Show FPS', () => st.showFps, (v) => { st.showFps = v; });
+        rows.push({ label: 'Map changes apply on next load', html: '<span class="note">Some options reload the map</span>', bind: () => {} });
+        break;
+      case 'audio':
+        range('Master volume', () => st.masterVolume, (v) => { st.masterVolume = v; }, 0, 1, 0.05, pct);
+        range('Music volume', () => st.musicVolume, (v) => { st.musicVolume = v; }, 0, 1, 0.05, pct);
+        range('Effects volume', () => st.effectsVolume, (v) => { st.effectsVolume = v; }, 0, 1, 0.05, pct);
+        check('Announcer voice', () => st.announcer, (v) => { st.announcer = v; });
+        check('Hit sounds', () => st.hitSound, (v) => { st.hitSound = v; });
+        check('3D positional audio (HRTF)', () => st.hrtf, (v) => { st.hrtf = v; });
+        break;
+      case 'crosshair': {
+        const c = st.crosshair;
+        select('Style', () => c.style, (v) => { c.style = v; refreshCh(); }, CROSSHAIRS.map((x) => [x, x[0].toUpperCase() + x.slice(1)]));
+        rows.push({ label: 'Colour', html: '<input type="color" class="input" style="height:40px;padding:2px">', bind: (el) => { const i = el.querySelector('input'); i.value = c.color; i.addEventListener('input', () => { c.color = i.value; save(); refreshCh(); }); } });
+        range('Size', () => c.size, (v) => { c.size = v; refreshCh(); }, 0.5, 2, 0.05, (v) => v.toFixed(2));
+        range('Gap', () => c.gap, (v) => { c.gap = v; refreshCh(); }, 0, 14, 1);
+        range('Thickness', () => c.thickness, (v) => { c.thickness = v; refreshCh(); }, 1, 5, 1);
+        check('Centre dot', () => c.dot, (v) => { c.dot = v; refreshCh(); });
+        check('Outline', () => c.outline, (v) => { c.outline = v; refreshCh(); });
+        check('Dynamic spread', () => c.dynamic, (v) => { c.dynamic = v; });
+        rows.push({ label: 'Preview', html: '<div class="ch-preview" style="display:grid;place-items:center"></div>', bind: (el) => { this.chPrev = el.querySelector('.ch-preview'); } });
+        var refreshCh = () => { if (this.chPrev) this.chPrev.innerHTML = crosshairSVG(c); this.app.ui.hud.buildCrosshair(); };
+        setTimeout(refreshCh, 0);
+        break;
+      }
+      case 'mobile':
+        check('Use touch controls', () => st.forceTouch || this.app.isTouch, (v) => { st.forceTouch = v; });
+        range('Look sensitivity', () => st.mobile.lookSens, (v) => { st.mobile.lookSens = v; }, 0.2, 3, 0.05, (v) => v.toFixed(2));
+        range('Joystick sensitivity', () => st.mobile.joySens, (v) => { st.mobile.joySens = v; }, 0.5, 2, 0.05, (v) => v.toFixed(2));
+        range('Button opacity', () => st.mobile.opacity, (v) => { st.mobile.opacity = v; this.app.touch.applyLayout(); }, 0.2, 1, 0.05, pct);
+        rows.push({ label: 'Button layout', html: '<button class="btn">Edit layout</button>', bind: (el) => el.querySelector('button').addEventListener('click', () => { this.closeSheet(); this.app.touch.setEditing(true); }) });
+        break;
+      case 'access':
+        check('Reduce motion (minimal bob, sprint FOV, shake)', () => st.reduceMotion, (v) => { st.reduceMotion = v; });
+        range('Camera shake', () => st.cameraShake, (v) => { st.cameraShake = v; }, 0, 1.5, 0.05, pct);
+        range('Weapon bob', () => st.viewBob, (v) => { st.viewBob = v; }, 0, 1.5, 0.05, pct);
+        check('Damage numbers', () => st.damageNumbers, (v) => { st.damageNumbers = v; });
+        check('Show player names', () => st.showNames, (v) => { st.showNames = v; });
+        break;
+      case 'network':
+        check('Show ping', () => st.showPing, (v) => { st.showPing = v; });
+        rows.push({ label: 'Dedicated server address', html: `<input class="input" value="${esc(st.serverUrl || defaultServerUrl())}">`, bind: (el) => { const i = el.querySelector('input'); i.addEventListener('keydown', (e) => e.stopPropagation()); i.addEventListener('change', () => { st.serverUrl = i.value.trim(); save(); }); } });
+        rows.push({ label: 'Browser hosting uses WebRTC via the public PeerJS signalling service; gameplay traffic flows directly between players.', html: '', bind: () => {} });
+        break;
+      default:
+    }
+    const grid = h('div', 'set-grid');
+    for (const r of rows) {
+      const el = h('div', 'set-row', `<span>${esc(r.label)}</span>${r.html}`);
+      grid.appendChild(el);
+      r.bind(el);
+    }
+    sb.appendChild(grid);
+  }
+
+  // ---------------------------------------------------------------- PAUSE / TEAM
+  renderPause(body) {
+    const g = this.app.game;
+    const host = g?.net.isHost;
+    const code = this.app.host?.code;
+    this.sheet.querySelector('.sheet').classList.add('pause');
+    body.innerHTML = `
+      ${code ? `<div class="note">Room code — share it with friends</div><div class="codebox">${esc(code)}</div>` : this.app.host ? '<div class="note">Hosting offline practice match</div>' : ''}
+      <button class="btn primary resume">Resume</button>
+      <button class="btn cls">Change class</button>
+      <button class="btn team">Change team</button>
+      <button class="btn sb">Scoreboard</button>
+      <button class="btn set">Settings</button>
+      ${host ? `<div class="host-tools"><div class="note">Host controls</div>
+        <div class="row-btns"><select class="input hm" style="flex:1">${MAP_IDS.map((id) => `<option value="${id}" ${id === g.net.mapId ? 'selected' : ''}>${esc(getMap(id).name)}</option>`).join('')}</select><select class="input hmo" style="width:120px">${Object.values(MODES).map((m) => `<option value="${m.id}" ${m.id === g.net.mode ? 'selected' : ''}>${m.short}</option>`).join('')}</select></div>
+        <button class="btn chmap">Change map / mode</button>
+        <div class="field" style="margin:0"><label>Bots: <b class="bv">${g.net.rosterMeta?.botFill ?? 0}</b></label><input type="range" min="0" max="16" step="1" value="${g.net.rosterMeta?.botFill ?? 0}" class="bots"></div>
+        <div class="row-btns"><button class="btn restart">Restart match</button><button class="btn end">End match now</button></div></div>` : ''}
+      <button class="btn red leave">Leave match</button>`;
+    body.querySelector('.resume').addEventListener('click', () => this.closeSheet(true));
+    body.querySelector('.cls').addEventListener('click', () => this.openClassMenu(true));
+    body.querySelector('.team').addEventListener('click', () => this.openTeamMenu());
+    body.querySelector('.sb').addEventListener('click', () => { this.closeSheet(); this.hud.showScoreboard(true); setTimeout(() => this.hud.showScoreboard(false), 4000); });
+    body.querySelector('.set').addEventListener('click', () => this.openSheet('settings'));
+    body.querySelector('.leave').addEventListener('click', () => this.app.leaveMatch());
+    if (host) {
+      body.querySelector('.chmap').addEventListener('click', () => { g.net.host('map', { mapId: body.querySelector('.hm').value, mode: body.querySelector('.hmo').value }); this.closeSheet(true); });
+      body.querySelector('.restart').addEventListener('click', () => { g.net.host('restart'); this.closeSheet(true); });
+      body.querySelector('.end').addEventListener('click', () => { g.net.host('end'); this.closeSheet(); });
+      const bots = body.querySelector('.bots');
+      bots.addEventListener('input', () => { body.querySelector('.bv').textContent = bots.value; });
+      bots.addEventListener('change', () => g.net.host('bots', { count: +bots.value }));
+    }
+  }
+
+  renderTeam(body) {
+    const g = this.app.game;
+    const roster = [...(g?.net.roster.values() || [])];
+    const c = [0, 1].map((t) => roster.filter((p) => p.team === t).length);
+    body.innerHTML = `<p class="note">Switching teams eliminates you. Teams must stay balanced.</p><div class="row-btns"><button class="btn red big" data-t="0">Join RED <span class="sub">${c[0]} players</span></button><button class="btn blue big" data-t="1">Join BLUE <span class="sub">${c[1]} players</span></button></div>`;
+    body.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => { g?.net.requestTeam(+b.dataset.t); this.closeSheet(true); }));
+  }
+
+  // ================================================================ LOADING
+  showLoading(title, sub) {
+    this.hideLoading();
+    const el = h('div', 'loading', `<div><h2>${esc(title)}</h2><div class="muted">${esc(sub || '')}</div><div class="spinner"></div><p class="tip">${esc(TIPS[Math.floor(Math.random() * TIPS.length)])}</p><button class="btn ghost cancel" style="margin-top:16px">Cancel</button></div>`);
+    el.querySelector('.cancel').addEventListener('click', () => this.app.leaveMatch());
+    this.root.appendChild(el);
+    this.loadingEl = el;
+  }
+  hideLoading() { if (this.loadingEl) { this.loadingEl.remove(); this.loadingEl = null; } }
+
+  onGameReady(game) {
+    this.hideLoading();
+    this.hideMainMenu();
+    this.closeSheet();
+    this.hideResults();
+    this.app.state = 'game';
+    this.app.audio.stopMusic();
+    if (!this.app.input.touchActive()) this.toast(`Click the game to aim. <b>${keyName(this.app.settings.keys.classmenu)}</b> changes class, <b>Tab</b> shows scores, <b>Esc</b> opens the menu.`, 6500);
+    if (this.app.host?.code) this.toast(`Hosting room <b>${esc(this.app.host.code)}</b> — share this code with friends.`, 9000);
+    this.app.onGameReady(game);
+  }
+
+  // ================================================================ RESULTS
+  showResults(r, summary, myId) {
+    this.hideResults();
+    this.closeSheet();
+    this.hud.showScoreboard(false);
+    const icons = this.app.icons;
+    const byId = new Map(r.players.map((p) => [p.id, p]));
+    const winTxt = r.winner === -1 ? 'Stalemate' : `${TEAM_NAMES[r.winner]} wins`;
+    const dur = `${Math.floor(r.duration / 60)}:${String(r.duration % 60).padStart(2, '0')}`;
+    const mvps = r.mvps.map((id) => byId.get(id)).filter(Boolean);
+    const el = h('div', 'results');
+    const players = [...r.players].sort((a, b) => a.team - b.team || b.stats.score - a.stats.score);
+    el.innerHTML = `
+      <div class="res-head"><div class="win ${r.winner === -1 ? 'draw' : `t${r.winner}`}">${winTxt}</div><div class="final"><span style="color:#ff8f80">${r.scores[0]}</span> — <span style="color:#8fb8ff">${r.scores[1]}</span></div><div class="meta">${esc(getMap(r.mapId).name)} · ${esc(MODES[r.mode].name)} · ${dur} · ${r.reason === 'score' ? 'score limit reached' : r.reason === 'time' ? 'time expired' : r.reason}</div></div>
+      <div class="res-mid">
+        <div class="awards">${r.awards.map((a) => `<div class="award plate thin"><img src="${icons.portraits[`${a.classId}_${a.team}`]}" alt=""><div><div class="t">${esc(a.title)}</div><div class="n" style="color:${a.team ? '#8fb8ff' : '#ff8f80'}">${esc(a.name)}${a.playerId === myId ? ' (you)' : ''}</div><div class="v">${a.value.toLocaleString()} ${esc(a.unit)}</div></div></div>`).join('')}</div>
+        <div class="podium-names">${mvps.map((p, i) => `<div><span>${['MVP', '2nd', '3rd'][i]}</span>${esc(p.name)}</div>`).join('')}</div>
+        <div class="xp-panel plate">${summary ? `<h3>${summary.won ? 'Victory' : summary.draw ? 'Draw' : 'Defeat'} · XP earned</h3>${summary.xp.lines.map((l) => `<div class="xp-line"><span>${esc(l.label)}${l.count > 1 ? ` ×${l.count}` : ''}</span><b>+${l.xp}</b></div>`).join('')}<div class="xp-total"><span>Total</span><span>+${summary.xp.total}</span></div>${summary.levelAfter > summary.levelBefore ? `<div class="levelup">Level up! You are now level ${summary.levelAfter}</div>` : ''}${summary.newAchievements.map((a) => `<div class="levelup" style="font-family:var(--ui);font-weight:700">Badge unlocked: ${esc(a.name)}</div>`).join('')}<div class="xpbar" style="margin-top:12px"><i style="width:${levelFromXp(this.app.profile.data.xp).into / levelFromXp(this.app.profile.data.xp).need * 100}%"></i></div>` : '<p class="note">Spectated match</p>'}</div>
+      </div>
+      <div class="res-table"><table class="tbl"><thead><tr><th>Player</th><th>Team</th><th>Class</th><th class="num">Score</th><th class="num">K</th><th class="num">A</th><th class="num">D</th><th class="num">Damage</th><th class="num">Healing</th>${r.mode === 'ctf' ? '<th class="num">Caps</th><th class="num">Returns</th>' : ''}</tr></thead><tbody>${players.map((p) => `<tr style="${p.id === myId ? 'background:rgba(240,180,41,.15)' : ''}"><td>${esc(p.name)}${p.isBot ? ' <span class="muted small">bot</span>' : ''}</td><td style="color:${p.team ? '#8fb8ff' : '#ff8f80'}">${TEAM_NAMES[p.team]}</td><td>${esc(getClass(p.classId).displayName)}</td><td class="num">${p.stats.score}</td><td class="num">${p.stats.kills}</td><td class="num">${p.stats.assists}</td><td class="num">${p.stats.deaths}</td><td class="num">${Math.round(p.stats.damage)}</td><td class="num">${Math.round(p.stats.healing)}</td>${r.mode === 'ctf' ? `<td class="num">${p.stats.captures}</td><td class="num">${p.stats.returns}</td>` : ''}</tr>`).join('')}</tbody><tfoot>${r.teamStats.map((t, i) => `<tr class="muted"><td>${TEAM_NAMES[i]} total</td><td></td><td></td><td></td><td class="num">${t.kills}</td><td class="num">${t.assists}</td><td class="num">${t.deaths}</td><td class="num">${Math.round(t.damage)}</td><td class="num">${Math.round(t.healing)}</td>${r.mode === 'ctf' ? `<td class="num">${t.captures}</td><td></td>` : ''}</tr>`).join('')}</tfoot></table></div>
+      <div class="res-foot"><span class="note next" style="align-self:center">Next match starting soon…</span><button class="btn primary stay">Stay for next match</button><button class="btn leave">Return to menu</button></div>`;
+    this.root.appendChild(el);
+    this.resultsEl = el;
+    el.querySelector('.leave').addEventListener('click', () => this.app.leaveMatch());
+    el.querySelector('.stay').addEventListener('click', () => { el.querySelector('.stay').disabled = true; el.querySelector('.next').textContent = 'Waiting for the server to start the next match…'; });
+    this.wireSounds(el);
+    // podium: MVP characters with their victory poses
+    this.app.renderer.showcase.setCharacters(mvps.map((p) => ({ classId: p.classId, team: p.team, cosmetics: p.cosmetics, pose: p.cosmetics?.victoryPose || 'flex', skin: p.cosmetics?.weaponSkin })));
+    this.app.state = 'results';
+    this.hud.show(false);
+    this.app.audio.startMusic('results');
+  }
+
+  hideResults() {
+    if (this.resultsEl) { this.resultsEl.remove(); this.resultsEl = null; this.app.audio.stopMusic(); }
+  }
+}

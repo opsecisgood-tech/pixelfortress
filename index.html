@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Pixel Fortress</title>
+  <meta name="description" content="Pixel Fortress — a class-based, blocky multiplayer FPS. Eight classes, two teams, six maps. Plays in your browser.">
+  <meta name="theme-color" content="#23272d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2323272d'/%3E%3Crect x='2' y='3' width='5' height='10' fill='%23d8473b'/%3E%3Crect x='9' y='3' width='5' height='10' fill='%233f7fd6'/%3E%3Crect x='6' y='6' width='4' height='4' fill='%23f0b429'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.min.js" } }
+  </script>
+  <script src="vendor/peerjs.min.js" defer></script>
+</head>
+<body>
+  <canvas id="view" aria-label="Game view"></canvas>
+  <div id="ui"></div>
+  <div id="touch"></div>
+  <noscript><p style="color:#fff;padding:2rem">Pixel Fortress needs JavaScript and WebGL.</p></noscript>
+  <div id="boot" class="boot">
+    <div class="boot-logo">PIXEL<br>FORTRESS</div>
+    <div class="boot-bar"><i></i></div>
+    <p class="boot-msg">Painting pixels…</p>
+  </div>
+  <script type="module" src="src/client/main.js"></script>
+</body>
+</html>

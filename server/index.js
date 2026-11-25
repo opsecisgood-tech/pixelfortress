@@ -1,0 +1,151 @@
+#!/usr/bin/env node
+// Pixel Fortress dedicated server: serves the static game files AND hosts authoritative matches over
+// WebSocket (/ws). Room-based matchmaking: list, create, join, quick play. Persistent TDM and CTF rooms
+// rotate through all six maps.
+//
+//   npm install && npm start          -> http://localhost:8080
+//   PORT=9000 BOTS=8 npm start
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { WebSocketServer } from 'ws';
+import { ServerGame } from '../src/server/ServerGame.js';
+import { SERVER_TICK_RATE, GAME_VERSION } from '../src/shared/constants.js';
+import { MAP_IDS } from '../src/maps/index.js';
+import { MODES } from '../src/shared/config/modes.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const PORT = +process.env.PORT || 8080;
+const BOTS = process.env.BOTS !== undefined ? +process.env.BOTS : 8;
+const MAX_ROOMS = +process.env.MAX_ROOMS || 12;
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain', '.md': 'text/markdown',
+};
+
+// ---------------------------------------------------------------- static files
+const server = http.createServer((req, res) => {
+  let url = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (url === '/api/rooms') {
+    res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+    res.end(JSON.stringify({ version: GAME_VERSION, rooms: roomList() }));
+    return;
+  }
+  if (url.endsWith('/')) url += 'index.html';
+  const file = path.normalize(path.join(ROOT, url));
+  if (!file.startsWith(ROOT) || file.includes(`${path.sep}.git`) || file.includes('node_modules')) { res.writeHead(403); res.end(); return; }
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
+    fs.createReadStream(file).pipe(res);
+  });
+});
+
+// ---------------------------------------------------------------- rooms
+const rooms = new Map();
+let nextRoomId = 1;
+let nextConnId = 1;
+
+function createRoom({ name, mapId, mode, botFill, persistent = false, maxPlayers = 16 }) {
+  if (rooms.size >= MAX_ROOMS) return null;
+  const id = String(nextRoomId++);
+  const room = { id, conns: new Map(), persistent, emptySince: Date.now() };
+  room.game = new ServerGame({
+    mapId: MAP_IDS.includes(mapId) ? mapId : MAP_IDS[0], mode: MODES[mode] ? mode : 'tdm',
+    botFill: Math.max(0, Math.min(16, botFill ?? BOTS)), maxPlayers, roomName: name || `Room ${id}`,
+    rotation: true, hostConn: -1,
+    send: (connId, msg) => {
+      const ws = room.conns.get(connId);
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+    },
+    log: (s) => console.log(`[room ${id}] ${s}`),
+  });
+  rooms.set(id, room);
+  console.log(`room ${id} created: ${room.game.roomName} ${room.game.mapId} ${room.game.modeId}`);
+  return room;
+}
+
+function roomList() {
+  return [...rooms.values()].map((r) => ({ id: r.id, ...r.game.info() }));
+}
+
+createRoom({ name: 'Fortress TDM #1', mapId: 'dusty_depot', mode: 'tdm', persistent: true });
+createRoom({ name: 'Fortress CTF #1', mapId: 'sandstone_fortress', mode: 'ctf', persistent: true });
+
+// ---------------------------------------------------------------- websocket
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
+
+wss.on('connection', (ws) => {
+  const connId = nextConnId++;
+  let room = null;
+  let msgCount = 0;
+  const rate = setInterval(() => { msgCount = 0; }, 1000);
+  ws.on('message', (raw) => {
+    if (++msgCount > 200) return; // flood protection
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+    if (!room) {
+      if (msg.t === 'lobby') {
+        if (msg.action === 'list') { ws.send(JSON.stringify({ t: 'rooms', rooms: roomList() })); return; }
+        let target = null;
+        if (msg.action === 'join') target = rooms.get(String(msg.room));
+        else if (msg.action === 'create') target = createRoom({ name: String(msg.name || '').slice(0, 32), mapId: msg.mapId, mode: msg.mode, botFill: msg.botFill });
+        else if (msg.action === 'quick') {
+          const wantMode = MODES[msg.mode] ? msg.mode : null;
+          const cands = [...rooms.values()].filter((r) => (!wantMode || r.game.modeId === wantMode) && r.game.humanCount() < r.game.maxPlayers)
+            .sort((a, b) => b.game.humanCount() - a.game.humanCount());
+          target = cands[0] || createRoom({ mapId: msg.mapId, mode: wantMode || 'tdm' });
+        }
+        if (!target) { ws.send(JSON.stringify({ t: 'error', reason: 'Room not available' })); return; }
+        room = target;
+        room.conns.set(connId, ws);
+        // the first human in a non-persistent room acts as its host (restart / map / bots controls)
+        if (!room.persistent && room.game.hostConn === -1) room.game.hostConn = connId;
+        ws.send(JSON.stringify({ t: 'joined', room: room.id, info: room.game.info() }));
+      }
+      return;
+    }
+    room.game.handleMessage(connId, msg);
+  });
+  ws.on('close', () => {
+    clearInterval(rate);
+    if (room) {
+      room.conns.delete(connId);
+      room.game.handleDisconnect(connId);
+      if (room.conns.size === 0) room.emptySince = Date.now();
+    }
+  });
+  ws.on('error', () => {});
+});
+
+// ---------------------------------------------------------------- simulation loop
+const STEP = 1000 / SERVER_TICK_RATE;
+let last = performance.now();
+let acc = 0;
+setInterval(() => {
+  const now = performance.now();
+  acc += now - last;
+  last = now;
+  if (acc > 250) acc = 250;
+  while (acc >= STEP) {
+    acc -= STEP;
+    for (const r of rooms.values()) {
+      if (r.conns.size === 0 && !r.persistent) {
+        if (Date.now() - r.emptySince > 60000) { rooms.delete(r.id); console.log(`room ${r.id} closed`); }
+        continue;
+      }
+      if (r.conns.size === 0) continue; // idle persistent rooms sleep
+      try { r.game.tick(); } catch (e) { console.error(`room ${r.id} tick error`, e); }
+    }
+  }
+}, 5);
+
+server.listen(PORT, () => {
+  console.log(`Pixel Fortress v${GAME_VERSION} dedicated server`);
+  console.log(`  game:      http://localhost:${PORT}/`);
+  console.log(`  websocket: ws://localhost:${PORT}/ws`);
+  console.log(`  rooms:     http://localhost:${PORT}/api/rooms`);
+});

@@ -1,0 +1,284 @@
+// SINGLE SOURCE OF TRUTH for weapon statistics.
+// type: hitscan | projectile | melee | beam (healing) | flame | repair
+// slot: 0 primary, 1 secondary, 2 melee
+// Times are seconds, distances metres, damage in hit points.
+
+const W = {};
+const def = (id, o) => {
+  W[id] = {
+    id,
+    pellets: 1,
+    headshotMult: 1,
+    critMult: 1.5,
+    crit: {},
+    auto: false,
+    clip: -1,
+    reserve: 0,
+    ammoPerShot: 1,
+    reloadTime: 1.5,
+    reloadMode: 'mag',          // 'mag' | 'single'
+    reloadStart: 0,
+    reloadInterrupt: 'switch',  // 'switch' | 'fire' (single reloads can be interrupted by firing)
+    spread: 0,
+    spreadMove: 0,
+    spreadAir: 0,
+    range: 100,
+    effectiveRange: 100,
+    minFalloff: 1,
+    deployTime: 0.35,
+    holsterTime: 0.1,
+    recoil: { pitch: 0.01, yaw: 0.004 },
+    kick: 0.5,
+    crosshair: 'cross',
+    tracer: 0xfff2a8,
+    botRange: 12,
+    ...o,
+  };
+};
+
+// ---------------- SCOUT ----------------
+def('scattershot', {
+  name: 'Scattershot', slot: 0, type: 'hitscan', category: 'Shotgun',
+  description: 'Compact 10-pellet shotgun. Devastating up close, weak at distance.',
+  damage: 6, pellets: 10, fireInterval: 0.625, clip: 6, reserve: 32,
+  reloadMode: 'single', reloadStart: 0.25, reloadTime: 0.45, reloadInterrupt: 'fire',
+  spread: 0.07, spreadMove: 0.01, spreadAir: 0.015,
+  range: 40, effectiveRange: 5, minFalloff: 0.3,
+  recoil: { pitch: 0.05, yaw: 0.012 }, kick: 1.2, crosshair: 'shotgun', botRange: 5,
+  deployTime: 0.3,
+});
+def('sidekick', {
+  name: 'Sidekick', slot: 1, type: 'hitscan', category: 'Pistol',
+  description: 'Light semi-automatic pistol for finishing fleeing targets.',
+  damage: 15, fireInterval: 0.15, clip: 12, reserve: 36, reloadTime: 1.05,
+  headshotMult: 1.25, spread: 0.012, spreadMove: 0.018, spreadAir: 0.03,
+  range: 70, effectiveRange: 14, minFalloff: 0.5,
+  recoil: { pitch: 0.018, yaw: 0.006 }, kick: 0.6, botRange: 14, deployTime: 0.25,
+});
+def('streetbat', {
+  name: 'Street Bat', slot: 2, type: 'melee', category: 'Melee',
+  description: 'A taped-up bat. Fast swings, solid knock.',
+  damage: 35, fireInterval: 0.5, auto: true,
+  melee: { range: 2.3, angle: 0.55, windup: 0.1 },
+  crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.25,
+});
+
+// ---------------- SPY ----------------
+def('silencedpistol', {
+  name: 'Silenced Pistol', slot: 0, type: 'hitscan', category: 'Pistol',
+  description: 'Suppressed sidearm. Quiet shots, accurate at mid range.',
+  damage: 18, fireInterval: 0.22, clip: 10, reserve: 40, reloadTime: 1.2,
+  headshotMult: 1.35, spread: 0.009, spreadMove: 0.014, spreadAir: 0.03,
+  range: 70, effectiveRange: 18, minFalloff: 0.5, silenced: true,
+  recoil: { pitch: 0.014, yaw: 0.005 }, kick: 0.45, botRange: 14,
+});
+def('revolver', {
+  name: 'Precision Revolver', slot: 1, type: 'hitscan', category: 'Revolver',
+  description: 'Six heavy rounds. First-shot accurate; punishes careless aim.',
+  damage: 42, fireInterval: 0.55, clip: 6, reserve: 24, reloadTime: 1.35,
+  headshotMult: 1.5, spread: 0.004, spreadMove: 0.02, spreadAir: 0.04,
+  range: 90, effectiveRange: 24, minFalloff: 0.55,
+  recoil: { pitch: 0.06, yaw: 0.012 }, kick: 1.3, botRange: 18,
+});
+def('shadowblade', {
+  name: 'Shadow Blade', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Balanced blade. Strikes to the back are lethal to most classes.',
+  damage: 40, fireInterval: 0.8, auto: true,
+  melee: { range: 2.1, angle: 0.5, windup: 0.08, backstab: true },
+  crosshair: 'melee', botRange: 2, deployTime: 0.25,
+});
+
+// ---------------- MARKSMAN ----------------
+def('longshot', {
+  name: 'Longshot Rifle', slot: 0, type: 'hitscan', category: 'Sniper Rifle',
+  description: 'Bolt-action precision rifle. Scope (RMB) to charge damage; scoped headshots double damage.',
+  damage: 50, fireInterval: 1.4, clip: 5, reserve: 25, reloadTime: 2.0,
+  headshotMult: 2.0, headshotRequiresScope: true,
+  spread: 0.035, spreadMove: 0.03, spreadAir: 0.06,
+  range: 220, effectiveRange: 220, minFalloff: 1,
+  scope: { fov: 24, chargeTime: 2.2, chargeMax: 150, moveMult: 0.45, delay: 0.15 },
+  recoil: { pitch: 0.08, yaw: 0.01 }, kick: 1.8, crosshair: 'scope', tracer: 0xc8f0ff, botRange: 40,
+  deployTime: 0.45,
+});
+def('compactsmg', {
+  name: 'Compact SMG', slot: 1, type: 'hitscan', category: 'SMG',
+  description: 'Bullet hose for when someone gets too close.',
+  damage: 8, fireInterval: 0.09, auto: true, clip: 25, reserve: 75, reloadTime: 1.25,
+  headshotMult: 1.2, spread: 0.028, spreadMove: 0.012, spreadAir: 0.03,
+  range: 55, effectiveRange: 12, minFalloff: 0.4,
+  recoil: { pitch: 0.008, yaw: 0.006 }, kick: 0.35, botRange: 10,
+});
+def('utilityknife', {
+  name: 'Utility Knife', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Box cutter. Critical damage when striking from behind.',
+  damage: 40, fireInterval: 0.6, auto: true,
+  melee: { range: 2.0, angle: 0.5, windup: 0.08 },
+  crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.25,
+});
+
+// ---------------- MECHANIC ----------------
+def('rivetgun', {
+  name: 'Rivet Gun', slot: 0, type: 'projectile', category: 'Nailgun',
+  description: 'Pneumatic rivet driver. Fast hot rivets with a slight drop.',
+  damage: 12, fireInterval: 0.12, auto: true, clip: 30, reserve: 120, reloadTime: 1.5,
+  spread: 0.02, spreadMove: 0.01, spreadAir: 0.02,
+  projectile: { kind: 'rivet', speed: 62, gravity: 3, radius: 0.08, lifetime: 1.4 },
+  recoil: { pitch: 0.008, yaw: 0.005 }, kick: 0.4, botRange: 14,
+});
+def('constructor', {
+  name: 'Construction Device', slot: 1, type: 'repair', category: 'Tool',
+  description: 'Short-range arc beam. Repairs & rearms allied turrets and zaps enemies.',
+  damage: 4, fireInterval: 0.1, auto: true, clip: 80, reserve: 160, reloadTime: 1.3,
+  repair: { range: 7, hpPerTick: 6, ammoPerTick: 4 },
+  range: 7, effectiveRange: 7, crosshair: 'beam', tracer: 0x8ef6ff, botRange: 5,
+});
+def('wrench', {
+  name: 'Reinforced Wrench', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Heavy wrench. Each hit on an allied turret repairs 40 HP and adds 40 rounds.',
+  damage: 32, fireInterval: 0.65, auto: true,
+  melee: { range: 2.2, angle: 0.55, windup: 0.12, repair: { hp: 40, ammo: 40 } },
+  crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+});
+
+// ---------------- DOCTOR ----------------
+def('syringelauncher', {
+  name: 'Syringe Launcher', slot: 0, type: 'projectile', category: 'Needle Gun',
+  description: 'Lobs a stream of medical darts. Leads targets at range.',
+  damage: 10, fireInterval: 0.105, auto: true, clip: 40, reserve: 150, reloadTime: 1.5,
+  spread: 0.015,
+  projectile: { kind: 'syringe', speed: 34, gravity: 9, radius: 0.08, lifetime: 2 },
+  recoil: { pitch: 0.006, yaw: 0.004 }, kick: 0.35, botRange: 12,
+});
+def('medbeam', {
+  name: 'Medical Beam', slot: 1, type: 'beam', category: 'Healing Beam',
+  description: 'Hold to lock onto an ally and heal them, overhealing up to 150%. Builds Overcharge.',
+  damage: 0, fireInterval: 0.1, auto: true, clip: -1,
+  beam: { range: 15, breakRange: 19, healRate: 27, overhealMax: 1.5, overhealRate: 0.4, lockAngle: 0.35 },
+  crosshair: 'beam', tracer: 0x7fffb0, botRange: 6, deployTime: 0.3,
+});
+def('surgicalsaw', {
+  name: 'Surgical Saw', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Bone saw. Each hit on an enemy adds 10% Overcharge.',
+  damage: 40, fireInterval: 0.8, auto: true,
+  melee: { range: 2.1, angle: 0.5, windup: 0.12, overchargeOnHit: 0.1 },
+  crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+});
+
+// ---------------- JUGGERNAUT ----------------
+def('cyclone', {
+  name: 'Cyclone Rotary Cannon', slot: 0, type: 'hitscan', category: 'Rotary Cannon',
+  description: 'Six barrels of sustained fire. Spin up with RMB or fire; slows you while spinning.',
+  damage: 9, fireInterval: 0.085, auto: true, clip: 200, reserve: 200, reloadTime: 3.0,
+  spread: 0.045, spreadMove: 0.015, spreadAir: 0.03,
+  range: 65, effectiveRange: 12, minFalloff: 0.35,
+  spinUp: 0.8, spinMoveMult: 0.5,
+  recoil: { pitch: 0.004, yaw: 0.006 }, kick: 0.3, botRange: 12, deployTime: 0.6,
+});
+def('breacher', {
+  name: 'Breacher Shotgun', slot: 1, type: 'hitscan', category: 'Shotgun',
+  description: 'Pump shotgun for when the cannon is too slow.',
+  damage: 7, pellets: 8, fireInterval: 0.7, clip: 6, reserve: 32,
+  reloadMode: 'single', reloadStart: 0.3, reloadTime: 0.5, reloadInterrupt: 'fire',
+  spread: 0.07, spreadMove: 0.01, spreadAir: 0.015,
+  range: 40, effectiveRange: 6, minFalloff: 0.3,
+  recoil: { pitch: 0.05, yaw: 0.012 }, kick: 1.2, crosshair: 'shotgun', botRange: 6,
+});
+def('foundryhammer', {
+  name: 'Foundry Hammer', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Forge sledge. Slow wind-up, crushing impact.',
+  damage: 65, fireInterval: 1.0, auto: true,
+  melee: { range: 2.5, angle: 0.6, windup: 0.28 },
+  crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.45,
+});
+
+// ---------------- INCINERATOR ----------------
+def('thermal', {
+  name: 'Thermal Projector', slot: 0, type: 'flame', category: 'Flamethrower',
+  description: 'Short-range jet of thermal plasma. Ignites targets for lingering burn damage.',
+  damage: 7, fireInterval: 0.08, auto: true, clip: 200, reserve: 200, reloadTime: 2.2,
+  flame: { range: 7.5, angle: 0.36, afterburnDps: 6, afterburnTime: 4, farMult: 0.5 },
+  range: 7.5, effectiveRange: 4, crosshair: 'flame', tracer: 0xff8a2a, botRange: 5,
+});
+def('flarelauncher', {
+  name: 'Flare Launcher', slot: 1, type: 'projectile', category: 'Flare Gun',
+  description: 'Single-shot flare. Ignites on hit; critical vs burning targets.',
+  damage: 30, fireInterval: 0.4, clip: 1, reserve: 16, reloadTime: 1.6,
+  crit: { vsBurning: true }, critMult: 2,
+  projectile: { kind: 'flare', speed: 40, gravity: 6, radius: 0.12, lifetime: 3, ignite: true },
+  recoil: { pitch: 0.05, yaw: 0.01 }, kick: 1.0, botRange: 18,
+});
+def('furnaceaxe', {
+  name: 'Furnace Axe', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Fire axe. Critical damage on burning targets.',
+  damage: 50, fireInterval: 0.8, auto: true,
+  melee: { range: 2.3, angle: 0.55, windup: 0.15 },
+  crit: { vsBurning: true, fromBehind: true }, critMult: 1.6, crosshair: 'melee', botRange: 2,
+});
+
+// ---------------- DEMOLITIONIST ----------------
+def('blastcaster', {
+  name: 'Blastcaster', slot: 0, type: 'projectile', category: 'Shell Launcher',
+  description: 'Straight-flying blast shells. Splash damage; direct hits are critical. Rocket-jump capable.',
+  damage: 90, fireInterval: 0.8, clip: 4, reserve: 20,
+  reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.8, reloadInterrupt: 'fire',
+  crit: { directHit: true }, critMult: 1.2, explosive: true,
+  projectile: { kind: 'shell', speed: 27, gravity: 0, radius: 0.18, lifetime: 5,
+    explode: { radius: 3.6, minMult: 0.35, knockback: 9, selfKnockback: 13, selfMult: 0.5 } },
+  recoil: { pitch: 0.06, yaw: 0.01 }, kick: 1.5, crosshair: 'circle', botRange: 14,
+});
+def('chargelauncher', {
+  name: 'Charge Launcher', slot: 1, type: 'projectile', category: 'Grenade Launcher',
+  description: 'Bouncing charges that burst on enemy contact or after a 2s fuse.',
+  damage: 80, fireInterval: 0.6, clip: 4, reserve: 16,
+  reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.6, reloadInterrupt: 'fire',
+  crit: { directHit: true }, critMult: 1.2, explosive: true,
+  projectile: { kind: 'charge', speed: 23, gravity: 17, radius: 0.15, lifetime: 2.0, bounce: 0.45, fuseExplode: true,
+    explode: { radius: 3.3, minMult: 0.35, knockback: 8, selfKnockback: 11, selfMult: 0.5 } },
+  recoil: { pitch: 0.04, yaw: 0.01 }, kick: 1.0, crosshair: 'circle', botRange: 12,
+});
+def('demohammer', {
+  name: 'Demolition Hammer', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Long-handled sledge for breaking walls and skulls.',
+  damage: 60, fireInterval: 0.9, auto: true,
+  melee: { range: 2.4, angle: 0.55, windup: 0.22 },
+  crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.4,
+});
+
+// Ability "pseudo-weapons" used for kill feed / damage attribution.
+export const ABILITY_SOURCES = {
+  turret: { id: 'turret', name: 'Automated Turret', damage: 8, range: 22, fireInterval: 0.16, maxHp: 160, maxAmmo: 150, turnRate: 3.2, spread: 0.035, buildTime: 1.2 },
+  detcharge: { id: 'detcharge', name: 'Detonation Charge' },
+  thermalburst: { id: 'thermalburst', name: 'Thermal Burst' },
+  afterburn: { id: 'afterburn', name: 'Afterburn' },
+  fall: { id: 'fall', name: 'Fall' },
+  world: { id: 'world', name: 'Environment' },
+  spawnshield: { id: 'spawnshield', name: 'Spawn Shield' },
+};
+
+export const WEAPONS = W;
+export const WEAPON_IDS = Object.keys(W);
+
+export function getWeapon(id) {
+  return W[id];
+}
+
+export function applyWeaponOverrides(overrides) {
+  for (const [id, patch] of Object.entries(overrides || {})) {
+    if (W[id]) Object.assign(W[id], patch);
+  }
+}
+
+export function validateWeapons() {
+  const errors = [];
+  const types = ['hitscan', 'projectile', 'melee', 'beam', 'flame', 'repair'];
+  for (const w of Object.values(W)) {
+    if (!types.includes(w.type)) errors.push(`${w.id} bad type`);
+    if (!(w.fireInterval > 0)) errors.push(`${w.id} bad fireInterval`);
+    if (w.type === 'projectile' && !w.projectile) errors.push(`${w.id} missing projectile`);
+    if (w.type === 'melee' && !w.melee) errors.push(`${w.id} missing melee`);
+    if (w.type === 'beam' && !w.beam) errors.push(`${w.id} missing beam`);
+    if (w.type === 'flame' && !w.flame) errors.push(`${w.id} missing flame`);
+    if (w.slot === 2 && w.type !== 'melee') errors.push(`${w.id} slot 2 must be melee`);
+  }
+  return errors;
+}
