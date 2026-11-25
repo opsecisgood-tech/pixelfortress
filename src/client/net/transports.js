@@ -19,7 +19,20 @@ export function makeRoomCode() {
   return s;
 }
 
+// Optional self-hosted signalling server: ?peer=host:port[/path] (defaults to the public PeerJS cloud).
+function customSignal() {
+  try {
+    const v = new URLSearchParams(window.location.search).get('peer');
+    if (!v) return {};
+    const m = v.match(/^([^:/]+)(?::(\d+))?(\/.*)?$/);
+    if (!m) return {};
+    const secure = window.location.protocol === 'https:';
+    return { host: m[1], port: +(m[2] || (secure ? 443 : 80)), path: m[3] || '/', secure };
+  } catch { return {}; }
+}
+
 const PEER_OPTS = {
+  ...customSignal(),
   debug: 0,
   config: {
     iceServers: [
@@ -207,7 +220,7 @@ export class PeerClient {
 }
 
 // Discover public browser-hosted rooms by probing well-known public slot ids.
-export async function browsePublicRooms(timeoutMs = 4000) {
+export async function browsePublicRooms(timeoutMs = 9000) {
   const Peer = peerLib();
   const peer = await new Promise((resolve, reject) => {
     const p = new Peer(PEER_OPTS);

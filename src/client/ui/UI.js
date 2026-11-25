@@ -264,7 +264,7 @@ export class UI {
       tb.innerHTML = `<p class="note">Matches hosted by other players who chose to list them publicly.</p><div class="row-btns" style="margin-bottom:12px"><button class="btn refresh">Refresh list</button></div><div class="room-list"><div class="note">Press refresh to search.</div></div>${status}`;
       const list = tb.querySelector('.room-list');
       const refresh = async () => {
-        list.innerHTML = '<div class="note">Searching…</div>';
+        list.innerHTML = '<div class="note">Searching for public matches (up to 10 seconds)…</div>';
         try {
           const rooms = await browsePublicRooms();
           if (!rooms.length) { list.innerHTML = '<div class="note">No public matches right now. Host one from the Host online tab.</div>'; return; }
