@@ -8,7 +8,7 @@ import {
 import { CLASSES, CLASS_IDS, getClass } from '../shared/config/classes.js';
 import { WEAPONS } from '../shared/config/weapons.js';
 import { MODES, SCORE_VALUES, MATCH_DEFAULTS } from '../shared/config/modes.js';
-import { sanitizeCosmetics } from '../shared/config/progression.js';
+import { sanitizeLoadouts, randomLoadouts } from '../shared/config/cosmetics.js';
 import { World } from '../shared/physics.js';
 import { NavGraph } from '../shared/nav.js';
 import { createMoveState, stepMovement, moveParamsFor, eyeHeight } from '../shared/movement.js';
@@ -27,6 +27,14 @@ import { round2, round3, wrapAngle } from '../shared/math.js';
 
 const TICK_DT = 1 / SERVER_TICK_RATE;
 const navCache = new Map();
+
+// Cosmetics the player currently wears: their loadout for the class they're playing (empty slots dropped).
+function wornBy(p) {
+  const lo = p.loadouts?.[p.classId] || {};
+  const out = {};
+  for (const k in lo) if (lo[k]) out[k] = lo[k];
+  return out;
+}
 
 export function emptyStats() {
   return {
@@ -112,7 +120,7 @@ export class ServerGame {
     if (this.state === MATCH_STATE.ENDED) return;
     this.state = MATCH_STATE.ENDED;
     this.stateTime = MATCH_DEFAULTS.endScreenTime;
-    const list = [...this.players.values()].map((p) => ({ id: p.id, name: p.name, team: p.team, classId: p.classId, isBot: p.isBot, cosmetics: p.cosmetics, stats: { ...p.stats, classKills: undefined } }));
+    const list = [...this.players.values()].map((p) => ({ id: p.id, name: p.name, team: p.team, classId: p.classId, isBot: p.isBot, cosmetics: wornBy(p), stats: { ...p.stats, classKills: { ...p.stats.classKills } } }));
     const awards = assignAwards(list, this.modeId);
     const mvps = [...list].sort((a, b) => mvpScore(b.stats) - mvpScore(a.stats)).slice(0, 3).map((p) => p.id);
     this.results = {
@@ -195,7 +203,7 @@ export class ServerGame {
       case 'team': if (p) this.requestTeam(p, msg.team); return;
       case 'chat': if (p) this.onChat(p, msg); return;
       case 'pong': if (p && p.pingSent && msg.n === p.pingN) { p.ping = Math.round((Date.now() - p.pingSent) / 1); p.pingSent = 0; } return;
-      case 'cos': if (p) { p.cosmetics = sanitizeCosmetics(msg.cosmetics); this.sendRoster(); } return;
+      case 'cos': if (p) { p.loadouts = sanitizeLoadouts(msg.loadouts); this.sendRoster(); } return;
       case 'host': if (connId === this.hostConn) this.onHostCommand(msg); return;
       default:
     }
@@ -225,7 +233,7 @@ export class ServerGame {
       const team = this.pickTeam(msg.team ?? -1);
       if (team < 0) { this.send(connId, { t: 'error', reason: 'Server is full.' }); return; }
       const classId = CLASS_IDS.includes(msg.classId) && classAllowed([...this.players.values()], team, msg.classId, getClass(msg.classId).limit) ? msg.classId : this.pickClass(team);
-      p = this.createPlayer({ name: this.uniqueName(name), team, classId, isBot: false, connId, cosmetics: sanitizeCosmetics(msg.cosmetics), token: msg.token || randomToken() });
+      p = this.createPlayer({ name: this.uniqueName(name), team, classId, isBot: false, connId, loadouts: sanitizeLoadouts(msg.loadouts), token: msg.token || randomToken() });
     }
     this.conns.set(connId, p.id);
     if (this.hostConn === null) this.hostConn = connId;
@@ -277,11 +285,11 @@ export class ServerGame {
     return 'scout';
   }
 
-  createPlayer({ name, team, classId, isBot, connId, cosmetics, token }) {
+  createPlayer({ name, team, classId, isBot, connId, loadouts, token }) {
     const id = this.nextId++;
     const cls = getClass(classId);
     const p = {
-      id, name, team, classId, nextClassId: classId, isBot, connId: connId ?? null, token, cosmetics: cosmetics || sanitizeCosmetics({}),
+      id, name, team, classId, nextClassId: classId, isBot, connId: connId ?? null, token, loadouts: loadouts || sanitizeLoadouts({}),
       alive: false, hp: 0, maxHp: cls.health, respawnAt: this.time + 0.5, spawnCount: 0,
       ms: createMoveState(), ws: createWeaponState(cls), cmdQueue: [], cmdBudget: 0, lastSeq: 0,
       history: [], spawnProtectUntil: 0, prevAbilityBtn: false,
@@ -306,7 +314,7 @@ export class ServerGame {
       if (team < 0) break;
       const used = new Set([...this.players.values()].map((p) => p.name));
       const name = BOT_NAMES.find((n) => !used.has(n)) || `Bot${this.nextId}`;
-      const p = this.createPlayer({ name, team, classId: this.pickClass(team), isBot: true, cosmetics: sanitizeCosmetics({}) });
+      const p = this.createPlayer({ name, team, classId: this.pickClass(team), isBot: true, loadouts: randomLoadouts(Math.random) });
       p.respawnAt = this.time + 0.5 + Math.random();
       total++;
     }
@@ -541,6 +549,7 @@ export class ServerGame {
     if (p.nextClassId && p.nextClassId !== p.classId) {
       this.abilities.removeOwned(p.id);
       p.classId = p.nextClassId;
+      this.rosterDirty = true;
     }
     const cls = getClass(p.classId);
     const sp = this.chooseSpawn(p);
@@ -611,7 +620,8 @@ export class ServerGame {
       this.sendSnapshots();
     }
     this.flushEvents();
-    if (this.tickCount % SERVER_TICK_RATE === 0) {
+    if (this.tickCount % SERVER_TICK_RATE === 0 || this.rosterDirty) {
+      this.rosterDirty = false;
       this.sendRoster();
       this.sendPings();
     }
@@ -850,7 +860,7 @@ export class ServerGame {
     const list = [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, team: p.team, cls: p.classId, bot: p.isBot, k: p.stats.kills, d: p.stats.deaths,
       a: p.stats.assists, s: p.stats.score, cap: p.stats.captures, dmg: Math.round(p.stats.damage), heal: Math.round(p.stats.healing),
-      ping: p.isBot ? 0 : p.ping, alive: p.alive, cos: p.cosmetics, host: p.connId !== null && p.connId === this.hostConn,
+      ping: p.isBot ? 0 : p.ping, alive: p.alive, cos: wornBy(p), host: p.connId !== null && p.connId === this.hostConn,
     }));
     this.broadcast({ t: 'r', players: list, room: this.roomName, mapId: this.mapId, mode: this.modeId, botFill: this.botFill });
   }

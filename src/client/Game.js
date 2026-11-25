@@ -199,7 +199,7 @@ export class Game {
     if (!me || !this.net.ws) return;
     const slot = this.net.ws.slot;
     const wid = this.net.ws.w[slot].id;
-    const cos = this.app.profile.cosmetics();
+    const cos = this.app.profile.cosmetics(me.cls);
     this.r.vm.setLoadout(me.cls, me.team, wid, cos.weaponSkin, cos.gloves);
     if (force) this.r.vm.onEquip();
   }

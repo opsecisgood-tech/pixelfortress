@@ -8,6 +8,8 @@ import { makeCanvas, hexToRgb, rgbStr } from './textures.js';
 import { colorMat, boxGeo } from './blocks.js';
 import { buildWeapon, WEAPON_MODELS } from './WeaponModels.js';
 import { voxelCells, VOXEL_MATERIAL } from './voxel.js';
+import { attachCosmetics, gloveSpec } from './CosmeticModels.js';
+import { getItem } from '../../shared/config/cosmetics.js';
 import { TEAM_COLORS_HEX, TEAM_DARK_HEX } from '../../shared/constants.js';
 import { getClass } from '../../shared/config/classes.js';
 import { mulberry32, damp } from '../../shared/math.js';
@@ -92,7 +94,8 @@ function paintPart(classId, team, part, dims, gloves) {
   const R = (f) => L[f];
   const fillAll = (col, amt = 0.08) => { for (const f of faces) { const [x, y, fw, fh] = R(f); noise(c, x, y, fw, fh, col, amt, rnd); } };
   const band = (y0, hh, col) => { for (const f of ['right', 'front', 'left', 'back']) { const [x, y, fw] = R(f); P(c, x, y + y0, fw, hh, col); } };
-  const glove = gloves === 'black' ? 0x222222 : gloves === 'team' ? st.tc : gloves === 'gold' ? 0xd8a830 : null;
+  const gs = gloveSpec(gloves, team);
+  const glove = gs ? gs.main : null;
 
   if (part === 'head') {
     fillAll(st.skin, 0.06);
@@ -228,6 +231,11 @@ function paintPart(classId, team, part, dims, gloves) {
     band(0, 1, st.tc);
   }
   if (classId === 'scout' || classId === 'spy') signaturePaint(classId, part, c, L, st, rnd, dims, glove);
+  if (part === 'arm' && gs) {
+    const gh = classId === 'spy' ? 2 : 3;
+    if (gs.cuff != null) band(h - gh - 1, 1, gs.cuff);
+    if (gs.stripe != null) band(h - 2, 1, gs.stripe);
+  }
   shadeAtlas(c, L, false);
   const tex = new THREE.CanvasTexture(cv);
   tex.magFilter = THREE.NearestFilter;
@@ -551,47 +559,6 @@ function accessories(classId, team, j, s, prop) {
   return hat;
 }
 
-function cosmeticsOn(j, s, cos, team, classHat) {
-  if (!cos) return;
-  const tc = TEAM_COLORS_HEX[team];
-  const A = (parent, x, y, z, w, h, d, col, glow) => {
-    const m = new THREE.Mesh(boxGeo(w * s, h * s, d * s), glow ? colorMat(col, { basic: true }) : colorMat(col));
-    m.position.set(x * s, y * s, z * s);
-    parent.add(m);
-    return m;
-  };
-  if (cos.hat && cos.hat !== 'none') {
-    for (const h of classHat) h.visible = false;
-    switch (cos.hat) {
-      case 'beanie': A(j.head, 0, 8.6, 0, 8.6, 2.4, 8.6, tc); A(j.head, 0, 10.2, 0, 2, 1, 2, 0xffffff); break;
-      case 'cone': A(j.head, 0, 8.5, 0, 7, 1.2, 7, 0xff7a20); A(j.head, 0, 9.7, 0, 5, 2, 5, 0xff7a20); A(j.head, 0, 11.4, 0, 3, 1.6, 3, 0xffffff); A(j.head, 0, 12.6, 0, 2, 1.4, 2, 0xff7a20); break;
-      case 'tophat': A(j.head, 0, 8.4, 0, 11, 0.6, 11, 0x1a1a1a); A(j.head, 0, 9, 0, 7, 6, 7, 0x1a1a1a); A(j.head, 0, 9.6, 0, 7.2, 1, 7.2, tc); break;
-      case 'headphones': A(j.head, 0, 9, 0, 9, 1, 2, 0x2a2a2a); A(j.head, 4.6, 4.5, 0, 1.4, 3.4, 3.4, tc); A(j.head, -4.6, 4.5, 0, 1.4, 3.4, 3.4, tc); break;
-      case 'horns': A(j.head, 0, 8.4, 0, 8.6, 1.6, 8.6, 0x8a8f96); A(j.head, 5, 9.4, 0, 2.4, 2, 2, 0xf0e8d0); A(j.head, 6, 11, 0, 1.6, 2.4, 1.6, 0xf0e8d0); A(j.head, -5, 9.4, 0, 2.4, 2, 2, 0xf0e8d0); A(j.head, -6, 11, 0, 1.6, 2.4, 1.6, 0xf0e8d0); break;
-      case 'crown': A(j.head, 0, 8.4, 0, 8.6, 1.6, 8.6, 0xe8b830); for (const [x, z] of [[-3.5, -3.5], [3.5, -3.5], [-3.5, 3.5], [3.5, 3.5], [0, -3.5]]) A(j.head, x, 10, z, 1.4, 1.6, 1.4, 0xe8b830); A(j.head, 0, 9, -4.35, 1.2, 1.2, 0.2, 0xd8384a, true); break;
-      case 'halo': A(j.head, 0, 11, 0, 8, 0.6, 1.2, 0xfff28a, true); A(j.head, 0, 11, 0, 1.2, 0.6, 8, 0xfff28a, true); A(j.head, 3.4, 11, 3.4, 1.2, 0.6, 1.2, 0xfff28a, true); A(j.head, -3.4, 11, -3.4, 1.2, 0.6, 1.2, 0xfff28a, true); A(j.head, 3.4, 11, -3.4, 1.2, 0.6, 1.2, 0xfff28a, true); A(j.head, -3.4, 11, 3.4, 1.2, 0.6, 1.2, 0xfff28a, true); break;
-      default:
-    }
-  }
-  if (cos.mask && cos.mask !== 'none') {
-    switch (cos.mask) {
-      case 'bandana': A(j.head, 0, 1.5, -4.2, 8.4, 3, 0.4, tc); break;
-      case 'shades': A(j.head, 0, 4.6, -4.25, 8.2, 1.4, 0.4, 0x111111); A(j.head, -2, 4.6, -4.4, 2, 1, 0.1, 0x4a6aa0, true); A(j.head, 2, 4.6, -4.4, 2, 1, 0.1, 0x4a6aa0, true); break;
-      case 'visor': A(j.head, 0, 4.6, -4.3, 8.4, 1.6, 0.4, 0x3ff2ff, true); break;
-      default:
-    }
-  }
-  if (cos.accessory && cos.accessory !== 'none') {
-    const bh = j.bodyH;
-    switch (cos.accessory) {
-      case 'scarf': A(j.torso, 0, bh - 0.5, 0, j.bodyW + 1.2, 2, j.bodyD + 1.2, tc); A(j.torso, 2, bh - 4, -j.bodyD / 2 - 0.6, 2, 5, 0.6, tc); break;
-      case 'medals': for (let i = 0; i < 3; i++) A(j.torso, -2 + i * 1.6, bh - 4, -j.bodyD / 2 - 0.3, 1.2, 1.6, 0.4, [0xe8b830, 0xc0c0c8, 0xb07040][i]); break;
-      case 'antenna': A(j.torso, -2, bh + 2, j.bodyD / 2 + 1, 0.5, 9, 0.5, 0x2a2a2a); A(j.torso, -2, bh + 7, j.bodyD / 2 + 1, 1, 1, 1, 0xff4040, true); break;
-      default:
-    }
-  }
-}
-
 // ---------------------------------------------------------------- rig
 const _qx = new THREE.Quaternion(), _qy = new THREE.Quaternion();
 const _X = new THREE.Vector3(1, 0, 0), _Y = new THREE.Vector3(0, 1, 0);
@@ -659,14 +626,15 @@ export class CharacterRig {
     j.bodyH = prop.body[1]; j.bodyW = prop.body[0]; j.bodyD = prop.body[2];
     this.j = j;
     this.classHat = accessories(this.classId, this.team, j, s, prop);
-    const hatOn = !!(this.opts.cosmetics?.hat && this.opts.cosmetics.hat !== 'none');
+    const hatOn = !!getItem(this.opts.cosmetics?.hat);
     const hairGeo = hairVoxels(this.classId, this.team, s, hatOn);
     if (hairGeo) {
       const hair = new THREE.Mesh(hairGeo, VOXEL_MATERIAL);
       hair.castShadow = true;
       j.head.add(hair);
     }
-    cosmeticsOn(j, s, this.opts.cosmetics, this.team, this.classHat);
+    const worn = attachCosmetics(j, s, this.opts.cosmetics, this.team);
+    if (worn.hat) for (const h of this.classHat) h.visible = false;
     this.armLen = (prop.arm[1] - prop.arm[0] / 2) * s;
     // both hands converge on a point in front of the chest (rigid arms can't bend)
     const sx = armX, reachZ = Math.sqrt(Math.max(0.01, this.armLen ** 2 - (sx * 0.85) ** 2));
@@ -733,6 +701,7 @@ export class CharacterRig {
     a.torsoX = damp(a.torsoX, -lean, 10, dt);
     j.torso.rotation.x = a.torsoX;
     j.head.rotation.x = Math.max(-0.7, Math.min(0.7, st.pitch || 0)) * 0.6 - a.torsoX * 0.5;
+    j.head.rotation.y = 0;
 
     // arms
     a.kick = Math.max(0, a.kick - dt * 6);
@@ -741,8 +710,13 @@ export class CharacterRig {
     let rx, lx, ly, lz = 0, rz = 0, ry = 0;
     if (st.dead) { rx = 0; lx = 0; ly = 0; }
     else if (a.pose) {
-      [rx, lx, rz, lz] = poseAngles(a.pose, performance.now() / 1000);
-      ly = 0;
+      const P = poseAngles(a.pose, performance.now() / 1000);
+      [rx, lx, rz, lz] = P;
+      ly = P.ly || 0; ry = P.ry || 0;
+      if (P.torso) j.torso.rotation.x = P.torso;
+      if (P.hop) j.hips.position.y += P.hop * this.scale;
+      j.head.rotation.y = P.headY || 0;
+      if (P.headX) j.head.rotation.x = P.headX;
     } else if (this.melee) {
       // melee: idle guard, swing arc when swinging
       rx = 0.9 + pitch * 0.5 + armSwing * 0.3;
@@ -812,13 +786,42 @@ export class CharacterRig {
   }
 }
 
-function poseAngles(pose, t) {
-  switch (pose) {
-    case 'flex': return [2.8 + Math.sin(t * 3) * 0.1, 2.8 - Math.sin(t * 3) * 0.1, 0.6, -0.6];
-    case 'salute': return [2.6, 0.1, 0.9, 0];
-    case 'cheer': return [3.0 + Math.sin(t * 8) * 0.3, 3.0 + Math.cos(t * 8) * 0.3, 0.3, -0.3];
-    case 'dab': return [2.9, 1.2, 0.2, -1.2];
-    default: return [0.2, 0.2, 0, 0];
+// Victory poses: [rightArmX, leftArmX, rightArmZ, leftArmZ] plus optional extras
+// (ly/ry arm yaw, torso lean, hop in skin pixels, head yaw/pitch). Accepts a catalog id or a bare shape.
+const pose = (rx, lx, rz, lz, extra) => Object.assign([rx, lx, rz, lz], extra || {});
+function poseAngles(id, t) {
+  const key = typeof id === 'string' && id.includes(':') ? (getItem(id)?.shape || 'flex') : id;
+  const sn = Math.sin, hopAbs = (f, a) => Math.abs(sn(t * f)) * a;
+  switch (key) {
+    case 'flex': return pose(2.8 + sn(t * 3) * 0.1, 2.8 - sn(t * 3) * 0.1, 0.6, -0.6);
+    case 'salute': return pose(2.6, 0.1, 0.9, 0);
+    case 'wave': return pose(2.9, 0.1, 0.4 + sn(t * 9) * 0.45, -0.05, { headY: -0.2 });
+    case 'point': return pose(1.65, 0.15, -0.1, -0.1, { torso: 0.08 });
+    case 'shrug': return pose(0.7, 0.7, 0.9 + sn(t * 4) * 0.1, -0.9 - sn(t * 4) * 0.1, { hop: hopAbs(4, 0.4), headX: 0.2 });
+    case 'cheer': return pose(3.0 + sn(t * 8) * 0.3, 3.0 + Math.cos(t * 8) * 0.3, 0.3, -0.3, { hop: hopAbs(5, 1.2) });
+    case 'think': return pose(2.3, 1.2, -0.65, 0.55, { headX: 0.25, headY: 0.2 });
+    case 'clap': { const c = sn(t * 14) * 0.22; return pose(1.45, 1.45, -0.3 + c, 0.3 - c); }
+    case 'champion': return pose(3.1, 3.1, 0.15, -0.15, { hop: hopAbs(3, 1.6), headX: -0.3 });
+    case 'dab': return pose(2.9, 1.2, 0.2, -1.2, { headX: 0.35, headY: 0.4 });
+    case 'starjump': { const o = (sn(t * 6) * 0.5 + 0.5); return pose(0.2, 0.2, 0.2 + o * 2.6, -0.2 - o * 2.6, { hop: o * 2.4 }); }
+    case 'robot': { const k = Math.floor(t * 2.5) % 4; return pose(k < 2 ? 1.57 : 0.3, k < 2 ? 0.3 : 1.57, 0, 0, { headY: (k % 2 ? 0.5 : -0.5) }); }
+    case 'airguitar': return pose(0.9 + sn(t * 18) * 0.35, 1.5, -0.4, 0.55, { torso: 0.15, headX: 0.3 + sn(t * 9) * 0.15 });
+    case 'guard': return pose(1.25, 1.45, -0.15, 0.4, { torso: 0.15 });
+    case 'heart': return pose(2.6, 2.6, -0.5, 0.5, { headY: sn(t * 2) * 0.15 });
+    case 'facepalm': return pose(2.4, 0.1, -0.95, -0.05, { headX: 0.45 });
+    case 'victory': return pose(2.8, 2.8, 0.8, -0.8, { hop: hopAbs(4, 1.4) });
+    case 'meditate': return pose(0.9, 0.9, 0.35, -0.35, { hop: 1.6 + sn(t * 2) * 0.6, headX: 0.1 });
+    case 'bow': return pose(1.1, -0.4, -0.7, -0.1, { torso: 0.75, headX: 0.2 });
+    case 'legend': return pose(3.05, 0.55, 0.1, -0.7, { torso: -0.12, headX: -0.25, headY: 0.2 });
+    case 'bunt': return pose(1.2, 1.25, -0.35, 0.35, { torso: 0.2 });
+    case 'tiptoe': return pose(1.35, -0.35, -0.5, -0.1, { hop: 0.6, headX: -0.15 });
+    case 'scan': return pose(2.55, 0.1, -0.7, -0.05, { headY: sn(t * 1.2) * 0.6 });
+    case 'wrenchtwirl': return pose(1.6, 0.2, 0, 0, { ry: (t * 6) % (Math.PI * 2) - Math.PI });
+    case 'diagnose': return pose(1.6, 1.05, -0.1, 0.35, { headX: 0.3, headY: -0.25 });
+    case 'beast': { const p = hopAbs(5, 1); return pose(1.2 + p * 0.4, 1.2 + (1 - p) * 0.4, 1.15, -1.15, { torso: 0.3 }); }
+    case 'warm': { const r = sn(t * 10) * 0.12; return pose(1.3 + r, 1.3 - r, -0.35, 0.35, { torso: 0.12, headX: 0.25 }); }
+    case 'detonate': { const d = (sn(t * 3) * 0.5 + 0.5); return pose(0.6 + d * 0.6, 0.6 + d * 0.6, -0.2, 0.2, { torso: 0.2 + d * 0.3, hop: (1 - d) * 0.8 }); }
+    default: return pose(0.2, 0.2, 0, 0);
   }
 }
 

@@ -105,11 +105,13 @@ export function voxelizeSprite(sprite, pal, opts) {
   }
   // 2) colours per pixel with automatic highlight / shade
   const rnd = mulberry32(seed);
+  const patGlow = new Set();
   const colAt = (x, y) => {
     const k = key[y * W + x];
     if (k === '__ol') return OUTLINE;
     let c = pal[k] ?? 0xff00ff;
     if (k === 'hl') return 0xf6f6f2;
+    if (opts.pattern) { const pc = opts.pattern(x - 1, y - 1, k, c); if (pc != null) { c = pc & 0xffffff; if (pc > 0xffffff) patGlow.add(y * W + x); } }
     const up = y > 0 ? key[(y - 1) * W + x] : null;
     const dn = y < H - 1 ? key[(y + 1) * W + x] : null;
     let f = 1 + (rnd() - 0.5) * 0.07;
@@ -129,7 +131,7 @@ export function voxelizeSprite(sprite, pal, opts) {
     if (!k) continue;
     const d = Math.min(maxD, depth[y * W + x] | 1);
     const c = colAt(x, y);
-    const glow = glowKeys.has(k);
+    const glow = glowKeys.has(k) || patGlow.has(y * W + x);
     for (let l = -(d - 1) / 2; l <= (d - 1) / 2; l++) { put(x, y, l, 1); cells.push([x, y, l, c, glow]); }
   }
   const builders = { solid: newBuilder(), glow: newBuilder() };

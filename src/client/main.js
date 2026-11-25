@@ -116,7 +116,7 @@ class App {
   hello() {
     let token = null;
     try { token = sessionStorage.getItem('pf_token'); } catch { /* ignore */ }
-    return { name: this.profile.name || 'Recruit', classId: this.profile.data.selectedClass, cosmetics: this.profile.cosmetics(), token };
+    return { name: this.profile.name || 'Recruit', classId: this.profile.data.selectedClass, loadouts: this.profile.loadoutsPayload(), token };
   }
 
   beginGame(transport, meta) {

@@ -1,6 +1,7 @@
 // Visual effects with pooling: instanced pixel-cube particles, tracers, muzzle flashes with light,
 // explosions, healing/repair beams, flame streams, impact decals, elimination gibs and spawn columns.
 import * as THREE from 'three';
+import { getItem } from '../../shared/config/cosmetics.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 
 const tmpM = new THREE.Matrix4();
@@ -167,14 +168,24 @@ export class Effects {
       if (this.gibs.length > 160) { const g = this.gibs.shift(); this.scene.remove(g.m); }
     }
     const c = meshes[0] ? meshes[0].getWorldPosition(new THREE.Vector3()) : new THREE.Vector3();
-    const palettes = {
-      pixels: [0xc8402f, 0x8a2a1f, TEAM_COLORS_HEX[team], 0xffffff],
-      confetti: [0xff3f6a, 0x3ff2ff, 0xffe03f, 0x58ff6a],
-      sparks: [0xffe070, 0xffa030, 0xffffff],
-      hearts: [0xff4f8a, 0xff8ab0, 0xffffff],
-      gold: [0xffd040, 0xffe890, 0xc89a28],
-    };
-    this.burst(c.x, c.y, c.z, effect === 'pixels' ? 18 : 30, { color: palettes[effect] || palettes.pixels, speed: effect === 'sparks' ? 8 : 5, life: effect === 'confetti' ? 1.6 : 0.9, size: 0.09, g: effect === 'hearts' ? -2 : 9, up: 0.5 });
+    this.elimEffect(c.x, c.y, c.z, effect, team);
+  }
+
+  // Catalog elimination effect (also previewed in the loadout). Higher rarity = denser, layered bursts.
+  elimEffect(x, y, z, effect, team = 0) {
+    const it = getItem(effect) || getItem('elimEffect:pixels');
+    const colors = it.colors.map((v) => (v === 'team' ? TEAM_COLORS_HEX[team] : v));
+    const r = it.rarity;
+    const drift = it.g < 0;
+    this.burst(x, y, z, 18 + r * 7, { color: colors, speed: it.speed, life: drift ? 1.8 : 1 + r * 0.08, size: 0.08 + r * 0.008, g: it.g, drag: drift ? 1.5 : 0.6, up: 0.5 });
+    if (r >= 3) this.burst(x, y + 0.6, z, 10 + r * 3, { color: colors, speed: it.speed * 0.4, life: 1.6, size: 0.05, g: -1.5, drag: 2, up: 1.2 });
+    if (r >= 5) {
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        this.burst(x, y - 0.4, z, 1, { color: colors, speed: it.speed * 0.9, life: 0.9, size: 0.12, g: 0, drag: 1.5, dir: [Math.cos(a), 0.05, Math.sin(a)], cone: 0.05 });
+      }
+    }
+    if (r >= 6) this.burst(x, y + 1.6, z, 30, { color: colors, speed: it.speed * 1.2, life: 1.4, size: 0.1, g: 3, drag: 1, up: 0.2 });
   }
 
   // Cube-chain beam between two points (healing, repair). Rebuilt each frame by caller.

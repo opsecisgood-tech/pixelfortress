@@ -1,4 +1,4 @@
-// Progression rules: XP awards, level curve, achievements and cosmetics.
+// Progression rules: XP awards, level curve and achievements.
 
 export const XP = {
   kill: 50,
@@ -65,82 +65,4 @@ export const ACHIEVEMENTS = [
   { id: 'mvp', name: 'Most Valuable', desc: 'Earn 10 end-of-match awards.', stat: 'awards', goal: 10, icon: 'trophy' },
 ];
 
-// Cosmetics are visual only. unlock: { level } or { achievement }.
-export const COSMETICS = {
-  hat: [
-    { id: 'none', name: 'No Hat', unlock: { level: 1 } },
-    { id: 'beanie', name: 'Pixel Beanie', unlock: { level: 2 } },
-    { id: 'cone', name: 'Traffic Cone', unlock: { level: 4 } },
-    { id: 'tophat', name: 'Boxy Top Hat', unlock: { level: 6 } },
-    { id: 'headphones', name: 'Comms Headset', unlock: { level: 8 } },
-    { id: 'horns', name: 'Viking Horns', unlock: { level: 12 } },
-    { id: 'crown', name: 'Block Crown', unlock: { achievement: 'winner' } },
-    { id: 'halo', name: 'Field Halo', unlock: { achievement: 'fieldmedic' } },
-  ],
-  mask: [
-    { id: 'none', name: 'No Mask', unlock: { level: 1 } },
-    { id: 'bandana', name: 'Bandana', unlock: { level: 3 } },
-    { id: 'shades', name: 'Block Shades', unlock: { level: 5 } },
-    { id: 'visor', name: 'Neon Visor', unlock: { level: 10 } },
-  ],
-  accessory: [
-    { id: 'none', name: 'None', unlock: { level: 1 } },
-    { id: 'scarf', name: 'Team Scarf', unlock: { level: 3 } },
-    { id: 'medals', name: 'Medal Rack', unlock: { achievement: 'veteran' } },
-    { id: 'antenna', name: 'Radio Antenna', unlock: { level: 9 } },
-  ],
-  weaponSkin: [
-    { id: 'none', name: 'Factory', unlock: { level: 1 } },
-    { id: 'camo', name: 'Desert Camo', unlock: { level: 2 } },
-    { id: 'carbon', name: 'Carbon', unlock: { level: 5 } },
-    { id: 'candy', name: 'Candy Stripe', unlock: { level: 7 } },
-    { id: 'neon', name: 'Neon Grid', unlock: { level: 11 } },
-    { id: 'gold', name: 'Gilded', unlock: { achievement: 'centurion' } },
-  ],
-  gloves: [
-    { id: 'none', name: 'Standard', unlock: { level: 1 } },
-    { id: 'black', name: 'Tactical Black', unlock: { level: 3 } },
-    { id: 'team', name: 'Team Colors', unlock: { level: 6 } },
-    { id: 'gold', name: 'Gold Knuckles', unlock: { achievement: 'rampage' } },
-  ],
-  victoryPose: [
-    { id: 'flex', name: 'Flex', unlock: { level: 1 } },
-    { id: 'salute', name: 'Salute', unlock: { level: 2 } },
-    { id: 'cheer', name: 'Cheer', unlock: { level: 4 } },
-    { id: 'dab', name: 'Point Skyward', unlock: { level: 8 } },
-  ],
-  elimEffect: [
-    { id: 'pixels', name: 'Pixel Burst', unlock: { level: 1 } },
-    { id: 'confetti', name: 'Confetti', unlock: { level: 3 } },
-    { id: 'sparks', name: 'Sparks', unlock: { level: 6 } },
-    { id: 'hearts', name: 'Hearts', unlock: { level: 10 } },
-    { id: 'gold', name: 'Gold Rush', unlock: { achievement: 'unstoppable' } },
-  ],
-  banner: [
-    { id: 'steel', name: 'Riveted Steel', unlock: { level: 1 } },
-    { id: 'hazard', name: 'Hazard Stripe', unlock: { level: 2 } },
-    { id: 'circuit', name: 'Circuit Board', unlock: { level: 5 } },
-    { id: 'sunset', name: 'Desert Sunset', unlock: { level: 7 } },
-    { id: 'frost', name: 'Frostfall', unlock: { level: 9 } },
-    { id: 'neon', name: 'Neon Night', unlock: { level: 13 } },
-  ],
-};
-
-export const COSMETIC_SLOTS = Object.keys(COSMETICS);
-
-export function isCosmeticUnlocked(item, profile) {
-  if (!item) return false;
-  if (item.unlock.level) return (profile.level || 1) >= item.unlock.level;
-  if (item.unlock.achievement) return (profile.achievements || []).includes(item.unlock.achievement);
-  return false;
-}
-
-// Sanitize cosmetics sent by a client (visual only, but keep values in the known set).
-export function sanitizeCosmetics(c) {
-  const out = {};
-  for (const slot of COSMETIC_SLOTS) {
-    const v = c && typeof c[slot] === 'string' ? c[slot] : null;
-    out[slot] = COSMETICS[slot].some((i) => i.id === v) ? v : COSMETICS[slot][0].id;
-  }
-  return out;
-}
+// Cosmetics live in ./cosmetics.js (catalog, crates) and ./economy.js (reward loop).

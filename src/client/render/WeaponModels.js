@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { PixelSprite, voxelizeSprite, VOXEL_MATERIAL, VOXEL_GLOW_MATERIAL } from './voxel.js';
 import { colorMat, boxGeo } from './blocks.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
+import { getItem } from '../../shared/config/cosmetics.js';
 
 const BASE = {
   metal: 0x7c838c, dark: 0x34373d, light: 0xd7dbe0, wood: 0x9a6232, woodDark: 0x6e4220, grip: 0x3d2b20, tape: 0xe6e2d6,
@@ -14,14 +15,51 @@ const BASE = {
 };
 const GLOW = new Set(['glow', 'cyan', 'fire']);
 
-const SKINS = {
-  none: {},
-  camo: { metal: 0xa88f5c, dark: 0x6a5a3a, light: 0xc9b688, olive: 0x8a7a4a, black: 0x4a3f2a, gunmetal: 0x7d6c48, white: 0xd8c8a0 },
-  carbon: { metal: 0x3a3c41, dark: 0x1d1e21, light: 0x5a5d63, wood: 0x2e2f33, woodDark: 0x1f2023, olive: 0x2a2b2f, gunmetal: 0x2f3135, white: 0x5a5d63 },
-  candy: { metal: 0xf4f4f4, dark: 0xd8384a, light: 0xffffff, wood: 0xff9ac8, woodDark: 0xe0609a, olive: 0xf4f4f4, gunmetal: 0xd8384a },
-  neon: { metal: 0x2c2046, dark: 0x140d24, light: 0xff4fb0, wood: 0x34205a, woodDark: 0x22143a, olive: 0x2c2046, glow: 0xff4fb0, cyan: 0xff4fb0, gunmetal: 0x3a2a5e },
-  gold: { metal: 0xe0b03a, dark: 0xa07818, light: 0xffe48a, wood: 0x8a5a20, olive: 0xd0a030, steel: 0xffe48a, gunmetal: 0xc09028, white: 0xffe8a0 },
-};
+// Weapon skins come from the cosmetics catalog: a pattern drawn across the sprite in a 3-colour palette.
+// Pattern colours replace the body keys (metal, wood, polymer...) and keep their light/dark tone.
+const SKINNABLE = { metal: 1, gunmetal: 0.85, steel: 1.15, light: 1.25, dark: 0.62, black: 0.55, wood: 1, woodDark: 0.75, olive: 0.9, khaki: 1.05, white: 1.25 };
+const hash2 = (x, y, s = 0) => { let h = (x * 374761393 + y * 668265263 + s * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+function vnoise(x, y, s) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi, s), b = hash2(xi + 1, yi, s), c = hash2(xi, yi + 1, s), d = hash2(xi + 1, yi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function tone(c, f) {
+  const r = Math.min(255, ((c >> 16) & 255) * f), g = Math.min(255, ((c >> 8) & 255) * f), b = Math.min(255, (c & 255) * f);
+  return (r << 16) | (g << 8) | b;
+}
+const GLOW_BIT = 0x1000000;
+function hsl(h, s, l) { return new THREE.Color().setHSL(h, s, l).getHex(); }
+function skinPattern(item) {
+  if (!item || item.slot !== 'weaponSkin' || item.shape === 'none' || !item.colors) return null;
+  const [A, B, C] = item.colors;
+  const glowy = item.fx === 'glow', rainbow = item.fx === 'rainbow';
+  return (x, y, k) => {
+    const f = SKINNABLE[k];
+    if (f === undefined) return null;
+    let col = A, glow = false;
+    switch (item.shape) {
+      case 'solid': col = (y % 7 === 0) ? B : A; break;
+      case 'stripes': col = Math.floor((x + y) / 3) % 2 ? A : B; break;
+      case 'checker': col = ((x >> 1) + (y >> 1)) % 2 ? A : B; break;
+      case 'camo': { const n = vnoise(x / 4.5, y / 3.5, 3); col = n < 0.42 ? A : n < 0.66 ? B : C; break; }
+      case 'digital': { const n = vnoise((x >> 1) / 2.2, (y >> 1) / 2.2, 7); col = n < 0.4 ? A : n < 0.65 ? B : C; break; }
+      case 'dots': col = (x % 4 === 1 && y % 4 === 1) || (x % 4 === 3 && y % 4 === 3) ? C : A; break;
+      case 'chevron': col = Math.floor((x + Math.abs((y % 6) - 3)) / 2) % 3 === 0 ? B : Math.floor((x + Math.abs((y % 6) - 3)) / 2) % 3 === 1 ? A : C; break;
+      case 'carbon': col = ((x + (y >> 1)) % 2) ? A : B; break;
+      case 'damascus': { const w = Math.sin(x * 0.55 + Math.sin(y * 0.9) * 2.2); col = w > 0.35 ? C : w > -0.3 ? A : B; break; }
+      case 'circuit': { const on = (x % 6 === 0 && hash2(0, y >> 2, 5) > 0.3) || (y % 4 === 1 && hash2(x >> 2, 0, 9) > 0.45); col = on ? B : A; glow = on; if (on && hash2(x, y, 2) > 0.85) col = C; break; }
+      case 'lava': { const n = vnoise(x / 3.5, y / 2.5, 11); col = n > 0.62 ? C : n > 0.45 ? B : A; glow = n > 0.45; break; }
+      case 'galaxy': { const n = vnoise(x / 5, y / 3, 13); col = hash2(x, y, 17) > 0.93 ? 0xffffff : n > 0.6 ? C : n > 0.42 ? B : A; glow = col === 0xffffff || n > 0.6; break; }
+      case 'gilded': col = (x + y) % 5 === 0 ? C : (y % 3 === 0 ? B : A); break;
+      default: col = A;
+    }
+    if (rainbow) { col = hsl(((x * 0.035 + y * 0.05) % 1 + 1) % 1, 0.85, col === A ? 0.55 : col === B ? 0.42 : 0.7); glow = glow || (x + y) % 9 === 0; }
+    const out = tone(col, glowy && glow ? 1.1 : f);
+    return (glow && (glowy || rainbow || item.fx === 'glow')) ? out | GLOW_BIT : out;
+  };
+}
 
 // ------------------------------------------------------------------ sprites
 // Each entry: { w, h, px (metres per pixel), grip:[x,y], muzzle:[x,y], draw(S), melee?, fp, spin? }
@@ -307,10 +345,11 @@ for (const m of Object.values(WEAPON_MODELS)) {
 const geoCache = new Map();
 
 function buildGeometry(id, skin, team) {
-  const key = `${id}|${skin || 'none'}|${team}`;
+  const item = getItem(skin);
+  const key = `${id}|${item ? item.id : 'none'}|${team}`;
   if (geoCache.has(key)) return geoCache.get(key);
   const def = WEAPON_MODELS[id];
-  const pal = { ...BASE, ...(SKINS[skin] || {}), team: TEAM_COLORS_HEX[team ?? 0] };
+  const pal = { ...BASE, team: TEAM_COLORS_HEX[team ?? 0] };
   const S = new PixelSprite(def.w, def.h);
   def.draw(S);
   const px = def.px;
@@ -318,7 +357,7 @@ function buildGeometry(id, skin, team) {
   const map = def.melee
     ? (x, y, l) => [l * px, (x - gx) * px, (y - gy) * px]
     : (x, y, l) => [l * px, -(y - gy) * px, -(x - gx) * px];
-  const g = voxelizeSprite(S, pal, { size: px, map, glowKeys: GLOW, seed: id.length * 97 });
+  const g = voxelizeSprite(S, pal, { size: px, map, glowKeys: GLOW, seed: id.length * 97, pattern: skinPattern(item) });
   geoCache.set(key, g);
   return g;
 }
@@ -339,7 +378,7 @@ export function buildWeapon(id, opts = {}) {
   let spin = null;
   if (def.spin) {
     // rotary barrel cluster: six outlined voxel rods around the bore axis
-    const pal = { ...BASE, ...(SKINS[opts.skin] || {}) };
+    const pal = BASE;
     spin = new THREE.Group();
     const px = def.px;
     const len = (def.spin.to - def.spin.from) * px;

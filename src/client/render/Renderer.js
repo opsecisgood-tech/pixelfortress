@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { Viewmodel } from './Viewmodel.js';
 import { CharacterRig } from './CharacterModel.js';
 import { buildWeapon } from './WeaponModels.js';
+import { tickCosmeticFx } from './CosmeticModels.js';
 import { bx, colorMat } from './blocks.js';
 import { getPlainMaterial as getWorldMaterial } from './textures.js';
 import { CLASS_IDS, getClass } from '../../shared/config/classes.js';
@@ -51,6 +52,7 @@ export class Renderer {
 
   renderGame(showViewmodel) {
     const gl = this.gl;
+    tickCosmeticFx(performance.now() / 1000);
     gl.setRenderTarget(null);
     gl.clear();
     gl.render(this.scene, this.camera);
@@ -62,6 +64,7 @@ export class Renderer {
 
   renderMenu(dt) {
     this.showcase.update(dt, this.aspect);
+    tickCosmeticFx(performance.now() / 1000);
     this.gl.setRenderTarget(null);
     this.gl.clear();
     this.gl.render(this.showcase.scene, this.showcase.camera);

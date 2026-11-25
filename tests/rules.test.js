@@ -9,7 +9,7 @@ import { chooseTeam, canSwitchTeam, classAllowed } from '../src/shared/teams.js'
 import { Flag } from '../src/shared/flag.js';
 import { FLAG_STATE } from '../src/shared/constants.js';
 import { assignAwards } from '../src/shared/awards.js';
-import { computeMatchXp, levelFromXp, xpForLevel, sanitizeCosmetics } from '../src/shared/config/progression.js';
+import { computeMatchXp, levelFromXp, xpForLevel } from '../src/shared/config/progression.js';
 
 test('exactly eight valid classes referencing real weapons in correct slots', () => {
   assert.equal(CLASS_IDS.length, 8);
@@ -150,5 +150,4 @@ test('xp is computed from stats with anti-exploit caps; level curve is monotonic
   for (let l = 1; l < 50; l++) assert.ok(xpForLevel(l + 1) > xpForLevel(l));
   assert.equal(levelFromXp(0).level, 1);
   assert.equal(levelFromXp(xpForLevel(1)).level, 2);
-  assert.deepEqual(sanitizeCosmetics({ hat: 'crown', mask: '<script>' }).mask, 'none');
 });
