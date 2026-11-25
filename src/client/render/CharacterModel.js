@@ -135,7 +135,7 @@ function paintPart(classId, team, part, dims, gloves) {
         P(c, fx + 1, fy + 6, 6, 2, '#bfe0e8'); // surgical mask
         break;
       case 'juggernaut':
-        P(c, fx + 1, fy + 2, 6, 1, '#3a2418'); // heavy brow
+        P(c, fx + 1, fy + 2, 2, 1, '#3a2418'); P(c, fx + 5, fy + 2, 2, 1, '#3a2418'); P(c, fx + 3, fy + 2, 2, 1, '#b8805c'); // heavy brows, frown crease
         P(c, fx + 1, fy + 3, 2, 1, '#fff'); P(c, fx + 5, fy + 3, 2, 1, '#fff');
         P(c, fx + 2, fy + 3, 1, 1, '#222'); P(c, fx + 5, fy + 3, 1, 1, '#222');
         noise(c, fx, fy + 5, 8, 3, 0x3a2a1a, 0.25, rnd);
@@ -149,9 +149,14 @@ function paintPart(classId, team, part, dims, gloves) {
         P(c, fx + 3, fy + 5, 2, 3, '#222'); P(c, fx + 2, fy + 6, 4, 1, '#555');
         break;
       case 'demolitionist':
-        P(c, fx, fy + 1, 8, 3, st.tc); P(c, fx, fy + 1, 8, 1, hex(st.td));
-        P(c, fx + 1, fy + 2, 6, 2, '#1a2a2a'); P(c, fx + 2, fy + 2, 1, 1, '#7fd0ff');
-        P(c, fx + 2, fy + 5, 4, 1, '#2a1a10'); noise(c, fx + 1, fy + 6, 6, 2, 0x2a1a10, 0.3, rnd);
+        // separate brows, real eyes, moustache and short beard
+        P(c, fx + 1, fy + 2, 2, 1, '#24160c'); P(c, fx + 5, fy + 2, 2, 1, '#24160c');
+        P(c, fx + 1, fy + 3, 2, 1, '#f2efe6'); P(c, fx + 5, fy + 3, 2, 1, '#f2efe6');
+        P(c, fx + 2, fy + 3, 1, 1, '#3b2312'); P(c, fx + 5, fy + 3, 1, 1, '#3b2312');
+        P(c, fx + 3, fy + 4, 2, 1, hex(shadeNum(st.skin, 0.82)));
+        P(c, fx + 2, fy + 5, 4, 1, '#24160c');
+        P(c, fx + 1, fy + 5, 1, 3, '#2e1d10'); P(c, fx + 6, fy + 5, 1, 3, '#2e1d10'); P(c, fx + 2, fy + 7, 4, 1, '#2e1d10');
+        P(c, fx + 3, fy + 6, 2, 1, '#6a2a1c');
         break;
       default:
     }
@@ -436,7 +441,9 @@ function accessories(classId, team, j, s, prop) {
       A(j.torso, 0, bh * 0.45 + 1, bd / 2 + 3.8, 1.4, 1.4, 0.5, tc);
       break;
     case 'demolitionist':
-      hat.push(A(j.head, 0, 8.5, 0, 8.6, 2, 8.6, tc), A(j.head, 0, 9.6, 0, 6, 0.8, 6, td));
+      hat.push(A(j.head, 0, 8.6, 0, 8.8, 2.2, 8.8, tc), A(j.head, 0, 9.8, 0, 6, 0.8, 6, td), A(j.head, 0, 7.5, -4.5, 9, 0.5, 1.2, td));
+      // safety goggles pushed up onto the helmet brim
+      hat.push(A(j.head, 0, 8.1, -4.55, 8.4, 1.3, 0.7, 0x222222), A(j.head, -2, 8.1, -4.95, 2.4, 0.9, 0.15, 0xffb040, true), A(j.head, 2, 8.1, -4.95, 2.4, 0.9, 0.15, 0xffb040, true));
       A(j.torso, 0, bh * 0.5, bd / 2 + 2, 7, 9, 4, 0x3f4430);
       for (let i = 0; i < 3; i++) A(j.torso, -2 + i * 2, bh * 0.5 + 5, bd / 2 + 2, 1.4, 2.5, 1.4, 0xc8402f);
       A(j.torso, 0, bh * 0.5 - 4, bd / 2 + 4.1, 6, 1, 0.3, 0xe2b12a);

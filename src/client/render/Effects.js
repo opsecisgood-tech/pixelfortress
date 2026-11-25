@@ -179,10 +179,11 @@ export class Effects {
 
   // Cube-chain beam between two points (healing, repair). Rebuilt each frame by caller.
   beginBeams() { this.beamCount = 0; }
-  beam(a, b, color, t, curve = 0.6, wobble = 0) {
+  // reach < 1 stops the chain early (e.g. a beam that ends at the local player's own chest)
+  beam(a, b, color, t, curve = 0.6, wobble = 0, reach = 1) {
     const n = Math.min(40, Math.max(6, Math.round(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) * 3)));
     tmpC.setHex(color);
-    for (let i = 0; i <= n && this.beamCount < 600; i++) {
+    for (let i = 0; i <= Math.floor(n * reach) && this.beamCount < 600; i++) {
       const u = i / n;
       const sag = Math.sin(u * Math.PI) * curve;
       const flow = (u * 6 - t * 4) % 1;

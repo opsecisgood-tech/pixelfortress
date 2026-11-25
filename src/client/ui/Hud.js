@@ -8,6 +8,8 @@ import { MAP_IDS } from '../../maps/index.js';
 import { getMap } from '../../maps/index.js';
 import { PF, MATCH_STATE, FLAG_STATE, FLAG_STATE_NAMES, TEAM_NAMES } from '../../shared/constants.js';
 
+const BRIEFCASE = '<svg viewBox="0 0 30 26" aria-hidden="true"><rect x="2" y="7" width="26" height="17" rx="2" fill="#ece3cb" stroke="#2a2420" stroke-width="2"/><path d="M10 7V4h10v3" fill="none" stroke="#ece3cb" stroke-width="3"/><rect x="12" y="13" width="6" height="4" fill="#2a2420"/></svg>';
+const CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="#ece3cb" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtTime = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -27,7 +29,8 @@ export class Hud {
     r.innerHTML = `
       <div class="vignette"></div><div class="heal-vignette"></div><div class="focus-tint"></div>
       <div class="scope hidden"><div class="charge"><i></i></div></div>
-      <div class="hud-top"><div class="score-box red"><b class="s0">0</b><span>RED</span></div><div class="timer-box"><b class="tm">8:00</b><span class="md">Team Deathmatch</span></div><div class="score-box blue"><b class="s1">0</b><span>BLUE</span></div></div>
+      <div class="hx-timer timer-box">${CLOCK}<b class="tm">8:00</b><span class="md"></span></div>
+      <div class="hx-obj"></div>
       <div class="flagstrip hidden"></div>
       <div class="flagmarkers"></div>
       <div class="netstat"></div>
@@ -44,24 +47,26 @@ export class Hud {
       <div class="death plate hidden"></div>
       <div class="chatbox"></div>
       <div class="mobile-top hidden clickable"><button class="btn ghost m-score">Scores</button><button class="btn ghost m-class">Class</button><button class="btn ghost m-menu">Menu</button></div>
-      <div class="hud-bl">
-        <div class="hp-plate plate"><img class="cls-ic" alt=""><div><div class="hp-num">125</div><div class="hp-bar"><i></i></div><div class="status-fx"></div></div></div>
-        <div class="ability-plate plate"><div class="ability-ring"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="#121418" stroke-width="7"/><circle class="arc" cx="32" cy="32" r="27" fill="none" stroke="#f0b429" stroke-width="7" stroke-dasharray="169.6" stroke-dashoffset="0"/></svg><div class="key">E</div></div><div class="nm"></div><div class="cd"></div></div>
+      <div class="hx-health">
+        <div class="hx-portrait"><img class="cls-ic" alt=""></div>
+        <div class="hx-cross"><div class="fill"></div><div class="lvl"><div class="shape"></div></div><div class="glow"></div><b class="hp-num">125</b></div>
+        <div class="hx-fx status-fx"></div>
       </div>
-      <div class="hud-br">
+      <div class="hx-slots slots"></div>
+      <div class="hx-right">
         <div class="turret-status plate hidden"></div>
-        <div class="meter-wrap hidden"><div class="wname mlabel"></div><div class="meter"><i></i></div></div>
-        <div class="slots"></div>
-        <div class="ammo-plate plate"><div><div class="wname wn"></div><div class="reload-tag"></div></div><img class="wimg" alt=""><div class="ammo-num">--</div></div>
+        <div class="hx-meter meter-wrap hidden"><span class="mlabel"></span><div class="bar"><i class="meter-fill"></i></div></div>
+        <div class="hx-ability ability-plate"><div class="ring"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="#171310" stroke-width="8"/><circle class="arc" cx="32" cy="32" r="27" fill="none" stroke="#ece3cb" stroke-width="8" stroke-dasharray="169.6" stroke-dashoffset="0"/></svg><div class="key">E</div></div><div><div class="nm"></div><div class="cd"></div></div></div>
+        <div class="hx-ammo ammo-plate"><span class="rel reload-tag"></span><img class="wimg" alt=""><b class="clip ammo-num">--</b><span class="res"></span><span class="wn hidden"></span></div>
       </div>`;
     const q = (s) => r.querySelector(s);
     this.el = {
       s0: q('.s0'), s1: q('.s1'), tm: q('.tm'), md: q('.md'), timerBox: q('.timer-box'), flagstrip: q('.flagstrip'), flagmarkers: q('.flagmarkers'),
-      netstat: q('.netstat'), killfeed: q('.killfeed'), cross: q('.crosshair'), hit: q('.hitmarker'), ring: q('.dmg-ring'), dmg: q('.dmg-layer'),
+      netstat: q('.netstat'), killfeed: q('.killfeed'), xhair: q('.crosshair'), hit: q('.hitmarker'), ring: q('.dmg-ring'), dmg: q('.dmg-layer'),
       notices: q('.notices'), big: q('.bigtext'), kc: q('.killconfirm'), healT: q('.heal-target'), pre: q('.preround'), death: q('.death'),
-      chat: q('.chatbox'), clsIc: q('.cls-ic'), hp: q('.hp-num'), hpBar: q('.hp-bar i'), fx: q('.status-fx'), ab: q('.ability-plate'),
+      chat: q('.chatbox'), clsIc: q('.cls-ic'), hp: q('.hp-num'), hpBar: q('.hx-cross .lvl'), cross: q('.hx-cross'), fx: q('.status-fx'), ab: q('.ability-plate'), obj: q('.hx-obj'), res: q('.hx-ammo .res'),
       abArc: q('.ability-plate .arc'), abKey: q('.ability-plate .key'), abNm: q('.ability-plate .nm'), abCd: q('.ability-plate .cd'),
-      ammo: q('.ammo-num'), wn: q('.wn'), wimg: q('.wimg'), rel: q('.reload-tag'), slots: q('.slots'), meterWrap: q('.meter-wrap'), meter: q('.meter i'), mlabel: q('.mlabel'),
+      ammo: q('.ammo-num'), wn: q('.wn'), wimg: q('.wimg'), rel: q('.reload-tag'), slots: q('.slots'), meterWrap: q('.meter-wrap'), meter: q('.meter-fill'), mlabel: q('.mlabel'),
       scope: q('.scope'), scopeCharge: q('.scope .charge i'), vig: q('.vignette'), healVig: q('.heal-vignette'), focus: q('.focus-tint'), turret: q('.turret-status'), mobile: q('.mobile-top'),
     };
     this.el.mobile.querySelector('.m-score').addEventListener('click', () => this.showScoreboard(!this.sbVisible));
@@ -74,7 +79,7 @@ export class Hud {
 
   buildCrosshair() {
     const c = this.app.settings.crosshair;
-    this.el.cross.innerHTML = crosshairSVG(c, 0);
+    this.el.xhair.innerHTML = crosshairSVG(c, 0);
     this.crossCfg = JSON.stringify(c);
   }
 
@@ -89,8 +94,16 @@ export class Hud {
     this.map = map;
     this.room = room;
     this.isHost = isHost;
-    this.el.md.textContent = `${MODES[mode].name} · ${map.name}`;
-    this.el.flagstrip.classList.toggle('hidden', mode !== 'ctf');
+    this.el.md.textContent = MODES[mode].short;
+    this.el.flagstrip.classList.add('hidden');
+    const lim = MODES[mode].scoreLimit;
+    const side = (t) => mode === 'ctf'
+      ? `<div class="team t${t}"><b class="s${t}">0</b><div class="intel i${t}">${BRIEFCASE}<em></em></div></div>`
+      : `<div class="team t${t}"><b class="s${t}">0</b><div class="bar"><i class="b${t}" style="width:0"></i></div></div>`;
+    this.el.obj.innerHTML = `${side(0)}<span class="lim">of ${lim}</span>${side(1)}`;
+    const q = (k) => this.el.obj.querySelector(k);
+    Object.assign(this.el, { s0: q('.s0'), s1: q('.s1'), b0: q('.b0'), b1: q('.b1'), i0: q('.i0'), i1: q('.i1') });
+    this.scoreLimit = lim;
     this.el.killfeed.innerHTML = '';
     this.el.death.classList.add('hidden');
     if (JSON.stringify(this.app.settings.crosshair) !== this.crossCfg) this.buildCrosshair();
@@ -111,6 +124,12 @@ export class Hud {
     if (!snap || !me) return;
     el.s0.textContent = snap.sc[0];
     el.s1.textContent = snap.sc[1];
+    if (el.b0) { el.b0.style.width = `${Math.min(100, snap.sc[0] / this.scoreLimit * 100)}%`; el.b1.style.width = `${Math.min(100, snap.sc[1] / this.scoreLimit * 100)}%`; }
+    if (el.i0 && snap.fl) for (const f of snap.fl) {
+      const box = f[0] === 0 ? el.i0 : el.i1;
+      const lbl = f[1] === FLAG_STATE.CARRIED ? 'Taken' : f[1] === FLAG_STATE.DROPPED || f[1] === FLAG_STATE.RETURNING ? 'Dropped' : 'Home';
+      if (box.dataset.st !== lbl) { box.dataset.st = lbl; box.querySelector('em').textContent = lbl; box.classList.toggle('away', lbl !== 'Home'); }
+    }
     el.tm.textContent = snap.ms === MATCH_STATE.PREROUND ? fmtTime(snap.pt) : snap.ms === MATCH_STATE.WARMUP ? '--:--' : fmtTime(snap.tl);
     el.timerBox.classList.toggle('ot', snap.ms === MATCH_STATE.OVERTIME);
     // preround countdown
@@ -122,16 +141,15 @@ export class Hud {
       this.lastCls = `${me.cls}${me.team}`;
       el.clsIc.src = this.app.icons.portraits[`${me.cls}_${me.team}`] || '';
       el.abNm.textContent = cls.ability.name;
-      el.abKey.textContent = cls.ability.id === 'doublejump' ? '⇧⇧' : 'E';
+      el.abKey.textContent = cls.ability.id === 'doublejump' ? '2×' : 'E';
     }
     const hp = me.alive ? me.hp : 0;
     if (hp !== this.lastHp) {
       this.lastHp = hp;
       el.hp.textContent = hp;
-      el.hp.classList.toggle('low', hp > 0 && hp <= me.mhp * 0.3);
-      el.hp.classList.toggle('over', hp > me.mhp);
-      el.hpBar.style.width = `${Math.min(100, hp / me.mhp * 100)}%`;
-      el.hpBar.classList.toggle('over', hp > me.mhp);
+      el.cross.classList.toggle('low', hp > 0 && hp <= me.mhp * 0.3);
+      el.cross.classList.toggle('over', hp > me.mhp);
+      el.hpBar.style.height = `${Math.min(100, hp / me.mhp * 100)}%`;
       el.vig.style.opacity = hp > 0 && hp <= me.mhp * 0.3 ? 0.6 : 0;
     }
     // status effects
@@ -164,6 +182,7 @@ export class Hud {
     el.abCd.textContent = label;
     el.ab.classList.toggle('ready', frac >= 1 && !isActive);
     el.ab.classList.toggle('active', !!isActive);
+    el.ab.classList.toggle('hidden', ab.id === 'overcharge');
     el.focus.style.opacity = isActive && ab.id === 'focus' ? 1 : 0;
     // weapon
     const w = s.weapon;
@@ -172,20 +191,29 @@ export class Hud {
         this.lastW = w.id;
         el.wn.textContent = w.def.name;
         el.wimg.src = this.app.icons.weapons[w.id] || '';
-        el.slots.innerHTML = w.slots.map((x, i) => `<div data-i="${i}"><img src="${this.app.icons.weapons[x.id] || ''}" alt="">${i + 1}</div>`).join('');
+        el.slots.innerHTML = w.slots.map((x, i) => `<div data-i="${i}"><img src="${this.app.icons.weapons[x.id] || ''}" alt="">${esc(WEAPONS[x.id].name)}<b>${i + 1}</b></div>`).join('');
+      }
+      if (w.slot !== this.lastSlotShown) {
+        this.lastSlotShown = w.slot;
+        el.slots.classList.add('show');
+        clearTimeout(this.slotT);
+        this.slotT = setTimeout(() => el.slots.classList.remove('show'), 1600);
       }
       [...el.slots.children].forEach((d, i) => d.classList.toggle('on', i === w.slot));
-      const ammoTxt = w.def.clip < 0 ? '∞' : `${w.clip}<small>/${w.reserve}</small>`;
-      if (ammoTxt !== this.lastAmmo) { this.lastAmmo = ammoTxt; el.ammo.innerHTML = w.def.type === 'melee' ? '—' : ammoTxt; }
+      const melee = w.def.type === 'melee';
+      const clipTxt = melee ? '' : w.def.clip < 0 ? '∞' : String(w.clip);
+      const resTxt = melee || w.def.clip < 0 ? '' : String(w.reserve);
+      if (clipTxt + '|' + resTxt !== this.lastAmmo) { this.lastAmmo = clipTxt + '|' + resTxt; el.ammo.textContent = clipTxt; el.res.textContent = resTxt; }
+      el.ammo.style.display = melee ? 'none' : '';
       el.ammo.classList.toggle('empty', w.def.clip > 0 && w.clip === 0);
       el.rel.textContent = w.reloading ? 'Reloading' : (w.def.clip > 0 && w.clip === 0 && w.reserve === 0 ? 'No ammo' : '');
       // meters: spin / scope charge
       let meter = null;
       if (w.def.spinUp) meter = ['Spin', w.spin];
       if (w.def.scope && w.scoped) meter = ['Charge', w.charge];
-      if (ab.id === 'overcharge') meter = ['Overcharge', charge];
+      if (ab.id === 'overcharge') meter = [isActive ? 'Overcharge active' : charge >= 1 ? 'Overcharge ready · E' : 'Overcharge', charge];
       el.meterWrap.classList.toggle('hidden', !meter);
-      if (meter) { el.mlabel.textContent = meter[0]; el.meter.style.width = `${meter[1] * 100}%`; }
+      if (meter) { el.mlabel.textContent = `${meter[0]} ${Math.floor(meter[1] * 100)}%`; el.meter.style.width = `${meter[1] * 100}%`; el.meterWrap.classList.toggle('full', meter[1] >= 1); }
       el.scopeCharge.style.width = `${w.charge * 100}%`;
       // dynamic crosshair spread
       if (this.app.settings.crosshair.dynamic) {
@@ -194,11 +222,11 @@ export class Hud {
         const gapPx = Math.round(spread * 300);
         if (gapPx !== this.lastGap || w.def.crosshair !== this.lastCrossType) {
           this.lastGap = gapPx; this.lastCrossType = w.def.crosshair;
-          el.cross.innerHTML = crosshairSVG(this.app.settings.crosshair, gapPx, w.def.crosshair);
+          el.xhair.innerHTML = crosshairSVG(this.app.settings.crosshair, gapPx, w.def.crosshair);
         }
       }
     }
-    el.cross.style.display = me.alive && !(w && w.scoped) ? '' : 'none';
+    el.xhair.style.display = me.alive && !(w && w.scoped) ? '' : 'none';
     // turret status
     if (s.turret) {
       el.turret.classList.remove('hidden');
@@ -308,15 +336,14 @@ export class Hud {
   killfeed(e) {
     const icons = this.app.icons;
     const name = (p) => p ? `<span class="t${p.team}">${esc(p.name)}</span>` : '';
-    const clsImg = (p) => p && p.cls ? `<img class="cls" src="${icons.portraits[`${p.cls}_${p.team}`] || ''}" alt="">` : '';
-    const wimg = icons.weapons[e.weaponId] ? `<img src="${icons.weapons[e.weaponId]}" alt="${esc(WEAPONS[e.weaponId]?.name)}">` : `<span class="small muted">${esc(ABILITY_SOURCES[e.weaponId]?.name || e.weaponId)}</span>`;
-    const tags = [(e.flags & 1) ? 'HEAD' : '', (e.flags & 4) ? 'BACK' : '', (e.flags & 2) ? 'CRIT' : ''].filter(Boolean).map((t) => `<span class="tag">${t}</span>`).join('');
+    const wimg = icons.weapons[e.weaponId] ? `<img class="wpn" src="${icons.weapons[e.weaponId]}" alt="${esc(WEAPONS[e.weaponId]?.name)}" title="${esc(WEAPONS[e.weaponId]?.name)}">` : `<span class="plain">${esc(ABILITY_SOURCES[e.weaponId]?.name || e.weaponId)}</span>`;
+    const tags = [(e.flags & 1) ? 'Headshot' : '', (e.flags & 4) ? 'Backstab' : '', (e.flags & 2) ? 'Crit' : ''].filter(Boolean).map((t) => `<span class="tag">${t}</span>`).join('');
     const html = e.killer
-      ? `${clsImg(e.killer)}${name(e.killer)}${e.assister ? ` + ${name(e.assister)}` : ''} ${wimg}${tags} ${clsImg(e.victim)}${name(e.victim)}`
-      : `${wimg} ${clsImg(e.victim)}${name(e.victim)}`;
+      ? `${name(e.killer)}${e.assister ? ` <span class="plain">+</span> ${name(e.assister)}` : ''} ${wimg}${tags} ${name(e.victim)}`
+      : `${wimg} ${name(e.victim)}`;
     const d = h('div', `kf${e.involvesMe ? ' me' : ''}`, html);
-    this.el.killfeed.prepend(d);
-    while (this.el.killfeed.children.length > 6) this.el.killfeed.lastChild.remove();
+    this.el.killfeed.appendChild(d);
+    while (this.el.killfeed.children.length > 5) this.el.killfeed.firstChild.remove();
     setTimeout(() => d.remove(), 7000);
   }
 
@@ -375,6 +402,13 @@ export class Hud {
       const w = WEAPONS[info.weaponId]?.name || ABILITY_SOURCES[info.weaponId]?.name || '';
       by = `${esc(info.killerName)} (${esc(getClass(info.killerClass).displayName)}) got you with the ${esc(w)}${info.killerHp ? ` · they have ${info.killerHp} HP left` : ''}`;
     } else if (info && info.weaponId) by = info.weaponId === 'fall' ? 'You fell too far' : info.weaponId === 'spawnshield' ? 'Enemy spawn shield' : 'Environmental elimination';
+    if (info && info.killerName) {
+      const kt = this.roster.get(info.killer)?.team ?? 0;
+      const w = WEAPONS[info.weaponId]?.name || ABILITY_SOURCES[info.weaponId]?.name || '';
+      el.innerHTML = `<div style="display:flex;gap:14px;align-items:center;text-align:left"><img src="${icons.portraits[`${info.killerClass}_${kt}`]}" style="width:84px;height:84px;image-rendering:pixelated;border-radius:6px;background:${kt ? '#3c6c96' : '#9c372f'}" alt=""><div><h3 style="font-size:18px;color:#cfc5ad">You were killed by</h3><div style="font:400 30px/1.05 var(--display);color:${kt ? '#a4cdf5' : '#ff9d8f'}">${esc(info.killerName)}</div><div class="small" style="margin-top:4px">${esc(getClass(info.killerClass).displayName)} · ${esc(w)}${info.killerHp ? ` · <b style="color:#efe6cf">${info.killerHp} HP left</b>` : ''}</div></div></div><div class="rs"></div><div class="small nc" style="margin-top:4px"></div><div class="hint">Press ${esc(keyName(this.app.settings.keys.classmenu))} to change class while you wait</div>`;
+      this.setScope(false);
+      return;
+    }
     el.innerHTML = `<h3>Eliminated</h3>${info && info.killerClass ? `<img src="${icons.portraits[`${info.killerClass}_${this.roster.get(info.killer)?.team ?? 0}`]}" style="width:64px;height:64px;image-rendering:pixelated" alt="">` : ''}<div class="by">${by}</div><div class="rs"></div><div class="small nc" style="margin-top:4px"></div><div class="hint">Press ${esc(keyName(this.app.settings.keys.classmenu))} to change class while you wait</div>`;
     this.setScope(false);
   }

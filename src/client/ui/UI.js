@@ -14,6 +14,25 @@ import { browsePublicRooms, WSClient, defaultServerUrl } from '../net/transports
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ICON = { skull: '☠', hands: '✋', flag: '⚑', shield: '⛨', cross: '✚', gear: '⚙', scope: '◎', bolt: '⚡', knife: '🗡', medal: '🎖', trophy: '🏆', star: '★' };
+const SVG = (() => {
+  const w = (d) => `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  return {
+    chat: w('<path d="M5 7h16v11H11l-5 4v-4H5z"/><path d="M24 12h3v10h-2v3l-4-3h-7"/>'),
+    find: w('<circle cx="16" cy="16" r="10"/><path d="M16 3v6M16 23v6M3 16h6M23 16h6"/><circle cx="16" cy="16" r="2.5" fill="currentColor"/>'),
+    power: w('<path d="M16 4v11"/><path d="M9 8.5a10 10 0 1 0 14 0"/>'),
+    gear: w('<circle cx="16" cy="16" r="4.5"/><path d="M16 3v4M16 25v4M3 16h4M25 16h4M6.8 6.8l2.8 2.8M22.4 22.4l2.8 2.8M6.8 25.2l2.8-2.8M22.4 9.6l2.8-2.8"/>'),
+    keyboard: w('<rect x="3" y="9" width="26" height="15" rx="2"/><path d="M8 14h1M12 14h1M16 14h1M20 14h1M24 14h1M9 19h14"/>'),
+    trophy: w('<path d="M10 5h12v6a6 6 0 0 1-12 0z"/><path d="M10 7H5v2a4 4 0 0 0 5 4M22 7h5v2a4 4 0 0 1-5 4M16 17v5M11 27h10M12 22h8v5h-8z"/>'),
+    user: w('<circle cx="16" cy="11" r="5"/><path d="M6 27c1.5-6 5-8 10-8s8.5 2 10 8"/>'),
+    target: w('<circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="6"/><circle cx="16" cy="16" r="1.5" fill="currentColor"/>'),
+    server: w('<rect x="5" y="4" width="22" height="8" rx="1.5"/><rect x="5" y="14" width="22" height="8" rx="1.5"/><path d="M9 8h2M9 18h2M16 22v5M10 27h12"/>'),
+    antenna: w('<path d="M16 14v14M11 28h10"/><circle cx="16" cy="11" r="2.5"/><path d="M10.5 5.5a8 8 0 0 0 0 11M21.5 5.5a8 8 0 0 1 0 11M7 2.5a13 13 0 0 0 0 17M25 2.5a13 13 0 0 1 0 17"/>'),
+    key: w('<circle cx="10" cy="16" r="5.5"/><path d="M15.5 16H28M23 16v4.5M27 16v3"/>'),
+    globe: w('<circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c4 4 4 20 0 24M16 4c-4 4-4 20 0 24"/>'),
+    crate: w('<path d="M4 10l12-6 12 6v12l-12 6-12-6z"/><path d="M4 10l12 6 12-6M16 16v12"/>'),
+    helmet: w('<path d="M5 20a11 11 0 0 1 22 0z"/><path d="M3 20h26v4H3zM16 9v11"/>'),
+  };
+})();
 const SLOT_LABELS = { hat: 'Hats', mask: 'Masks', accessory: 'Accessories', weaponSkin: 'Weapon skins', gloves: 'Gloves', victoryPose: 'Victory poses', elimEffect: 'Elimination effects', banner: 'Profile banners' };
 const BANNERS = {
   steel: 'linear-gradient(135deg,#3a4048,#23272d)', hazard: 'repeating-linear-gradient(-45deg,#f0b429 0 12px,#222 12px 24px)',
@@ -70,73 +89,124 @@ export class UI {
     this.hud.show(false);
     if (this.menuEl) this.menuEl.remove();
     const p = this.app.profile;
-    const cls = getClass(p.data.selectedClass);
-    const m = h('div', 'menu');
+    const m = h('div', 'mm');
+    const maps = mapList();
+    const featured = maps[Math.floor(Date.now() / 86400000) % maps.length];
     m.innerHTML = `
-      <div class="menu-left">
-        <div class="logo-sign plate stripe-edge"><div class="logo">PIXEL<br>FORTRESS</div><div class="logo-tag">Eight classes. Two teams. One fortress each.</div></div>
-        <nav class="nav">
-          <button class="btn primary play" data-go="play">Play</button>
-          <button class="btn" data-go="class">Class select</button>
-          <button class="btn" data-go="loadout">Loadout</button>
-          <button class="btn" data-go="profile">Profile</button>
-          <button class="btn" data-go="stats">Statistics</button>
-          <button class="btn" data-go="settings">Settings</button>
-        </nav>
+      <div class="mm-top">
+        <button class="mm-chat" data-go="settings" aria-label="Settings" title="Settings">${SVG.chat}</button>
+        <div class="mm-classbar" role="toolbar" aria-label="Quick class select"></div>
+        <div class="mm-top-right">
+          <button class="mm-find" data-go="play">${SVG.find}<span>Find a game</span></button>
+          <button class="mm-power" aria-label="Toggle fullscreen" title="Toggle fullscreen">${SVG.power}</button>
+        </div>
       </div>
-      <div class="menu-center"><div class="showcase-label"></div></div>
-      <div class="menu-right"></div>
-      <div class="menu-bottom"><span class="ver">v${GAME_VERSION}</span><span class="conn">${navigator.onLine ? 'Online' : 'Offline — practice mode only'}</span><span class="news"><span>Season one is live: six maps, eight classes, Team Deathmatch and Capture the Flag · Host a match and share the room code with friends · Check Settings for touch layout and crosshair editors · Earn XP to unlock hats, weapon skins and elimination effects</span></span></div>`;
+      <div class="mm-body">
+        <div class="mm-left">
+          <div class="mm-logo">Pixel Fortress<small>Eight classes · two teams · one fortress each</small></div>
+          <div class="mm-card mm-profile"></div>
+          <div class="mm-card mm-featured"><h3>Featured</h3><div class="inner"><div><b>${esc(featured.name)}</b><p>${esc(featured.description)}</p></div><div class="art">${featured.preview.map((c) => `<i style="background:${c}"></i>`).join('')}<button class="btn primary feat-go">Play</button></div></div></div>
+          <div class="mm-card mm-recent"><h3>Recent matches</h3><div class="grid"></div></div>
+        </div>
+        <div class="mm-right">
+          <div class="mm-tiles">
+            <button class="mm-tile" data-tab="host" data-tip="Host an online match">${SVG.antenna}</button>
+            <button class="mm-tile" data-tab="join" data-tip="Join with a room code">${SVG.key}</button>
+            <button class="mm-tile" data-tab="browse" data-tip="Public matches">${SVG.globe}</button>
+          </div>
+          <div class="mm-showcase-name"></div>
+          <button class="btn mm-promo" data-go="loadout">Edit loadout</button>
+        </div>
+      </div>
+      <div class="mm-bottom">
+        <div class="mm-status">v${GAME_VERSION} · ${navigator.onLine ? 'Online' : 'Offline — practice only'}</div>
+        <button class="btn" data-go="loadout">${SVG.crate}Loadout</button>
+        <button class="btn" data-go="class">${SVG.helmet}Classes</button>
+        <div class="mm-icons">
+          <button data-go="settings" data-tip="Settings" aria-label="Settings">${SVG.gear}</button>
+          <button data-set="controls" data-tip="Controls" aria-label="Controls">${SVG.keyboard}</button>
+          <button data-go="stats" data-tip="Statistics & badges" aria-label="Statistics">${SVG.trophy}</button>
+          <button data-go="profile" data-tip="Profile" aria-label="Profile">${SVG.user}</button>
+          <button class="practice" data-tip="Quick practice vs bots" aria-label="Quick practice">${SVG.target}</button>
+          <button data-tab="server" data-tip="Dedicated servers" aria-label="Dedicated servers">${SVG.server}</button>
+        </div>
+      </div>`;
     this.root.appendChild(m);
     this.menuEl = m;
     m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => this.openSheet(b.dataset.go)));
+    m.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { this.playSel = { ...(this.playSel || { mode: this.app.settings.lastMode || 'tdm', map: this.app.settings.lastMap || 'dusty_depot' }), tab: b.dataset.tab }; this.openSheet('play'); }));
+    m.querySelector('[data-set]').addEventListener('click', () => { this.setTab = 'controls'; this.openSheet('settings'); });
+    m.querySelector('.practice').addEventListener('click', () => this.app.startHost({ mode: this.app.settings.lastMode || 'tdm', mapId: this.app.settings.lastMap || 'dusty_depot', online: false }));
+    m.querySelector('.feat-go').addEventListener('click', () => this.app.startHost({ mode: featured.modes[0], mapId: featured.id, online: false }));
+    m.querySelector('.mm-power').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); });
+    this.renderClassBar();
     this.renderProfileCard();
+    this.renderRecent();
     this.renderShowcaseLabel();
     this.wireSounds(m);
     this.updateShowcase();
     this.screen = 'menu';
     this.app.audio.startMusic('menu');
-    // drag to rotate showcase
-    const center = m.querySelector('.menu-center');
-    void center;
     if (!p.name) setTimeout(() => this.promptName(), 300);
   }
 
   hideMainMenu() { if (this.menuEl) { this.menuEl.remove(); this.menuEl = null; } }
 
-  updateShowcase(offsetX = 0) {
+  updateShowcase(offsetX) {
     const p = this.app.profile;
     const cos = p.cosmetics();
     const sc = this.app.renderer.showcase;
     sc.setCharacters([{ classId: p.data.selectedClass, team: this.previewTeam, cosmetics: cos, weaponId: this.previewWeapon || getClass(p.data.selectedClass).weapons[0], skin: cos.weaponSkin }]);
-    sc.offsetX = offsetX;
+    // main menu: hero character stands to the right of the panels, turned toward them
+    sc.offsetX = offsetX ?? (window.innerWidth > 760 ? 1.45 : 0);
+    sc.heroYaw = offsetX === undefined ? -1.0 : 0;
+    sc.zoom = offsetX === undefined && window.innerWidth > 760 ? 0.92 : 1;
+  }
+
+  renderClassBar() {
+    if (!this.menuEl) return;
+    const bar = this.menuEl.querySelector('.mm-classbar');
+    const cur = this.app.profile.data.selectedClass;
+    bar.innerHTML = CLASS_IDS.map((id) => `<button class="${id === cur ? 'on' : ''}" data-c="${id}" title="${esc(CLASSES[id].displayName)}" aria-label="${esc(CLASSES[id].displayName)}"><img src="${this.app.icons.portraits[`${id}_${this.previewTeam}`]}" alt=""></button>`).join('');
+    bar.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => {
+      this.app.profile.data.selectedClass = b.dataset.c; this.app.profile.save();
+      this.previewWeapon = null;
+      this.renderClassBar(); this.renderShowcaseLabel(); this.renderProfileCard(); this.updateShowcase();
+      this.sfx('click');
+    }));
   }
 
   renderShowcaseLabel() {
     if (!this.menuEl) return;
     const cls = getClass(this.app.profile.data.selectedClass);
-    const el = this.menuEl.querySelector('.showcase-label');
-    el.innerHTML = `<div class="cls">${esc(cls.displayName)}</div><div class="role">${esc(cls.role)}</div><div class="team-toggle"><button class="btn ${this.previewTeam === 0 ? 'red' : 'ghost'}" data-t="0">Red</button><button class="btn ${this.previewTeam === 1 ? 'blue' : 'ghost'}" data-t="1">Blue</button></div>`;
-    el.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => { this.previewTeam = +b.dataset.t; this.renderShowcaseLabel(); this.updateShowcase(); }));
+    const el = this.menuEl.querySelector('.mm-showcase-name');
+    el.innerHTML = `<b>${esc(cls.displayName)}</b><span>${esc(cls.role)}</span>`;
   }
 
   renderProfileCard() {
     if (!this.menuEl) return;
     const p = this.app.profile;
     const L = p.levelInfo();
-    const s = p.data.stats;
     const cls = getClass(p.data.selectedClass);
     const icons = this.app.icons;
-    const kd = s.deaths ? (s.kills / s.deaths).toFixed(2) : s.kills.toFixed(2);
-    const right = this.menuEl.querySelector('.menu-right');
-    right.innerHTML = `
-      <div class="idcard plate" style="background-image:${BANNERS[p.data.cosmetics.banner] || BANNERS.steel};background-blend-mode:multiply">
-        <div class="row"><img class="avatar" src="${icons.portraits[`${cls.id}_${this.previewTeam}`]}" alt=""><div><div class="name">${esc(p.name || 'Recruit')}</div><div class="lvl"><b>${L.level}</b><span class="muted small">Level · ${L.into} / ${L.need} XP</span></div></div></div>
-        <div class="xpbar"><i style="width:${L.into / L.need * 100}%"></i></div>
-        <div class="statgrid"><div class="stat"><b>${s.matches}</b><span>Matches</span></div><div class="stat"><b>${s.wins}</b><span>Wins</span></div><div class="stat"><b>${kd}</b><span>K/D</span></div><div class="stat"><b>${s.kills}</b><span>Eliminations</span></div><div class="stat"><b>${s.captures}</b><span>Captures</span></div><div class="stat"><b>${p.data.achievements.length}</b><span>Badges</span></div></div>
-      </div>
-      <div class="loadout-mini plate"><h3 style="margin-bottom:6px">${esc(cls.displayName)} loadout</h3>${cls.weapons.map((w, i) => `<div class="w"><img src="${icons.weapons[w]}" alt=""><div><div>${esc(WEAPONS[w].name)}</div><div class="slot">${['Primary', 'Secondary', 'Melee'][i]} · ${esc(WEAPONS[w].category)}</div></div></div>`).join('')}
-      <div class="w"><div style="width:84px;text-align:center;font-family:var(--display);color:var(--hazard)">E</div><div><div>${esc(cls.ability.name)}</div><div class="slot">${esc(cls.passive.name)} (passive)</div></div></div></div>`;
+    const segs = 10, on = Math.floor((L.into / L.need) * segs);
+    const rank = L.level < 5 ? 'Recruit' : L.level < 10 ? 'Private' : L.level < 20 ? 'Corporal' : L.level < 35 ? 'Sergeant' : 'Veteran';
+    const stars = '★'.repeat(Math.min(5, 1 + Math.floor(L.level / 5)));
+    const card = this.menuEl.querySelector('.mm-profile');
+    card.innerHTML = `
+      <div class="mm-medal"><span class="stars">${stars}</span><div class="disc" style="background:radial-gradient(circle at 40% 35%, ${this.previewTeam ? '#6a9cc8, #3c6c96 60%, #23435f' : '#d4685c, #a8423a 60%, #6a221c'})"><img src="${icons.portraits[`${cls.id}_${this.previewTeam}`]}" alt=""></div></div>
+      <div class="who"><b>${esc(p.name || 'Recruit')}</b><span>${rank}</span><span>Level ${L.level}</span></div>
+      <button class="mm-gear" aria-label="Profile" title="Profile">${SVG.gear}</button>
+      <div class="mm-xp"><div class="seg">${Array.from({ length: segs }, (_, i) => `<i class="${i < on ? 'on' : ''}"></i>`).join('')}</div><div class="nums"><span>${p.data.xp.toLocaleString()} xp</span><span>${(p.data.xp - L.into + L.need).toLocaleString()} xp</span></div></div>`;
+    card.querySelector('.mm-gear').addEventListener('click', () => this.openSheet('profile'));
+  }
+
+  renderRecent() {
+    if (!this.menuEl) return;
+    const grid = this.menuEl.querySelector('.mm-recent .grid');
+    const rec = this.app.profile.data.recent.slice(0, 6);
+    if (!rec.length) { grid.innerHTML = '<div class="empty">No matches yet. Press <b>Find a game</b> to host, join or practise against bots — your last six results show up here.</div>'; return; }
+    grid.innerHTML = rec.map((r) => `<div class="row"><img src="${this.app.icons.portraits[`${r.cls}_0`]}" alt=""><div><b>${esc(getMap(r.map).name)}</b><span class="${r.won ? 'w' : r.draw ? 'd' : 'l'}">${r.won ? 'Victory' : r.draw ? 'Stalemate' : 'Defeat'}</span> <span class="d">· ${r.k}/${r.d}/${r.a} · +${r.xp} xp</span></div></div>`).join('');
   }
 
   promptName() {
@@ -188,7 +258,7 @@ export class UI {
     this.menuOpen = false;
     if (this.menuEl) {
       this.menuEl.querySelectorAll('.nav .btn').forEach((b) => b.classList.remove('active'));
-      if (wasKind === 'loadout' || wasKind === 'class') { this.previewWeapon = null; this.updateShowcase(0); }
+      if (wasKind === 'loadout' || wasKind === 'class') { this.previewWeapon = null; this.updateShowcase(); this.renderClassBar(); }
     }
     if (this.app.state === 'game' && !this.resultsEl) this.app.updateTouchMode?.();
     if (user && this.app.game && this.app.state === 'game' && !this.resultsEl) {

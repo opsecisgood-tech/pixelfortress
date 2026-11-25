@@ -620,8 +620,9 @@ export class Game {
       if (def && def.type === 'beam' && snapP && snapP[10] >= 0) {
         const target = snapP[10] === this.net.myId ? null : this.rigs.get(snapP[10]);
         const m = R.rig.muzzleWorld(tmpV);
-        const end = target ? target.root.position.clone().setY(target.root.position.y + 1.1) : snapP[10] === this.net.myId ? this.r.camera.position.clone().setY(this.r.camera.position.y - 0.5) : null;
-        if (end) { fx.beam(m, end, (R.flags & PF.OVERCHARGED) ? 0xffffff : (R.realTeam ? 0x6ab8ff : 0xff7a6a), t, 0.25); this.audio.loop(`b${id}`, 'beam', pos, true); }
+        const healingMe = snapP[10] === this.net.myId;
+        const end = target ? target.root.position.clone().setY(target.root.position.y + 1.1) : healingMe ? new THREE.Vector3(this.net.ms.x, this.net.ms.y + 0.9, this.net.ms.z) : null;
+        if (end) { fx.beam(m, end, (R.flags & PF.OVERCHARGED) ? 0xffffff : (R.realTeam ? 0x6ab8ff : 0xff7a6a), t, 0.25, 0, healingMe ? 0.7 : 1); this.audio.loop(`b${id}`, 'beam', pos, true); }
       } else this.audio.loop(`b${id}`, null, null, false);
       if (def && def.type === 'repair' && firing) {
         const m = R.rig.muzzleWorld(tmpV);

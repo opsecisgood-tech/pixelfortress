@@ -144,8 +144,8 @@ export class Renderer {
 class Showcase {
   constructor() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x15171c);
-    this.scene.fog = new THREE.Fog(0x15171c, 10, 40);
+    this.scene.background = new THREE.Color(0x3a3631);
+    this.scene.fog = new THREE.Fog(0x3a3631, 9, 34);
     this.camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
     this.camera.position.set(0, 1.6, -6.2);
     this.camera.lookAt(0, 1.05, 0);
@@ -166,6 +166,7 @@ class Showcase {
 
   buildSet() {
     const g = new THREE.Group();
+    this.setGroup = g;
     // floor & pedestal
     const floor = new THREE.Mesh(new THREE.BoxGeometry(40, 0.2, 40), getWorldMaterial('metalfloor'));
     floor.position.y = -0.1; floor.receiveShadow = true;
@@ -187,6 +188,22 @@ class Showcase {
     const haz = new THREE.Mesh(new THREE.BoxGeometry(30, 0.02, 0.6), getWorldMaterial('hazard'));
     haz.position.set(0, 0.01, 4.5); g.add(haz);
     for (const x of [-7, 7]) { bx(g, x, 0, 8.4, 0.2, 7, 0.2, 0x2b2e33); bx(g, x, 6.6, 8, 0.8, 0.3, 0.8, 0xfff0c0, { basic: true }); }
+    // sepia-grey backdrop so the hero character pops (materials are cloned so the game world is unaffected)
+    const cache = new Map();
+    g.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      if (!cache.has(o.material)) {
+        const m = o.material.clone();
+        m.onBeforeCompile = (sh) => {
+          sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+            float lum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+            gl_FragColor.rgb = mix(vec3(lum) * vec3(1.06, 1.0, 0.9), gl_FragColor.rgb, 0.18);`);
+        };
+        m.customProgramCacheKey = () => 'desat';
+        cache.set(o.material, m);
+      }
+      o.material = cache.get(o.material);
+    });
     this.scene.add(g);
   }
 
@@ -216,11 +233,18 @@ class Showcase {
     this.t += dt;
     for (const r of this.rigs) r.update(dt, { speed: 0, grounded: true, pitch: -0.05 + Math.sin(this.t * 0.8) * 0.05 });
     if (this.mode === 'single') {
-      this.pivot.rotation.y = Math.sin(this.t * 0.35) * 0.55 + (this.drag || 0);
+      const hero = this.heroYaw || 0;
+      this.pedestal.visible = this.pedTrim.visible = !hero;
+      this.teamLight.intensity = hero ? 0 : 7;
+      this.pivot.rotation.y = hero + Math.sin(this.t * 0.35) * (hero ? 0.12 : 0.55) + (this.drag || 0);
       // keep character centred-ish; on narrow screens shift up
       const portrait = aspect < 0.9;
-      this.camera.position.set(this.offsetX, portrait ? 1.9 : 1.55, portrait ? -8.5 : -6.2);
-      this.camera.lookAt(this.offsetX, portrait ? 1.6 : 1.05, 0);
+      const z = this.zoom || 1;
+      this.camera.position.set(this.offsetX, 1.5, (portrait ? -9.5 : -6.2) * z);
+      this.camera.lookAt(this.offsetX, 1.1, 0);
+      // portrait phones: the menu cards sit below the character, so shift the projection to draw it in the upper area
+      if (portrait) this.camera.setViewOffset(aspect * 1000, 1000, 0, 230, aspect * 1000, 1000);
+      else if (this.camera.view && this.camera.view.enabled) this.camera.clearViewOffset();
     } else {
       this.pivot.rotation.y = Math.sin(this.t * 0.3) * 0.12;
       this.camera.position.set(0, 1.7, -7.5);
