@@ -164,6 +164,7 @@ export class UI {
     this.sheet = wrap;
     this.sheetKind = kind;
     this.menuOpen = true;
+    this.app.touch?.setActive(false);
     const titles = { play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
     sheet.innerHTML = `<div class="sheet-head"><h2>${titles[kind] || ''}</h2><button class="btn ghost close-x" aria-label="Close">✕</button></div><div class="sheet-body"></div>`;
     const body = sheet.querySelector('.sheet-body');
@@ -189,6 +190,7 @@ export class UI {
       this.menuEl.querySelectorAll('.nav .btn').forEach((b) => b.classList.remove('active'));
       if (wasKind === 'loadout' || wasKind === 'class') { this.previewWeapon = null; this.updateShowcase(0); }
     }
+    if (this.app.state === 'game' && !this.resultsEl) this.app.updateTouchMode?.();
     if (user && this.app.game && this.app.state === 'game' && !this.resultsEl) {
       if (!this.app.input.touchActive()) this.app.input.requestLock();
     }
@@ -561,6 +563,8 @@ export class UI {
   hideLoading() { if (this.loadingEl) { this.loadingEl.remove(); this.loadingEl = null; } }
 
   onGameReady(game) {
+    this.root.querySelectorAll('.sheet-wrap').forEach((e) => e.remove());
+    if (!this.app.profile.name) this.app.profile.name = `Recruit${Math.floor(1000 + Math.random() * 9000)}`;
     this.hideLoading();
     this.hideMainMenu();
     this.closeSheet();
@@ -601,6 +605,7 @@ export class UI {
     // podium: MVP characters with their victory poses
     this.app.renderer.showcase.setCharacters(mvps.map((p) => ({ classId: p.classId, team: p.team, cosmetics: p.cosmetics, pose: p.cosmetics?.victoryPose || 'flex', skin: p.cosmetics?.weaponSkin })));
     this.app.state = 'results';
+    this.app.touch?.setActive(false);
     this.hud.show(false);
     this.app.audio.startMusic('results');
   }

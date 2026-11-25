@@ -268,7 +268,8 @@ export class Game {
       case 'slot': n.selectSlot(a.slot); break;
       case 'lastslot': n.selectSlot(this.lastSlot); break;
       case 'cycle': if (n.ws) n.selectSlot((n.desiredSlot + (a.dir > 0 ? 1 : 2)) % 3); break;
-      case 'scoreboard': this.ui.hud.showScoreboard(a.on); break;
+      case 'scoreboard': this.ui.hud.showScoreboard(a.toggle ? !this.ui.hud.sbVisible : a.on); break;
+      case 'pause': this.ui.openPause(); break;
       case 'classmenu': this.ui.openClassMenu(true); break;
       case 'teammenu': this.ui.openTeamMenu(); break;
       case 'chat': this.ui.hud.openChat(a.team); break;

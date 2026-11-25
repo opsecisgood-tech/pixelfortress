@@ -176,6 +176,12 @@ export function getWorldMaterial(name) {
   return m;
 }
 
+const plainCache = new Map();
+export function getPlainMaterial(name) {
+  if (!plainCache.has(name)) plainCache.set(name, new THREE.MeshLambertMaterial({ map: getTexture(name) }));
+  return plainCache.get(name);
+}
+
 // Small canvas texture with text (signs, billboards, nameplates).
 export function textTexture(text, { w = 128, h = 32, bg = '#222', fg = '#fff', font = 'bold 18px monospace', border = null, pixel = true } = {}) {
   const key = `t:${text}:${w}:${h}:${bg}:${fg}:${font}:${border}`;

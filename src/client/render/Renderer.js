@@ -5,7 +5,7 @@ import { Viewmodel } from './Viewmodel.js';
 import { CharacterRig } from './CharacterModel.js';
 import { buildWeapon } from './WeaponModels.js';
 import { bx, colorMat } from './blocks.js';
-import { getWorldMaterial } from './textures.js';
+import { getPlainMaterial as getWorldMaterial } from './textures.js';
 import { CLASS_IDS, getClass } from '../../shared/config/classes.js';
 import { WEAPON_IDS } from '../../shared/config/weapons.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
@@ -77,8 +77,8 @@ export class Renderer {
     const d = new THREE.DirectionalLight(0xffffff, 2.2); d.position.set(-1, 2, -3); scene.add(d);
     const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
     const buf = new Uint8Array(size * size * 4);
-    const toURL = (w, h) => {
-      this.gl.readRenderTargetPixels(rt, 0, 0, w, h, buf);
+    const toURL = (w, h, target = rt) => {
+      this.gl.readRenderTargetPixels(target, 0, 0, w, h, buf);
       const c = document.createElement('canvas'); c.width = w; c.height = h;
       const ctx = c.getContext('2d');
       const img = ctx.createImageData(w, h);
@@ -107,29 +107,34 @@ export class Renderer {
       }
     }
     // weapons: side view, orthographic
+    const wrt = new THREE.WebGLRenderTarget(size, size / 2, { colorSpace: THREE.SRGBColorSpace });
     const ocam = new THREE.OrthographicCamera(-0.6, 0.6, 0.3, -0.3, 0.1, 10);
+    const iconLight = new THREE.DirectionalLight(0xffffff, 2.5); iconLight.position.set(-3, 2, 1); scene.add(iconLight);
     for (const id of WEAPON_IDS) {
       const w = buildWeapon(id, { team: 0 });
-      const box = new THREE.Box3().setFromObject(w);
+      const g = new THREE.Group(); g.add(w);
+      if (w.userData.def.melee) g.rotation.x = -Math.PI / 2;
+      g.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(g);
       const c = box.getCenter(new THREE.Vector3());
       const sz = box.getSize(new THREE.Vector3());
-      const span = Math.max(sz.z, sz.y * 2.2, 0.3) * 0.62;
+      const span = Math.max(sz.z, sz.y * 2.1, 0.12) * 0.56;
       ocam.left = -span; ocam.right = span; ocam.top = span / 2; ocam.bottom = -span / 2;
       ocam.updateProjectionMatrix();
-      w.position.sub(c);
-      const g = new THREE.Group(); g.add(w);
-      if (w.userData.def.melee) g.rotation.z = -Math.PI / 2;
+      g.position.sub(c);
       scene.add(g);
       ocam.position.set(-3, 0, 0); ocam.lookAt(0, 0, 0);
-      this.gl.setRenderTarget(rt);
+      this.gl.setRenderTarget(wrt);
       this.gl.clear();
       this.gl.render(scene, ocam);
-      out.weapons[id] = toURL(size, size / 2 | 0) ;
+      out.weapons[id] = toURL(size, size / 2, wrt);
       scene.remove(g);
     }
     this.gl.setRenderTarget(null);
     this.gl.setClearColor(0x000000, prevClear);
+    scene.remove(iconLight);
     rt.dispose();
+    wrt.dispose();
     this.resize();
     return out;
   }

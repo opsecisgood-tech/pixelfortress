@@ -434,6 +434,17 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .touch-root.editing .touch-btn.sel { background: rgba(240,180,41,.6); }
 .touch-editbar button { background: var(--slate); border: 2px solid var(--edge); padding: 6px 10px; color: var(--bone); }
 
+/* touch HUD: move plates away from the thumb zones */
+.hud.touch .hud-bl { bottom: auto; top: max(8px, env(safe-area-inset-top)); transform: scale(.62); transform-origin: top left; }
+.hud.touch .hud-br { bottom: auto; top: max(8px, env(safe-area-inset-top)); transform: scale(.62); transform-origin: top right; flex-direction: column-reverse; }
+.hud.touch .slots, .hud.touch .netstat { display: none; }
+.hud.touch .killfeed { top: 46%; transform: scale(.8); transform-origin: top right; }
+.hud.touch .chatbox { bottom: auto; top: 30%; }
+.hud.touch .death { bottom: 40%; }
+.touch-menubar { position: absolute; left: 50%; bottom: max(8px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 8px; }
+.touch-menubar button { background: rgba(35,39,45,.8); border: 2px solid rgba(233,226,208,.5); color: var(--bone); font: 600 13px var(--ui); padding: 6px 12px; }
+.touch-root.editing .touch-menubar { display: none; }
+
 /* ---------------------------------------------------------------- loading / toasts */
 .loading { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(15,17,20,.92); z-index: 8; text-align: center; }
 .loading h2 { font-size: 30px; margin-bottom: 10px; }

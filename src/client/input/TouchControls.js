@@ -36,6 +36,9 @@ export class TouchControls {
       this.buttons[id] = b;
       this.root.appendChild(b);
     }
+    this.menuBar = el('div', 'touch-menubar');
+    this.menuBar.innerHTML = '<button data-a="scores">Scores</button><button data-a="class">Class</button><button data-a="menu">Menu</button>';
+    this.root.appendChild(this.menuBar);
     this.editBar = el('div', 'touch-editbar');
     this.editBar.innerHTML = '<span>Drag buttons to move · pinch slider to resize</span><input type="range" min="0.6" max="1.8" step="0.05" class="te-size"><button class="te-reset">Reset</button><button class="te-done">Done</button>';
     this.root.appendChild(this.editBar);
@@ -94,6 +97,13 @@ export class TouchControls {
     e.preventDefault();
     for (const t of e.changedTouches) {
       const target = document.elementFromPoint(t.clientX, t.clientY);
+      const mb = target && target.closest && target.closest('.touch-menubar button');
+      if (mb && !this.editing) {
+        const a = mb.dataset.a;
+        this.actions.push(a === 'scores' ? { type: 'scoreboard', toggle: true } : a === 'class' ? { type: 'classmenu' } : { type: 'pause' });
+        continue;
+      }
+      if (target && target.closest && target.closest('.touch-editbar')) continue;
       const btn = target && target.closest && target.closest('.touch-btn');
       const W = window.innerWidth, H = window.innerHeight;
       if (this.editing) {

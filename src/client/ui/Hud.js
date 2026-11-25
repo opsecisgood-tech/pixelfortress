@@ -222,7 +222,9 @@ export class Hud {
       if (st.showPing) parts.push(`${s.ping | 0} ms`);
       el.netstat.textContent = parts.join('  ');
     } else el.netstat.textContent = '';
-    this.el.mobile.classList.toggle('hidden', !this.app.input.touchActive());
+    const touch = this.app.input.touchActive();
+    this.el.mobile.classList.add('hidden');
+    this.root.classList.toggle('touch', touch);
   }
 
   updateFlags(s) {
