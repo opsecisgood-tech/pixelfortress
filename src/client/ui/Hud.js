@@ -241,6 +241,7 @@ export class Hud {
     const cam = s.camera;
     const W = window.innerWidth, H = window.innerHeight;
     let mk = '';
+    const placed = [];
     for (const f of s.flags) {
       const [team, state, x, y, z, carrier] = f;
       if (carrier === s.myId) continue;
@@ -251,6 +252,9 @@ export class Hud {
       sx = Math.max(40, Math.min(W - 40, sx)); sy = Math.max(90, Math.min(H - 60, sy));
       const d = Math.hypot(x - s.ms.x, z - s.ms.z) | 0;
       const label = team === s.me.team ? (state === FLAG_STATE.AT_BASE ? 'Defend' : 'Recover') : (state === FLAG_STATE.CARRIED ? 'Escort' : 'Steal');
+      // stack markers that clamp onto the same screen spot
+      for (const q of placed) if (Math.abs(q[0] - sx) < 70 && Math.abs(q[1] - sy) < 50) sy = q[1] + 56;
+      placed.push([sx, sy]);
       mk += `<div class="flag-marker t${team}" style="left:${sx}px;top:${sy}px"><i></i>${label}<br>${d}m</div>`;
     }
     // own carrier: show where to bring it
