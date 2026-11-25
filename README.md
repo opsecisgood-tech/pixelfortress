@@ -200,3 +200,5 @@ docs/ARCHITECTURE.md               technical design notes
 ## Licences
 
 The game code and content in this repository are original. three.js and PeerJS are MIT-licensed; their licence files are in `vendor/`.
+
+The interface is set in Valve's TF2 Build, TF2 Secondary and TF2 fonts plus Verdana Bold. The TF2 font files aren't bundled: add them to `fonts/` (see `fonts/README.md`). Until then the game uses free look-alikes.

@@ -295,8 +295,9 @@ function signaturePaint(classId, part, c, L, st, rnd, dims, glove) {
       noise(c, fx + 1, fy + 2, 6, 5, st.skin, 0.05, rnd);
       P(c, fx + 1, fy + 2, 1, 1, hex(st.mask)); P(c, fx + 6, fy + 2, 1, 1, hex(st.mask)); P(c, fx + 1, fy + 6, 1, 1, hex(st.mask)); P(c, fx + 6, fy + 6, 1, 1, hex(st.mask));
       P(c, fx + 1, fy + 2, 2, 1, hex(shadeNum(st.mask, 0.7))); P(c, fx + 5, fy + 2, 2, 1, hex(shadeNum(st.mask, 0.7)));
-      P(c, fx + 2, fy + 3, 1, 1, '#f2efe6'); P(c, fx + 5, fy + 3, 1, 1, '#f2efe6');
-      P(c, fx + 3, fy + 3, 1, 1, '#5a3a20'); P(c, fx + 4, fy + 3, 1, 1, '#5a3a20');
+      // eyes spaced like the Scout's: two-pixel whites at the edges of the opening, irises inside
+      P(c, fx + 1, fy + 3, 2, 1, '#f2efe6'); P(c, fx + 5, fy + 3, 2, 1, '#f2efe6');
+      P(c, fx + 2, fy + 3, 1, 1, '#5a3a20'); P(c, fx + 5, fy + 3, 1, 1, '#5a3a20');
       P(c, fx + 3, fy + 4, 2, 1, hex(shadeNum(st.skin, 0.82)));
       P(c, fx + 3, fy + 5, 2, 1, '#8a4a3a');
       P(c, fx + 2, fy + 1, 4, 1, hex(shadeNum(st.mask, 0.85)));

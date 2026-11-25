@@ -1,6 +1,7 @@
-/* Optional typefaces: used when installed locally or placed in /fonts (see fonts/README.md). */
-@font-face { font-family: 'TF2 Build'; src: local('TF2 Build'), local('TF2Build'), url('../fonts/tf2build.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: 'TF2 Secondary'; src: local('TF2 Secondary'), local('TF2Secondary'), url('../fonts/tf2secondary.ttf') format('truetype'); font-display: swap; }
+/* TF2 fonts (Valve "TF2 DIY Kit"). Drop the files into /fonts under any of these names. */
+@font-face { font-family: 'TF2 Build'; src: local('TF2 Build'), local('TF2Build'), url('../fonts/tf2build.ttf') format('truetype'), url('../fonts/TF2Build.ttf') format('truetype'), url('../fonts/TF2 Build.ttf') format('truetype'), url('../fonts/tf2build.otf') format('opentype'); font-display: swap; }
+@font-face { font-family: 'TF2 Secondary'; src: local('TF2 Secondary'), local('TF2Secondary'), url('../fonts/tf2secondary.ttf') format('truetype'), url('../fonts/TF2secondary.ttf') format('truetype'), url('../fonts/TF2Secondary.ttf') format('truetype'), url('../fonts/TF2 Secondary.ttf') format('truetype'), url('../fonts/tf2secondary.otf') format('opentype'); font-display: swap; }
+@font-face { font-family: 'TF2'; src: local('TF2'), local('TF2 Regular'), url('../fonts/tf2.ttf') format('truetype'), url('../fonts/TF2.ttf') format('truetype'), url('../fonts/tf2professor.ttf') format('truetype'), url('../fonts/tf2.otf') format('opentype'); font-display: swap; }
 
 /* ============================================================================
    PIXEL FORTRESS — interface
@@ -32,6 +33,7 @@
   --display: 'TF2 Build', 'Lilita One', 'Arial Black', system-ui, sans-serif;
   --ui: 'TF2 Secondary', 'Nunito', 'Segoe UI', system-ui, sans-serif;
   --verdana: Verdana, 'DejaVu Sans', Geneva, sans-serif;
+  --label: 'TF2', 'Oswald', 'Arial Narrow', var(--verdana);
   --rivet: none;
   --hud-pad: max(16px, env(safe-area-inset-left));
 }
@@ -761,7 +763,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .r4 { --rc: var(--r4); } .r5 { --rc: var(--r5); } .r6 { --rc: #ffffff; }
 @keyframes rainbow-pan { to { background-position: 200% 0; } }
 @keyframes rare-pulse { 50% { box-shadow: 0 0 14px 2px var(--rc); } }
-.rar { display: inline-block; padding: 1px 7px; border-radius: 3px; font: 700 11px/16px var(--verdana); text-transform: uppercase; letter-spacing: .04em; color: #15110e; background: var(--rc); }
+.rar { display: inline-block; padding: 1px 7px; border-radius: 3px; font: 700 12px/16px var(--label); text-transform: uppercase; letter-spacing: .04em; color: #15110e; background: var(--rc); }
 .rar.r6 { background: var(--rainbow); background-size: 200% 100%; animation: rainbow-pan 3s linear infinite; }
 .badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 10px; background: var(--red); color: #fff; font: 700 12px/1 var(--verdana); font-style: normal; box-shadow: 0 1px 0 #000; }
 .badge:empty { display: none; }
@@ -912,4 +914,20 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
   .mm-bottom .btn .badge { margin-left: 2px; }
   .mm-icons { width: 100%; justify-content: space-between; }
   .mm-icons button { flex: 1; height: 42px; }
+}
+
+/* skinny all-caps TF2 font for small labels */
+.hx-timer .md, .mm-status, .ar-classes button span, .itm .cl, .itm .nw, .hud .hx-crate span, .lim, .hx-ability .cd, .reel-title + .reel .rc span { font-family: var(--label); letter-spacing: .03em; }
+
+/* decluttered main menu: one button per action */
+.mm-classbar { margin-left: 8px; }
+.mm-profile { grid-template-columns: 116px 1fr; cursor: pointer; }
+.mm-profile:hover { border-color: #6a5a48; }
+.mm .mm-showcase-name { bottom: 22px; pointer-events: auto; cursor: pointer; }
+.mm-showcase-name em { display: inline-block; margin-top: 6px; font: 700 14px var(--ui); font-style: normal; color: #ffd88a; text-shadow: 0 2px 4px rgba(0,0,0,.7); opacity: .8; }
+.mm-showcase-name:hover em { opacity: 1; text-decoration: underline; }
+.mm-bottom .btn.glow { animation: rare-pulse 1.6s ease-in-out infinite; --rc: #ffc93f; }
+@media (max-width: 760px) {
+  .mm-profile { grid-template-columns: 80px 1fr; }
+  .mm .mm-showcase-name { bottom: 10px; }
 }

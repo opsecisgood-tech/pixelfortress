@@ -1,16 +1,19 @@
-# Optional fonts
+# TF2 fonts
 
-Pixel Fortress automatically uses these typefaces when they are available:
+Pixel Fortress uses Valve's three TF2 typefaces, plus Verdana Bold, as soon as their files are in this folder:
 
-| Font | Used for | File name expected here |
+| Font | Used for | File name (any of these) |
 | --- | --- | --- |
-| TF2 Build | Headings, big HUD numbers, buttons | `tf2build.ttf` |
-| TF2 Secondary | Body text, labels | `tf2secondary.ttf` |
-| Verdana Bold | Kill feed, chat, notices | (system font) |
+| TF2 Build | Headings, big HUD numbers, buttons | `tf2build.ttf`, `TF2Build.ttf` |
+| TF2 Secondary | Body text, menus | `tf2secondary.ttf`, `TF2secondary.ttf`, `TF2Secondary.ttf` |
+| TF2 | Small all-caps labels (rarity tags, HUD captions) | `tf2.ttf`, `TF2.ttf`, `tf2professor.ttf` |
+| Verdana Bold | Kill feed, chat, notices | system font |
 
-The TF2 fonts are a free download from Valve's "TF2 DIY Kit" (https://www.teamfortress.com/artwork.php).
-They are not included in this repository because their licence does not cover redistribution.
-To use them, either install them on your computer, or copy the `.ttf` files into this folder
-with the file names above (only do that if you are comfortable with Valve's terms for your use).
+The fonts come free in Valve's **TF2 DIY Kit** (official TF2 blog / teamfortress.com). You can also copy them from
+your Team Fortress 2 install: `Team Fortress 2/tf/resource/`.
 
-If they are missing, the game falls back to Lilita One / Nunito (free Google Fonts) and Verdana.
+**Adding them on GitHub:** open this `fonts/` folder on github.com, choose **Add file → Upload files**, and drop in the `.ttf` files.
+No code changes are needed. They're picked up on the next page load. They're Valve's fonts, so keep the project
+non-commercial if you publish them.
+
+Until the files are here, the game falls back to Lilita One, Nunito and Oswald (free Google Fonts) and Verdana.

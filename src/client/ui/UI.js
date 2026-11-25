@@ -7,7 +7,7 @@ import { WEAPONS } from '../../shared/config/weapons.js';
 import { MODES } from '../../shared/config/modes.js';
 import { ACHIEVEMENTS, levelFromXp } from '../../shared/config/progression.js';
 import { getItem } from '../../shared/config/cosmetics.js';
-import { Armory, crateSVG } from './Armory.js';
+import { Armory } from './Armory.js';
 import { bannerCSS } from '../render/ItemIcons.js';
 import { mapList, MAP_IDS, getMap } from '../../maps/index.js';
 import { TEAM_NAMES, GAME_VERSION } from '../../shared/constants.js';
@@ -92,7 +92,6 @@ export class UI {
     const featured = maps[Math.floor(Date.now() / 86400000) % maps.length];
     m.innerHTML = `
       <div class="mm-top">
-        <button class="mm-chat" data-go="settings" aria-label="Settings" title="Settings">${SVG.chat}</button>
         <div class="mm-classbar" role="toolbar" aria-label="Quick class select"></div>
         <div class="mm-top-right">
           <button class="mm-find" data-go="play">${SVG.find}<span>Find a game</span></button>
@@ -108,36 +107,24 @@ export class UI {
           <div class="mm-card mm-recent"><h3>Recent matches</h3><div class="grid"></div></div>
         </div>
         <div class="mm-right">
-          <div class="mm-tiles">
-            <button class="mm-tile" data-tab="host" data-tip="Host an online match">${SVG.antenna}</button>
-            <button class="mm-tile" data-tab="join" data-tip="Join with a room code">${SVG.key}</button>
-            <button class="mm-tile" data-tab="browse" data-tip="Public matches">${SVG.globe}</button>
-          </div>
           <div class="mm-showcase-name"></div>
-          <button class="btn mm-promo" data-go="loadout">Edit loadout</button>
-          <button class="btn mm-crates" data-go="crates">${crateSVG('gold', 26)}<span>Crates</span><i class="badge"></i></button>
         </div>
       </div>
       <div class="mm-bottom">
         <div class="mm-status">v${GAME_VERSION} · ${navigator.onLine ? 'Online' : 'Offline — practice only'}</div>
         <button class="btn" data-go="loadout">${SVG.helmet}Loadout</button>
         <button class="btn" data-go="crates">${SVG.crate}Crates<i class="badge"></i></button>
-        <button class="btn" data-go="class">${SVG.user}Classes</button>
         <div class="mm-icons">
           <button data-go="settings" data-tip="Settings" aria-label="Settings">${SVG.gear}</button>
-          <button data-set="controls" data-tip="Controls" aria-label="Controls">${SVG.keyboard}</button>
           <button data-go="stats" data-tip="Statistics & badges" aria-label="Statistics">${SVG.trophy}</button>
           <button data-go="profile" data-tip="Profile" aria-label="Profile">${SVG.user}</button>
-          <button class="practice" data-tip="Quick practice vs bots" aria-label="Quick practice">${SVG.target}</button>
-          <button data-tab="server" data-tip="Dedicated servers" aria-label="Dedicated servers">${SVG.server}</button>
         </div>
       </div>`;
     this.root.appendChild(m);
     this.menuEl = m;
     m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => this.openSheet(b.dataset.go)));
     m.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { this.playSel = { ...(this.playSel || { mode: this.app.settings.lastMode || 'tdm', map: this.app.settings.lastMap || 'dusty_depot' }), tab: b.dataset.tab }; this.openSheet('play'); }));
-    m.querySelector('[data-set]').addEventListener('click', () => { this.setTab = 'controls'; this.openSheet('settings'); });
-    m.querySelector('.practice').addEventListener('click', () => this.app.startHost({ mode: this.app.settings.lastMode || 'tdm', mapId: this.app.settings.lastMap || 'dusty_depot', online: false }));
+    m.querySelector('.mm-showcase-name').addEventListener('click', () => this.openSheet('class'));
     m.querySelector('.feat-go').addEventListener('click', () => this.app.startHost({ mode: featured.modes[0], mapId: featured.id, online: false }));
     m.querySelector('.mm-power').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); });
     this.renderClassBar();
@@ -157,7 +144,7 @@ export class UI {
     if (!this.menuEl) return;
     const n = this.app.profile.data.crates.length;
     this.menuEl.querySelectorAll('.badge').forEach((b) => { b.textContent = n ? String(n) : ''; b.style.display = n ? '' : 'none'; });
-    this.menuEl.querySelector('.mm-crates')?.classList.toggle('glow', n > 0);
+    this.menuEl.querySelector('.mm-bottom [data-go="crates"]')?.classList.toggle('glow', n > 0);
   }
 
   hideMainMenu() { if (this.menuEl) { this.menuEl.remove(); this.menuEl = null; } }
@@ -190,7 +177,8 @@ export class UI {
     if (!this.menuEl) return;
     const cls = getClass(this.app.profile.data.selectedClass);
     const el = this.menuEl.querySelector('.mm-showcase-name');
-    el.innerHTML = `<b>${esc(cls.displayName)}</b><span>${esc(cls.role)}</span>`;
+    el.innerHTML = `<b>${esc(cls.displayName)}</b><span>${esc(cls.role)}</span><em>Class details ›</em>`;
+    el.setAttribute('role', 'button'); el.tabIndex = 0;
   }
 
   renderProfileCard() {
@@ -206,9 +194,8 @@ export class UI {
     card.innerHTML = `
       <div class="mm-medal"><span class="stars">${stars}</span><div class="disc" style="background:radial-gradient(circle at 40% 35%, ${this.previewTeam ? '#6a9cc8, #3c6c96 60%, #23435f' : '#d4685c, #a8423a 60%, #6a221c'})"><img src="${icons.portraits[`${cls.id}_${this.previewTeam}`]}" alt=""></div></div>
       <div class="who"><b>${esc(p.name || 'Recruit')}</b><span>${rank}</span><span>Level ${L.level}</span></div>
-      <button class="mm-gear" aria-label="Profile" title="Profile">${SVG.gear}</button>
       <div class="mm-xp"><div class="seg">${Array.from({ length: segs }, (_, i) => `<i class="${i < on ? 'on' : ''}"></i>`).join('')}</div><div class="nums"><span>${p.data.xp.toLocaleString()} xp</span><span>${(p.data.xp - L.into + L.need).toLocaleString()} xp</span></div></div>`;
-    card.querySelector('.mm-gear').addEventListener('click', () => this.openSheet('profile'));
+    card.onclick = () => this.openSheet('profile');
   }
 
   renderRecent() {
