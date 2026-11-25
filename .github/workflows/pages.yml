@@ -3,7 +3,8 @@
 name: Deploy to GitHub Pages
 on:
   push:
-    branches: [main]
+    # main, plus the current development branch (this repository's default branch)
+    branches: [main, claude/great-bell-5k7f5m]
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,7 +24,7 @@ jobs:
       - name: Assemble site
         run: |
           mkdir _site
-          cp -r index.html css src vendor .nojekyll _site/
+          cp -r index.html css src vendor fonts .nojekyll _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
