@@ -1,3 +1,7 @@
+/* Optional typefaces: used when installed locally or placed in /fonts (see fonts/README.md). */
+@font-face { font-family: 'TF2 Build'; src: local('TF2 Build'), local('TF2Build'), url('../fonts/tf2build.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'TF2 Secondary'; src: local('TF2 Secondary'), local('TF2Secondary'), url('../fonts/tf2secondary.ttf') format('truetype'); font-display: swap; }
+
 /* ============================================================================
    PIXEL FORTRESS — interface
    Industrial riveted plates, stencil paint, hazard signage, team colours.
@@ -25,8 +29,9 @@
   --rust: #b8562b;
   --good: #8ccf5e;
   --bad: #e2574a;
-  --display: 'Lilita One', 'Arial Black', system-ui, sans-serif;
-  --ui: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --display: 'TF2 Build', 'Lilita One', 'Arial Black', system-ui, sans-serif;
+  --ui: 'TF2 Secondary', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --verdana: Verdana, 'DejaVu Sans', Geneva, sans-serif;
   --rivet: none;
   --hud-pad: max(16px, env(safe-area-inset-left));
 }
@@ -741,3 +746,8 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .hud .hx-cross b.hp-num { min-width: 0; font-size: 38px; text-shadow: none; animation: none; }
 .hud .hx-ammo.ammo-plate { padding: 6px 16px 6px 10px; }
 .hud .hx-meter .bar { width: auto; border: 0; }
+
+/* Verdana Bold for fast-reading combat text (kill feed, chat, notices) */
+.hud .kf, .hud .chatline, .chatinput, .hud .notice, .toast, .hud .killconfirm, .hud .dmg-num em { font-family: var(--verdana); font-weight: 700; }
+.hud .kf { font-size: 13px; }
+.hud .notice { font-size: 14px; text-transform: none; }
