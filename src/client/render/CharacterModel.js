@@ -10,6 +10,7 @@ import { buildWeapon, WEAPON_MODELS } from './WeaponModels.js';
 import { voxelCells, VOXEL_MATERIAL } from './voxel.js';
 import { attachCosmetics, gloveSpec } from './CosmeticModels.js';
 import { getItem } from '../../shared/config/cosmetics.js';
+import { WEAPONS } from '../../shared/config/weapons.js';
 import { TEAM_COLORS_HEX, TEAM_DARK_HEX } from '../../shared/constants.js';
 import { getClass } from '../../shared/config/classes.js';
 import { mulberry32, damp } from '../../shared/math.js';
@@ -792,7 +793,12 @@ function partTexture(classId, team, part, dims, gloves) {
 // ---------------------------------------------------------------- class accessories (simple boxes in pixel units)
 function accessories(classId, team, j, s, prop, cos) {
   const tc = TEAM_COLORS_HEX[team], td = TEAM_DARK_HEX[team];
+  // every gear box grows by a slightly different hair so overlapping parts (straps, pouches, helmet
+  // panels, coat skirts against legs) never share an exact plane and flicker
+  let nA = 0;
   const A = (parent, x, y, z, w, h, d, col, glow) => {
+    const g = 0.012 * ((nA++ % 11) + 1);
+    w += g; h += g; d += g;
     const m = new THREE.Mesh(boxGeo(w * s, h * s, d * s), glow ? colorMat(col, { basic: true }) : colorMat(col));
     m.position.set(x * s, y * s, z * s);
     m.castShadow = true;
@@ -953,6 +959,33 @@ function emptyWeapon() {
   return g;
 }
 
+// ---------------------------------------------------------------- per-class animation styles
+// cadence: stride frequency per m/s; stride: leg swing (rad); lean: [walk, run] forward lean; airLean;
+// bob: hip bounce per step (m); stomp: heavy footfalls; sway: hip roll; twist: torso counter-twist;
+// arms: free-arm swing; jump: [front leg, back leg, arm raise]; land: landing squash;
+// fire: { kick: muzzle climb, torso: body jolt, decay: recovery speed, lift: extra climb (launchers),
+//         shake: jitter while firing (rotary cannon), sweep: side-to-side while firing (flamethrower) }
+const ANIM_STYLES = {
+  // quick, bouncy sprinter: high knees, big lean, snappy recoil
+  scout: { cadence: 2.6, stride: 1.0, lean: [0.1, 0.3], airLean: 0.12, bob: 0.07, sway: 0.02, twist: 0.16, arms: 1.0, jump: [-1.2, 0.75, 0.35], land: 0.3, fire: { kick: 0.8, torso: 0.04, decay: 10 } },
+  // upright march; rockets shove him back and lift the launcher
+  soldier: { cadence: 1.8, stride: 0.72, lean: [0.03, 0.1], airLean: 0, bob: 0.035, sway: 0.015, twist: 0.05, arms: 0.55, jump: [-0.55, 0.35, 0.15], land: 0.5, fire: { kick: 1.0, torso: 0.24, decay: 4, lift: 0.18 } },
+  // smooth glide: little bounce, hips sway, precise wrist-only recoil
+  spy: { cadence: 2.1, stride: 0.7, lean: [0.1, 0.16], airLean: 0.05, bob: 0.02, sway: 0.06, twist: 0.06, arms: 0.45, jump: [-0.95, 0.95, 0.2], land: 0.25, fire: { kick: 0.6, torso: 0.02, decay: 11 } },
+  // relaxed, slightly hunched; heavy rifle kick
+  marksman: { cadence: 1.9, stride: 0.82, lean: [0.06, 0.16], airLean: 0.04, bob: 0.035, sway: 0.02, twist: 0.07, arms: 0.7, jump: [-0.8, 0.45, 0.25], land: 0.4, fire: { kick: 1.5, torso: 0.13, decay: 5 } },
+  // sturdy waddle
+  mechanic: { cadence: 2.0, stride: 0.75, lean: [0.06, 0.15], airLean: 0.05, bob: 0.05, sway: 0.05, twist: 0.06, arms: 0.7, jump: [-0.9, 0.6, 0.3], land: 0.45, fire: { kick: 1.0, torso: 0.1, decay: 6 } },
+  // brisk and upright, head held high
+  doctor: { cadence: 2.2, stride: 0.85, lean: [0.03, 0.12], airLean: 0.02, bob: 0.03, sway: 0.02, twist: 0.05, arms: 0.6, jump: [-0.75, 0.5, 0.2], land: 0.35, fire: { kick: 0.5, torso: 0.03, decay: 8 } },
+  // lumbering stomp with a wide roll; the cannon shakes him while it fires
+  juggernaut: { cadence: 1.35, stride: 0.5, lean: [0.1, 0.16], airLean: 0, bob: 0.06, stomp: true, sway: 0.09, twist: 0.04, arms: 0.45, jump: [-0.45, 0.25, 0.1], land: 0.7, fire: { kick: 0.35, torso: 0.04, decay: 6, shake: 0.035 } },
+  // prowling hunch; sweeps the flame side to side
+  incinerator: { cadence: 2.0, stride: 0.8, lean: [0.16, 0.24], airLean: 0.08, bob: 0.04, sway: 0.03, twist: 0.09, arms: 0.7, jump: [-0.85, 0.55, 0.2], land: 0.4, fire: { kick: 0.2, torso: 0.02, decay: 6, sweep: 0.16 } },
+  // loose swagger; launchers lob up and rock him back
+  demolitionist: { cadence: 1.9, stride: 0.85, lean: [0.08, 0.18], airLean: 0.06, bob: 0.05, sway: 0.07, twist: 0.08, arms: 0.8, jump: [-0.7, 0.8, 0.3], land: 0.45, fire: { kick: 0.9, torso: 0.16, decay: 5, lift: 0.32 } },
+};
+
 // ---------------------------------------------------------------- rig
 const _qx = new THREE.Quaternion(), _qy = new THREE.Quaternion();
 const _X = new THREE.Vector3(1, 0, 0), _Y = new THREE.Vector3(0, 1, 0);
@@ -1048,6 +1081,8 @@ export class CharacterRig {
     // bare fists: nothing is held
     const w = def?.fists ? emptyWeapon() : buildWeapon(weaponId, { team: this.team, skin });
     this.melee = !!def?.melee;
+    const wdef = WEAPONS[weaponId];
+    this.meleeKind = def?.fists ? 'punch' : wdef?.melee?.backstab ? 'stab' : 'slash';
     this.twoHand = !!(def && !def.melee && Math.abs(def.muzzle3[2]) > 0.35);
     if (this.melee) { w.rotation.x = -Math.PI / 2; w.position.set(0, 0, 0); }
     else { w.rotation.x = -Math.PI / 2; w.position.set(0, 0, 0.02); }
@@ -1065,66 +1100,76 @@ export class CharacterRig {
   // per-frame animation update. st: { speed, grounded, crouch, pitch, firing, reloading, swing, ability, spun, dead, vy }
   update(dt, st) {
     const a = this.anim, j = this.j;
-    const set = getClass(this.classId).animSet;
-    const heavy = set === 'heavy', light = set === 'light';
+    const S = ANIM_STYLES[this.classId] || ANIM_STYLES.marksman;
     const sp = st.speed || 0;
     const moving = sp > 0.4 && st.grounded;
     const running = sp > 6.5;
-    const cadence = heavy ? 1.6 : light ? 2.4 : 2.0;
-    a.phase += dt * (moving ? sp * cadence : 0);
-    const amp = moving ? Math.min(1, sp / 7) * (heavy ? 0.55 : light ? 0.95 : 0.8) : 0;
-    let legL = Math.sin(a.phase) * amp, legR = -legL;
-    let armSwing = -legL * 0.6;
+    const pace = moving ? Math.min(1, sp / 7) : 0;
+    a.phase += dt * (moving ? sp * S.cadence : 0);
+    const amp = pace * S.stride * (running ? 1.1 : 1);
+    const sinP = Math.sin(a.phase);
+    let legL = sinP * amp, legR = -legL;
+    let armSwing = -legL * S.arms;
     const k = 14;
     a.crouch = damp(a.crouch, st.crouch ? 1 : 0, k, dt);
     a.air = damp(a.air, st.grounded ? 0 : 1, 10, dt);
-    if (a.air > 0.05) { legL = -0.7 * a.air + (st.vy < 0 ? 0.3 : 0); legR = 0.35 * a.air; }
+    // jump: each class tucks its legs its own way (scout high knees, juggernaut barely leaves the ground)
+    if (a.air > 0.05) { legL = S.jump[0] * a.air + (st.vy < 0 ? 0.3 : 0); legR = S.jump[1] * a.air; armSwing = 0; }
     if (a.crouch > 0.05) { legL = legL * 0.3 - 0.62 * a.crouch; legR = legR * 0.3 + 0.62 * a.crouch; }
     a.legL = damp(a.legL, legL, k, dt);
     a.legR = damp(a.legR, legR, k, dt);
     j.legL.rotation.x = a.legL;
     j.legR.rotation.x = a.legR;
-    // hips height (crouch / landing squash / walking bob)
+    // hips: height (crouch / landing squash / walk bounce) and side-to-side roll
     a.land = Math.max(0, a.land - dt * 4);
-    const bob = moving ? Math.abs(Math.sin(a.phase)) * 0.05 * (heavy ? 0.7 : 1) : Math.sin(performance.now() / 600) * 0.008;
+    const now = performance.now() / 1000;
+    let bob;
+    if (moving) bob = S.stomp ? Math.pow(Math.abs(sinP), 0.6) * S.bob - S.bob * 0.4 : Math.abs(sinP) * S.bob;
+    else bob = Math.sin(now * 1.6) * 0.008;
     const baseHip = this.prop.leg[1] * this.scale;
     // keep feet on the ground: rigid legs swung by angle t reach baseHip*cos(t)
     const reach = Math.cos(Math.min(1.2, Math.max(Math.abs(a.legL), Math.abs(a.legR))));
-    j.hips.position.y = baseHip * (1 - (a.crouch + a.land * 0.4) * (1 - reach)) + bob * (1 - a.crouch);
-    // torso lean
-    const lean = (running ? 0.18 : moving ? 0.08 : 0) + a.crouch * 0.35 + (heavy && st.spun ? 0.1 : 0);
+    j.hips.position.y = baseHip * (1 - (a.crouch + a.land * S.land) * (1 - reach)) + bob * (1 - a.crouch);
+    a.sway = damp(a.sway || 0, sinP * S.sway * pace, 12, dt);
+    j.hips.rotation.z = a.sway;
+    // torso: lean (more when running), counter-twist with the stride, recoil jolt
+    const lean = (running ? S.lean[1] : moving ? S.lean[0] : 0) + a.crouch * 0.35 + (a.air > 0.05 ? S.airLean : 0);
     a.torsoX = damp(a.torsoX, -lean, 10, dt);
-    j.torso.rotation.x = a.torsoX;
+    const fire = S.fire;
+    a.kick = Math.max(0, a.kick - dt * fire.decay);
+    const twist = -sinP * S.twist * pace * (this.melee ? 1 : 0.4);
+    let torsoX = a.torsoX + a.kick * fire.torso;
+    let torsoY = twist, torsoZ = -a.sway * 0.6;
+    if (st.firing && !this.melee) {
+      if (fire.shake) { torsoZ += (Math.sin(now * 57) + Math.sin(now * 33)) * 0.5 * fire.shake; torsoX += Math.sin(now * 41) * fire.shake * 0.5; }
+      if (fire.sweep) torsoY += Math.sin(now * 4.5) * fire.sweep;
+    }
     j.head.rotation.x = Math.max(-0.7, Math.min(0.7, st.pitch || 0)) * 0.6 - a.torsoX * 0.5;
-    j.head.rotation.y = 0;
+    j.head.rotation.y = -torsoY * 0.6;
 
     // arms
-    a.kick = Math.max(0, a.kick - dt * 6);
     a.hurt = Math.max(0, a.hurt - dt * 5);
     const pitch = (st.pitch || 0) - a.torsoX;
     let rx, lx, ly, lz = 0, rz = 0, ry = 0;
     if (st.dead) { rx = 0; lx = 0; ly = 0; }
     else if (a.pose) {
-      const P = poseAngles(a.pose, performance.now() / 1000);
+      const P = poseAngles(a.pose, now);
       [rx, lx, rz, lz] = P;
       ly = P.ly || 0; ry = P.ry || 0;
-      if (P.torso) j.torso.rotation.x = P.torso;
+      if (P.torso) torsoX = P.torso;
+      torsoY = 0; torsoZ = 0;
       if (P.hop) j.hips.position.y += P.hop * this.scale;
       j.head.rotation.y = P.headY || 0;
       if (P.headX) j.head.rotation.x = P.headX;
     } else if (this.melee) {
-      // melee: idle guard, swing arc when swinging
-      rx = 0.9 + pitch * 0.5 + armSwing * 0.3;
-      if (a.swing >= 0) {
-        a.swing += dt;
-        const t = Math.min(1, a.swing / 0.35);
-        rx = t < 0.3 ? 2.6 * (t / 0.3) : 2.6 - (t - 0.3) / 0.7 * 2.2;
-        if (t >= 1) a.swing = -1;
-      }
-      lx = 0.3 + armSwing; ly = 0; lz = -0.1;
+      const m = this.meleeArms(dt, pitch, armSwing, pace);
+      rx = m.rx; ry = m.ry; rz = m.rz; lx = m.lx; ly = m.ly; lz = m.lz;
+      torsoY += m.torsoY; torsoX += m.torsoX;
     } else {
-      rx = Math.PI / 2 + pitch - a.kick * 0.25;
-      lx = Math.PI / 2 + pitch - a.kick * 0.15 - 0.08;
+      // two-handed aim; the stride adds a little arm bounce, firing kicks the muzzle up
+      const bounce = Math.sin(a.phase * 2) * 0.03 * pace;
+      rx = Math.PI / 2 + pitch + a.kick * (0.12 * fire.kick + (fire.lift || 0)) + bounce;
+      lx = Math.PI / 2 + pitch + a.kick * (0.08 * fire.kick + (fire.lift || 0)) - 0.08 + bounce;
       ly = -this.holdL;
       lz = 0;
       ry = this.holdR;
@@ -1134,12 +1179,15 @@ export class CharacterRig {
         ly = -0.2;
         rx -= 0.25;
       } else a.reload = 0;
-      if (!st.grounded && !st.firing) { lx += 0.2; rx += 0.1; }
+      if (a.air > 0.05 && !st.firing) { lx += S.jump[2] * a.air; rx += S.jump[2] * 0.5 * a.air; }
     }
+    j.torso.rotation.set(torsoX, torsoY, torsoZ);
     if (a.ability > 0) { a.ability = Math.max(0, a.ability - dt); lx = 2.6; ly = 0.2; lz = -0.2; }
-    a.armRx = damp(a.armRx, rx, 18, dt);
-    a.armLx = damp(a.armLx, lx, 18, dt);
-    j.armR.rotation.set(a.armRx, ry, rz);
+    a.armRx = damp(a.armRx, rx, this.melee && a.swing >= 0 ? 40 : 18, dt);
+    a.armLx = damp(a.armLx, lx, this.melee && a.swing >= 0 ? 40 : 18, dt);
+    a.armRz = damp(a.armRz, rz, 22, dt);
+    a.armLz = damp(a.armLz, lz, 22, dt);
+    j.armR.rotation.set(a.armRx, ry, a.armRz);
     // cancel the arm's inward yaw on the weapon so it always points where the player aims:
     // hand = Rx(rx)^-1 * Ry(-ry) * Rx(rx)
     if (this.melee) j.handR.quaternion.identity();
@@ -1148,7 +1196,7 @@ export class CharacterRig {
       _qy.setFromAxisAngle(_Y, -ry);
       j.handR.quaternion.copy(_qx).invert().multiply(_qy).multiply(_qx);
     }
-    j.armL.rotation.set(a.armLx, ly, lz);
+    j.armL.rotation.set(a.armLx, ly, a.armLz);
     if (this.weapon && this.weapon.userData.spin) {
       a.spin = damp(a.spin, st.spun ? (st.firing ? 30 : 12) : 0, 4, dt);
       this.weapon.userData.spin.rotation.z += a.spin * dt;
@@ -1157,12 +1205,58 @@ export class CharacterRig {
     const em = a.hurt > 0 ? a.hurt * 0.6 : 0;
     if (em !== this._em) {
       this._em = em;
-      for (const m of this.materials) m.emissive.setRGB(em, em * 0.15, em * 0.1);
+      for (const mat of this.materials) mat.emissive.setRGB(em, em * 0.15, em * 0.1);
     }
   }
 
+  // Melee arms: a guard while idle, and per weapon kind a swing with anticipation, a fast strike and
+  // an eased recovery. slash = diagonal swing from high right across the body (bats, axes, saws,
+  // shovels); stab = pull back and lunge (knives); punch = alternating straight jabs (fists).
+  meleeArms(dt, pitch, armSwing, pace) {
+    const a = this.anim;
+    const kind = this.meleeKind;
+    const out = { rx: 0.9 + pitch * 0.4 + armSwing * 0.3, ry: 0, rz: 0, lx: 0.3 + armSwing, ly: 0, lz: -0.1, torsoY: 0, torsoX: 0 };
+    if (kind === 'punch') { out.rx = 0.95 + pitch * 0.3; out.rz = -0.3; out.lx = 0.95 + pitch * 0.3; out.lz = 0.3; out.ly = 0.1; }
+    if (kind === 'stab') { out.rx = 1.1 + pitch * 0.4; out.rz = -0.1; }
+    if (a.swing < 0) return out;
+    a.swing += dt;
+    const dur = kind === 'punch' ? 0.32 : kind === 'stab' ? 0.36 : 0.46;
+    const t = Math.min(1, a.swing / dur);
+    if (t >= 1) { a.swing = -1; return out; }
+    const easeOut = (x) => 1 - (1 - x) * (1 - x), easeIn = (x) => x * x, easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const lerp = (p, q, x) => p + (q - p) * x;
+    // key poses: [rx, rz, torsoY, torsoX] for guard -> windup -> strike end
+    let G, W, E, wEnd, sEnd;
+    if (kind === 'punch') {
+      // the punching side alternates; the other arm stays up in guard
+      const left = a.punchLeft;
+      G = [0.95 + pitch * 0.3, left ? 0.3 : -0.3, 0, 0];
+      W = [0.75 + pitch * 0.3, left ? 0.4 : -0.4, left ? 0.2 : -0.2, 0.04];
+      E = [Math.PI / 2 + 0.1 + pitch * 0.8, left ? -0.08 : 0.08, left ? -0.42 : 0.42, -0.18];
+      wEnd = 0.25; sEnd = 0.5;
+    } else if (kind === 'stab') {
+      G = [out.rx, out.rz, 0, 0];
+      W = [0.55, 0.2, -0.3, 0.08];
+      E = [Math.PI / 2 + pitch * 0.8, -0.2, 0.32, -0.32];
+      wEnd = 0.35; sEnd = 0.55;
+    } else {
+      G = [out.rx, out.rz, 0, 0];
+      W = [2.75, 0.45, -0.4, 0.06];
+      E = [0.35 + pitch * 0.3, -0.55, 0.38, -0.16];
+      wEnd = 0.32; sEnd = 0.56;
+    }
+    let P;
+    if (t < wEnd) { const x = easeOut(t / wEnd); P = G.map((g, i) => lerp(g, W[i], x)); }
+    else if (t < sEnd) { const x = easeIn((t - wEnd) / (sEnd - wEnd)); P = W.map((w, i) => lerp(w, E[i], x)); }
+    else { const x = easeIO((t - sEnd) / (1 - sEnd)); P = E.map((e, i) => lerp(e, G[i], x)); }
+    if (kind === 'punch' && a.punchLeft) { out.lx = P[0]; out.lz = P[1]; out.ly = 0; }
+    else { out.rx = P[0]; out.rz = P[1]; }
+    out.torsoY = P[2]; out.torsoX = P[3];
+    return out;
+  }
+
   onFire() { this.anim.kick = 1; }
-  onSwing() { this.anim.swing = 0; }
+  onSwing() { this.anim.swing = 0; this.anim.punchLeft = !this.anim.punchLeft; }
   onHurt() { this.anim.hurt = 1; }
   onLand() { this.anim.land = 1; }
   onAbility() { this.anim.ability = 0.6; }

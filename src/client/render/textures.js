@@ -209,6 +209,7 @@ export function getWorldMaterial(name) {
   if (rec.emissive) m = new THREE.MeshBasicMaterial({ map: opts.map, vertexColors: false });
   else m = new THREE.MeshLambertMaterial(opts);
   m.userData.tile = rec.tile;
+  m.name = name;
   matCache.set(name, m);
   return m;
 }

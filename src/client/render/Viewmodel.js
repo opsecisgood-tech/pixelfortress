@@ -65,15 +65,15 @@ export class Viewmodel {
     this.holder.add(this.armR);
     this.armL = arm();
     if (worn) {
-      // second fist held up on the left in a guard
-      this.armL.position.set(-0.24, -0.21, -0.66);
-      this.armL.scale.setScalar(0.5);
-      this.armL.rotation.set(0.3, -0.12, 0);
+      // second fist mirrors the right one (same size, position and angle), held up in a guard
+      this.armL.position.set(-this.base.x, this.base.y - 0.017, this.base.z + 0.035);
+      this.armL.scale.multiplyScalar(0.58); // keep the arm mesh's first-person slimming
+      this.armL.rotation.set(0.35, -0.25, 0);
       this.rig.add(this.armL);
       this.armL.userData.free = true;
     } else if (md.melee) {
       this.armL.position.set(-0.22, -0.2, -0.05);
-      this.armL.scale.setScalar(0.58);
+      this.armL.scale.multiplyScalar(0.58); // keep the arm mesh's first-person slimming
       this.armL.rotation.set(0.5, -0.3, 0);
       this.rig.add(this.armL);
       this.armL.userData.free = true;
@@ -83,6 +83,8 @@ export class Viewmodel {
       else { this.armL.position.set(-0.03, -0.08, 0.04); this.armL.rotation.set(0.35, -0.35, 0); }
       this.holder.add(this.armL);
     }
+    this.armLBase = this.armL.userData.free ? this.armL.position.clone() : null;
+    this.meleeKind = md.fists ? 'punch' : this.def?.melee?.backstab ? 'stab' : 'slash';
     this.st.equip = 0;
     this.st.reload = -1;
     this.st.swing = -1;
@@ -105,7 +107,7 @@ export class Viewmodel {
     this.st.kick = Math.min(1.6, this.st.kick + k * 0.6);
     this.st.kickRot = Math.min(1.6, this.st.kickRot + k * 0.6);
   }
-  onSwing() { this.st.swing = 0; }
+  onSwing() { this.st.swing = 0; this.st.punchLeft = !this.st.punchLeft; }
   onReload(dur, mode) { this.st.reload = 0; this.st.reloadDur = dur; this.st.reloadMode = mode; }
   onReloadDone() { this.st.reload = -1; }
   onEquip() { this.st.equip = 0; }
@@ -160,17 +162,39 @@ export class Viewmodel {
     } else if (this.armL && !this.armL.userData.free) {
       this.armL.position.y = -0.02;
     }
-    // melee swing
+    // melee swing: anticipation (windup), a fast accelerating strike, then an eased recovery.
+    // slash = high right to low left across the screen; stab = pull back and thrust; punch = alternating jabs.
+    if (this.armL?.userData.free && this.armLBase) this.armL.position.copy(this.armLBase);
     if (st.swing >= 0) {
       st.swing += dt;
-      const d = this.def && this.def.melee ? Math.max(0.25, this.def.melee.windup + 0.25) : 0.35;
+      const kind = this.meleeKind;
+      const windup = this.def?.melee?.windup ?? 0.12;
+      const d = kind === 'punch' ? 0.3 : kind === 'stab' ? 0.34 : Math.max(0.4, windup + 0.3);
       const t = Math.min(1, st.swing / d);
-      const wind = this.def?.melee ? this.def.melee.windup / d : 0.3;
-      let a;
-      if (t < wind) a = -(t / wind) * 0.6; else a = -0.6 + ((t - wind) / (1 - wind)) * 2.2;
-      r.x += a > 1 ? 1.6 - (a - 1) * 2 : a;
-      r.z -= Math.sin(t * Math.PI) * 0.8;
-      p.x -= Math.sin(t * Math.PI) * 0.12;
+      const wEnd = kind === 'punch' ? 0.25 : kind === 'stab' ? 0.35 : Math.min(0.4, Math.max(0.22, windup / d));
+      const sEnd = wEnd + 0.22;
+      // key poses as offsets [x, y, z, rotX, rotY, rotZ]
+      const POSES = {
+        // raise to the upper right with the head tilted right, then sweep down-left across the view
+        slash: [[0.1, 0.12, 0.03, -0.12, 0.1, -0.6], [-0.27, -0.17, -0.06, 0.55, -0.2, 1.15]],
+        // draw back and down a little, then thrust forward toward the crosshair
+        stab: [[0.03, -0.05, 0.06, 0.1, 0.05, 0.05], [-0.07, 0.05, -0.2, -0.12, -0.1, -0.05]],
+        // cock back, then a straight jab toward the crosshair
+        punch: [[0.02, -0.03, 0.05, 0, 0, 0], [-0.08, 0.06, -0.22, 0.05, -0.15, 0]],
+      };
+      const [W, E] = POSES[kind] || POSES.slash;
+      const easeOut = (x) => 1 - (1 - x) * (1 - x), easeIn = (x) => x * x, easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+      let P;
+      if (t < wEnd) { const x = easeOut(t / wEnd); P = W.map((w) => w * x); }
+      else if (t < sEnd) { const x = easeIn((t - wEnd) / (sEnd - wEnd)); P = W.map((w, i) => w + (E[i] - w) * x); }
+      else { const x = easeIO((t - sEnd) / (1 - sEnd)); P = E.map((e) => e * (1 - x)); }
+      if (kind === 'punch' && st.punchLeft && this.armL?.userData.free) {
+        // left jab: move the free left fist (mirrored)
+        this.armL.position.set(this.armLBase.x - P[0] * 0.6, this.armLBase.y + P[1], this.armLBase.z + P[2]);
+      } else {
+        p.x += P[0]; p.y += P[1]; p.z += P[2];
+        r.x += P[3]; r.y += P[4]; r.z += P[5];
+      }
       if (t >= 1) st.swing = -1;
     }
     // ability gesture (left hand throw / raise)

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { getWorldMaterial, materialRecipe } from './textures.js';
 import { buildProp, animateProp } from './props.js';
-import { mergeStatic, bx, colorMat } from './blocks.js';
+import { mergeStatic, bx, colorMat, coplanarOffsets } from './blocks.js';
 import { mulberry32 } from '../../shared/math.js';
 import { variantFor, makeCeilingTest, buildMapDetails } from './MapDetail.js';
 
@@ -44,15 +44,18 @@ export class MapRenderer {
       if (!bucket) { bucket = { mat, pos: [], nor: [], uv: [], col: [], idx: [], n: 0 }; buckets.set(key, bucket); }
       return bucket;
     };
-    for (const b of map.boxes) {
-      if (b.vis === false || !b.mat) continue;
+    const shown = map.boxes.filter((b) => b.vis !== false && b.mat);
+    const nudged = separateCoplanar(shown);
+    this.visualBoxes = nudged;
+    for (let i = 0; i < shown.length; i++) {
+      const b = shown[i], nb = nudged[i];
       // texture variants per box, and a ceiling material for undersides seen from inside
       const mat = variantFor(b.mat, b);
       const ceilMat = ceil.ceilingFor(b);
       if (ceilMat) {
-        appendBox(bucketFor(mat, b), b, mat, 'nobottom');
-        appendBox(bucketFor(ceilMat, b), b, ceilMat, 'bottom');
-      } else appendBox(bucketFor(mat, b), b, mat, 'all');
+        appendBox(bucketFor(mat, b), nb, mat, 'nobottom');
+        appendBox(bucketFor(ceilMat, b), nb, ceilMat, 'bottom');
+      } else appendBox(bucketFor(mat, b), nb, mat, 'all');
     }
     for (const bucket of buckets.values()) {
       const g = new THREE.BufferGeometry();
@@ -80,7 +83,8 @@ export class MapRenderer {
       staticRoot.add(buildProp(d));
     }
     staticRoot.add(buildMapDetails(map, { ...this.quality, propDetail: Math.max(0.4, detail) }, this.occ));
-    const merged = mergeStatic(staticRoot);
+    // props and dressing are separated from each other and from the (already built) map boxes
+    const merged = mergeStatic(staticRoot, this.visualBoxes || []);
     merged.traverse((o) => {
       if (o.userData && o.userData.anim) this.dynamicProps.push(o);
       if (o.isMesh) { o.castShadow = o.castShadow && this.quality.shadows; o.receiveShadow = this.quality.shadows; }
@@ -223,6 +227,18 @@ export class MapRenderer {
 }
 
 // Append the 6 faces of a box with world-space UVs and baked AO vertex colours.
+// Anti z-fighting for map geometry (see coplanarOffsets in blocks.js): overlapping same-plane faces of
+// smaller boxes are pushed outward a centimetre per layer. Only the visual box moves; collision uses
+// the map data unchanged.
+function separateCoplanar(boxes) {
+  const off = coplanarOffsets(boxes, 0, 0.01);
+  return boxes.map((b, i) => {
+    const o = off[i], min = [...b.min], max = [...b.max];
+    for (let ax = 0; ax < 3; ax++) { min[ax] -= o[ax * 2]; max[ax] += o[ax * 2 + 1]; }
+    return { min, max, mat: b.mat };
+  });
+}
+
 function appendBox(bk, b, matName = b.mat, which = 'all') {
   const [x0, y0, z0] = b.min, [x1, y1, z1] = b.max;
   const rec = materialRecipe(matName);

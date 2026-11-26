@@ -40,7 +40,7 @@ export function resolveColors(item, team) {
 function makeAdder(parent, s, item, team) {
   const cols = resolveColors(item, team);
   const fx = item?.fx;
-  let n = 0;
+  let n = 0, n2 = 0;
   return (x, y, z, w, h, d, col = 0, flag) => {
     const isSlot = typeof col === 'number' && col >= 0 && col <= 2;
     const hex = isSlot ? cols[col] : col;
@@ -49,7 +49,9 @@ function makeAdder(parent, s, item, team) {
     else if (isSlot && fx === 'rainbow' && flag !== 'f') mat = rainbowMat(n++ * 0.37 + col);
     else if (isSlot && (fx === 'glow' || fx === 'shine') && flag !== 'f') mat = glowMat(fx === 'shine' ? hex : hex);
     else mat = colorMat(hex);
-    const m = new THREE.Mesh(boxGeo(w * s, h * s, d * s), mat);
+    // grow each box by a slightly different hair (anti z-fighting with the body and other parts)
+    const g = 0.012 * ((n2++ % 11) + 1);
+    const m = new THREE.Mesh(boxGeo((w + g) * s, (h + g) * s, (d + g) * s), mat);
     m.position.set(x * s, y * s, z * s);
     m.castShadow = true;
     parent.add(m);

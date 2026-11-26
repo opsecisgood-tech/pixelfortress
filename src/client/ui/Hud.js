@@ -503,12 +503,16 @@ export class Hud {
     this.el.chat.querySelectorAll('.chatline').forEach((c) => c.classList.add('open'));
     this.app.input.exitLock();
     setTimeout(() => inp.focus(), 10);
-    const close = () => {
+    const close = (relock = true) => {
+      if (!this.chatOpen) return;
       this.chatOpen = false;
       inp.remove();
       this.el.chat.querySelectorAll('.chatline').forEach((c) => c.classList.remove('open'));
-      if (!this.app.input.touchActive()) this.app.input.requestLock();
+      if (relock && !this.app.input.touchActive()) this.app.input.requestLock();
     };
+    // clicking back into the game (or anywhere else) closes the chat box; otherwise movement would
+    // stay blocked while an unfocused, half-typed message sat on screen
+    inp.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== inp) close(false); }, 0));
     inp.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') { const t = inp.value.trim(); if (t) this.app.game?.net.chat(t, team); close(); }

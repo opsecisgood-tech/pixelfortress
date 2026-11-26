@@ -421,3 +421,49 @@ test('server: verified usernames come only from the trusted account check and ta
   const { checkJoin } = await import('../server/accounts.js');
   assert.deepEqual(await checkJoin({ name: 'Ace' }, { projectId: '' }), {});
 });
+
+test('server: rejoining with a different class from the menu spawns as the new class; bots give way', () => {
+  const { g } = makeServer();
+  const a = join(g, 1, 'Alpha', { classId: 'scout', token: 'tok-a' });
+  startPlaying(g);
+  assert.equal(a.classId, 'scout');
+  g.handleDisconnect(1);
+  g.handleMessage(2, { t: 'hello', protocol: PROTOCOL_VERSION, name: 'Alpha', classId: 'juggernaut', token: 'tok-a' });
+  const back = [...g.players.values()].find((p) => p.connId === 2);
+  assert.equal(back, a, 'same slot reclaimed');
+  assert.equal(back.classId, 'juggernaut');
+  // bots holding every slot of a limited class make room for a human
+  for (const q of g.players.values()) if (q.isBot && q.team === back.team) q.classId = 'soldier';
+  const lim = getClass('soldier').limit;
+  let n = 0; for (const q of g.players.values()) if (q.team === back.team && q.classId === 'soldier') n++;
+  if (n >= lim) {
+    g.handleMessage(3, { t: 'hello', protocol: PROTOCOL_VERSION, name: 'Bravo', classId: 'soldier', team: back.team });
+    const b = [...g.players.values()].find((p) => p.connId === 3);
+    if (b.team === back.team) assert.equal(b.classId, 'soldier');
+  }
+});
+
+test('server: input keeps up when the server loop runs behind real time (no command drops)', () => {
+  const { g } = makeServer();
+  const a = join(g, 1, 'Alpha', { classId: 'soldier' });
+  startPlaying(g);
+  place(a, 0, 0.01, 18, -Math.PI / 2);
+  const realPerf = globalThis.performance;
+  let fake = 1000;
+  Object.defineProperty(globalThis, 'performance', { value: { now: () => fake }, configurable: true, writable: true });
+  try {
+    let seq = a.lastSeq;
+    // 6 s of real time at 60 commands/s, but the server only manages 20 ticks/s (stalls drop the rest)
+    for (let t = 0; t < 120; t++) {
+      const list = [];
+      for (let i = 0; i < 3; i++) list.push([++seq, 1 / 60, 0, -Math.PI / 2, 0, 0, g.time]);
+      g.handleMessage(1, { t: 'c', c: list });
+      fake += 50;
+      g.tick();
+    }
+    for (let i = 0; i < 10; i++) { fake += 33; g.tick(); }
+    assert.ok(seq - a.lastSeq <= 3, `server fell ${seq - a.lastSeq} commands behind`);
+  } finally {
+    Object.defineProperty(globalThis, 'performance', { value: realPerf, configurable: true, writable: true });
+  }
+});

@@ -27,6 +27,7 @@ import { BotController, BOT_NAMES } from './bots/Bot.js';
 import { round2, round3, wrapAngle } from '../shared/math.js';
 
 const TICK_DT = 1 / SERVER_TICK_RATE;
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const navCache = new Map();
 
 // Bots pick a random weapon from each slot's arsenal so alternates show up in matches.
@@ -184,7 +185,8 @@ export class ServerGame {
     this.abilities.removeOwned(p.id);
     this.players.delete(p.id);
     if (allowReconnect && !p.isBot && p.token) {
-      this.ghosts.set(p.token, { player: p, until: this.time + RECONNECT_GRACE });
+      // held by game time and wall-clock time (an empty room stops ticking, so game time alone would never expire it)
+      this.ghosts.set(p.token, { player: p, until: this.time + RECONNECT_GRACE, untilMs: Date.now() + RECONNECT_GRACE * 1000 });
     }
     this.event(['ann', 'leave', p.name]);
     if (!p.isBot) this.opts.audit?.({ ev: 'leave', name: p.name, uid: p.uid || null, verified: !!p.verified });
@@ -234,7 +236,7 @@ export class ServerGame {
     // Reconnection
     const ghost = msg.token ? this.ghosts.get(msg.token) : null;
     let p;
-    if (ghost && ghost.until > this.time) {
+    if (ghost && ghost.until > this.time && (ghost.untilMs ?? Infinity) > Date.now()) {
       this.ghosts.delete(msg.token);
       p = ghost.player;
       p.connId = connId;
@@ -242,11 +244,22 @@ export class ServerGame {
       p.cmdBudget = 0;
       this.players.set(p.id, p);
       if (!isValidTeam(p.team) || this.teamCount(p.team) >= this.maxPerTeam()) p.team = this.pickTeam(-1);
+      // the player may have picked a different class / loadout in the menu since they left
+      p.loadouts = sanitizeLoadouts(msg.loadouts);
+      p.weaponPicks = sanitizeWeaponLoadouts(msg.weapons);
+      if (CLASS_IDS.includes(msg.classId) && msg.classId !== p.classId) {
+        this.makeRoomForClass(p.team, msg.classId, p.id);
+        if (classAllowed([...this.players.values()], p.team, msg.classId, getClass(msg.classId).limit, p.id)) {
+          p.nextClassId = msg.classId;
+          if (p.alive) this.spawnPlayer(p, true);
+        }
+      }
     } else {
       if (this.humanCount() >= this.maxPlayers) { this.send(connId, { t: 'error', reason: 'Server is full.' }); return; }
       this.trimBotsFor(1);
       const team = this.pickTeam(msg.team ?? -1);
       if (team < 0) { this.send(connId, { t: 'error', reason: 'Server is full.' }); return; }
+      if (CLASS_IDS.includes(msg.classId)) this.makeRoomForClass(team, msg.classId);
       const classId = CLASS_IDS.includes(msg.classId) && classAllowed([...this.players.values()], team, msg.classId, getClass(msg.classId).limit) ? msg.classId : this.pickClass(team);
       if (verified) this.freeName(name);
       p = this.createPlayer({ name: verified ? name : this.uniqueName(name), team, classId, isBot: false, connId, loadouts: sanitizeLoadouts(msg.loadouts), weaponPicks: sanitizeWeaponLoadouts(msg.weapons), token: msg.token || randomToken() });
@@ -297,11 +310,25 @@ export class ServerGame {
     return chooseTeam([...this.players.values()].map((p) => ({ team: p.team, isBot: p.isBot, score: p.stats.score })), this.maxPerTeam(), preferred);
   }
 
+  // Bots give way to humans: if a class is at its team limit and a bot holds a slot, that bot switches.
+  makeRoomForClass(team, classId, exceptId) {
+    const limit = getClass(classId).limit;
+    if (!limit) return;
+    const list = [...this.players.values()];
+    if (classAllowed(list, team, classId, limit, exceptId)) return;
+    const bot = list.find((q) => q.isBot && q.team === team && q.classId === classId);
+    if (!bot) return;
+    const others = CLASS_IDS.filter((c) => c !== classId && classAllowed(list, team, c, getClass(c).limit, bot.id));
+    bot.nextClassId = others[Math.floor(Math.random() * others.length)] || 'scout';
+    if (bot.alive) this.spawnPlayer(bot, true);
+    else { bot.classId = bot.nextClassId; this.rosterDirty = true; }
+  }
+
   pickClass(team) {
     const list = [...this.players.values()];
     const have = new Set(list.filter((p) => p.team === team).map((p) => p.classId));
     // bias toward missing roles; doctors first
-    const order = ['doctor', 'juggernaut', 'scout', 'demolitionist', 'incinerator', 'marksman', 'mechanic', 'spy'];
+    const order = ['doctor', 'juggernaut', 'soldier', 'scout', 'demolitionist', 'incinerator', 'marksman', 'mechanic', 'spy'];
     for (const c of order) if (!have.has(c) && Math.random() < 0.7) return c;
     const pool = CLASS_IDS.filter((c) => classAllowed(list, team, c, getClass(c).limit));
     let total = pool.reduce((s, c) => s + getClass(c).botWeight, 0);
@@ -379,6 +406,7 @@ export class ServerGame {
   // ------------------------------------------------------------------ requests
   requestClass(p, classId) {
     if (!CLASS_IDS.includes(classId)) return;
+    if (!p.isBot) this.makeRoomForClass(p.team, classId, p.id);
     if (!classAllowed([...this.players.values()], p.team, classId, getClass(classId).limit, p.id)) {
       this.send(p.connId, { t: 'notice', text: `${getClass(classId).displayName} limit reached for your team.` });
       return;
@@ -482,15 +510,24 @@ export class ServerGame {
   }
 
   processCommands(p) {
-    p.cmdBudget = Math.min(p.cmdBudget + TICK_DT, 0.25);
+    // Movement budget follows real elapsed time, not just ticks: after a stall the server loop skips
+    // ticks (to avoid a spiral of death), and counting only ticks would starve the player's input
+    // queue until commands were dropped and they could no longer move. Clients still can't send more
+    // than real time allows, so speed hacks stay blocked.
+    const now = nowMs();
+    const real = p.lastProcAt ? Math.min(0.5, (now - p.lastProcAt) / 1000) : TICK_DT;
+    p.lastProcAt = now;
+    p.cmdBudget = Math.min(p.cmdBudget + Math.max(TICK_DT, real), 0.5);
     let processed = 0;
-    while (p.cmdQueue.length && p.cmdBudget > -0.06 && processed < 12) {
+    while (p.cmdQueue.length && p.cmdBudget > -0.06 && processed < 40) {
       const cmd = p.cmdQueue.shift();
       p.cmdBudget -= cmd.dt;
       processed++;
       this.runCommand(p, cmd);
       p.lastSeq = cmd.seq;
     }
+    // an idle player can't bank time for a later burst
+    if (!p.cmdQueue.length) p.cmdBudget = Math.min(p.cmdBudget, 0.1);
     // Drop excessive backlog (speed hack / burst protection)
     if (p.cmdQueue.length > 45) p.cmdQueue.splice(0, p.cmdQueue.length - 20);
   }
@@ -625,7 +662,7 @@ export class ServerGame {
     this.tickCount++;
 
     // ghosts expiry
-    for (const [tok, g] of this.ghosts) if (g.until < this.time) this.ghosts.delete(tok);
+    for (const [tok, g] of this.ghosts) if (g.until < this.time || (g.untilMs ?? Infinity) < Date.now()) this.ghosts.delete(tok);
 
     // match state machine
     this.updateMatchState(dt);

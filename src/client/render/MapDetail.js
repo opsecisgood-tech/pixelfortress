@@ -115,11 +115,17 @@ export function buildMapDetails(map, quality, occ) {
   const detail = quality.propDetail ?? 1;
   const rnd = mulberry32(map.id.length * 9973 + map.boxes.length);
   let budget = Math.round(2600 * Math.max(0.35, detail));
+  // Anti z-fighting: detail boxes are grown a few millimetres each when merged (see mergeStatic), and
+  // thin floor decals are lifted onto separate layers ~6 mm apart instead (and not grown).
+  let nB = 0;
   const B = (x, y, z, w, h, d, col, opts = {}) => {
     if (budget-- <= 0) return null;
+    const decal = opts.flat && h <= 0.03;
+    if (decal) y += (nB++ % 5) * 0.006;
     const m = new THREE.Mesh(boxGeo(w, h, d), opts.material || (opts.glow ? colorMat(col, { basic: true }) : colorMat(col, opts.flat ? { flat: true } : {})));
     m.position.set(x, y, z);
     if (opts.ry) m.rotation.y = opts.ry;
+    if (decal) m.userData.noGrow = true;
     m.castShadow = !!opts.shadow;
     m.receiveShadow = true;
     root.add(m);

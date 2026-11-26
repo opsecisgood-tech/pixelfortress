@@ -21,7 +21,7 @@ export class Renderer {
     this.gl.shadowMap.type = THREE.PCFSoftShadowMap;
     this.gl.autoClear = false;
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(90, 1, 0.05, 600);
+    this.camera = new THREE.PerspectiveCamera(90, 1, 0.1, 600); // near 0.1: depth precision for distant surfaces (the collision hull keeps walls 0.4 m away)
     this.camera.rotation.order = 'YXZ';
     this.scene.add(this.camera);
     this.vm = new Viewmodel();
