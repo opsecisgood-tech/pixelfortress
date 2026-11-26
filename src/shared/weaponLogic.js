@@ -6,7 +6,7 @@ import { WEAPONS } from './config/weapons.js';
 import { BTN } from './constants.js';
 import { dirFromAngles, mulberry32, hashInts } from './math.js';
 
-export function createWeaponState(cls, startSlot = 0) {
+export function createWeaponState(cls, startSlot = 0, weapons = cls.weapons) {
   return {
     time: 0,
     slot: startSlot,
@@ -16,7 +16,7 @@ export function createWeaponState(cls, startSlot = 0) {
     lastEmpty: -10,
     lastFire: -10,
     scoped: false,
-    w: cls.weapons.map((id) => {
+    w: weapons.map((id) => {
       const d = WEAPONS[id];
       return { id, clip: d.clip, reserve: d.reserve, next: 0, rel: 0, relT: 0, spin: 0, charge: 0, melee: -1 };
     }),

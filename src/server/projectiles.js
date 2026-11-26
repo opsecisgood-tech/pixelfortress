@@ -3,7 +3,7 @@ import { getClass } from '../shared/config/classes.js';
 import { shotDirections } from '../shared/weaponLogic.js';
 import { rayAabb, round2 } from '../shared/math.js';
 
-export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge'];
+export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt'];
 
 // Shared muzzle offset so client-predicted projectiles line up with server ones.
 export function projectileOrigin(eye, yaw, pitch) {

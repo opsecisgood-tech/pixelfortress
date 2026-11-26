@@ -119,7 +119,7 @@ export class NetClient {
       // fresh spawn: hard reset prediction
       this.spawnCount = me.sc;
       this.ms = createMoveState();
-      this.ws = createWeaponState(cls);
+      this.ws = createWeaponState(cls, 0, me.wp || cls.weapons);
       this.applyServerState(me);
       this.pending = this.pending.filter((c) => c.seq > me.ack);
       this.smooth = [0, 0, 0];

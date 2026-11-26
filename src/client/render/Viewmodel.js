@@ -69,7 +69,7 @@ export class Viewmodel {
       this.rig.add(this.armL);
       this.armL.userData.free = true;
     } else {
-      const twoHand = (md.muzzle3 && Math.abs(md.muzzle3[2]) > 0.35) || weaponId === 'cyclone';
+      const twoHand = (md.muzzle3 && Math.abs(md.muzzle3[2]) > 0.35) || !!this.def?.spinUp;
       if (twoHand) { this.armL.position.set(-0.01, -0.04, md.muzzle3[2] * 0.45); this.armL.rotation.set(0.45, -0.7, 0); }
       else { this.armL.position.set(-0.03, -0.08, 0.04); this.armL.rotation.set(0.35, -0.35, 0); }
       this.holder.add(this.armL);

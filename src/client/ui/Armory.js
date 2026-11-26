@@ -62,7 +62,7 @@ export class Armory {
       <div class="ar-classes">${CLASS_IDS.map((id) => `<button class="${id === clsId ? 'on' : ''}" data-c="${id}" title="${esc(CLASSES[id].displayName)}"><img src="${portraits[`${id}_${this.ui.previewTeam}`]}" alt=""><span>${esc(CLASSES[id].displayName)}</span></button>`).join('')}</div>
       <div class="ar-sub"><b>${esc(cls.displayName)}</b> loadout <span class="muted">· ${col.owned} / ${col.total} items collected</span></div>
       <div class="ar-slots">
-        <button class="${slot === 'weapons' ? 'on' : ''}" data-s="weapons"><span>Weapons</span><small>${cls.weapons.length}</small></button>
+        <button class="${slot === 'weapons' ? 'on' : ''}" data-s="weapons"><span>Weapons</span><small>${(cls.arsenal || []).flat().length || 3} choices</small></button>
         ${SLOTS.map((s) => `<button class="${s === slot ? 'on' : ''}" data-s="${s}">${lo[s] && getItem(lo[s]) && s !== 'banner' && s !== 'weaponSkin' && s !== 'victoryPose' && s !== 'elimEffect' ? '<i class="dot"></i>' : ''}<span>${esc(SLOT_NAMES[s])}</span><small>${counts[s].own}/${counts[s].all}${counts[s].nw ? ' <b class="new">NEW</b>' : ''}</small></button>`).join('')}
       </div>
       <div class="ar-main"></div>`;
@@ -84,15 +84,28 @@ export class Armory {
   renderWeapons(main, cls) {
     const icons = this.app.icons;
     const ui = this.ui;
-    ui.inspectW = ui.inspectW && cls.weapons.includes(ui.inspectW) ? ui.inspectW : cls.weapons[0];
+    const p = this.app.profile;
+    const picks = p.weaponsFor(cls.id);
+    const arsenal = cls.arsenal || cls.weapons.map((w) => [w]);
+    ui.inspectW = ui.inspectW && arsenal.flat().includes(ui.inspectW) ? ui.inspectW : picks[0];
     const d = WEAPONS[ui.inspectW];
     const stat = (k, v) => `<div>${k}: <b>${v}</b></div>`;
     const dps = d.type === 'melee' || d.type === 'hitscan' || d.type === 'projectile' || d.type === 'flame' ? Math.round(d.damage * d.pellets / d.fireInterval) : 0;
     main.innerHTML = `
-      <div class="inspect">${cls.weapons.map((w, i) => `<div class="weap ${w === ui.inspectW ? 'sel' : ''}" data-w="${w}" style="${w === ui.inspectW ? 'border-color:var(--hazard)' : ''}"><img src="${icons.weapons[w]}" alt=""><div class="nm">${esc(WEAPONS[w].name)}</div><div class="d">${['Primary', 'Secondary', 'Melee'][i]} · ${esc(WEAPONS[w].category)}</div></div>`).join('')}</div>
-      <div class="weapon-stats">${stat('Damage', d.pellets > 1 ? `${d.damage} × ${d.pellets}` : d.type === 'beam' ? `${d.beam.healRate} HP/s heal` : d.damage)}${dps ? stat('Damage / sec', dps) : ''}${stat('Fire rate', `${(1 / d.fireInterval).toFixed(1)}/s`)}${d.clip > 0 ? stat('Magazine', `${d.clip} + ${d.reserve}`) : stat('Ammo', d.clip < 0 ? 'Unlimited' : '—')}${d.clip > 0 ? stat('Reload', `${d.reloadMode === 'single' ? `${d.reloadTime}s / round` : `${d.reloadTime}s`}`) : ''}${d.type === 'hitscan' ? stat('Effective range', `${d.effectiveRange} m`) : ''}${d.headshotMult > 1 ? stat('Headshot', `×${d.headshotMult}`) : ''}${d.projectile ? stat('Projectile speed', `${d.projectile.speed} m/s`) : ''}${d.melee ? stat('Reach', `${d.melee.range} m`) : ''}${stat('Switch time', `${d.deployTime}s`)}</div>
-      <p class="note">Cosmetics never change stats. Weapon skins apply to every weapon of the class.</p>`;
-    main.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => { ui.inspectW = b.dataset.w; ui.previewWeapon = ui.inspectW; ui.updateShowcase(-1.6); this.renderWeapons(main, cls); ui.wireSounds(main); }));
+      ${arsenal.map((list, slot) => `
+        <div class="wl-slot"><h4>${['Primary', 'Secondary', 'Melee'][slot]}</h4>
+          <div class="wl-row">${list.map((w) => `<button class="weap ${picks[slot] === w ? 'sel' : ''} ${ui.inspectW === w ? 'insp' : ''}" data-w="${w}" data-slot="${slot}"><img src="${icons.weapons[w]}" alt=""><div class="nm">${esc(WEAPONS[w].name)}</div><div class="d">${esc(WEAPONS[w].category)}${picks[slot] === w ? ' · Equipped' : ''}</div></button>`).join('')}</div>
+        </div>`).join('')}
+      <div class="wl-desc"><b>${esc(d.name)}</b> ${esc(d.description || '')}</div>
+      <div class="weapon-stats">${stat('Damage', d.pellets > 1 ? `${d.damage} × ${d.pellets}` : d.type === 'beam' ? `${d.beam.healRate} HP/s heal` : d.damage)}${dps ? stat('Damage / sec', dps) : ''}${stat('Fire rate', `${(1 / d.fireInterval).toFixed(1)}/s`)}${d.clip > 0 ? stat('Magazine', `${d.clip} + ${d.reserve}`) : stat('Ammo', d.clip < 0 ? 'Unlimited' : '—')}${d.clip > 0 ? stat('Reload', `${d.reloadMode === 'single' ? `${d.reloadTime}s / round` : `${d.reloadTime}s`}`) : ''}${d.type === 'hitscan' ? stat('Effective range', `${d.effectiveRange} m`) : ''}${d.headshotMult > 1 ? stat('Headshot', `×${d.headshotMult}`) : ''}${d.knockback ? stat('Knockback', 'Yes') : ''}${d.projectile ? stat('Projectile speed', `${d.projectile.speed} m/s`) : ''}${d.projectile?.explode ? stat('Blast radius', `${d.projectile.explode.radius} m`) : ''}${d.melee ? stat('Reach', `${d.melee.range} m`) : ''}${stat('Switch time', `${d.deployTime}s`)}</div>
+      <p class="note">Click a weapon to equip it. Changes apply the next time you spawn. Cosmetics never change stats.</p>`;
+    main.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => {
+      const w = b.dataset.w, slot = +b.dataset.slot;
+      ui.inspectW = w;
+      if (p.setWeapon(cls.id, slot, w)) this.app.game?.net.send({ t: 'wpn', weapons: p.weaponsPayload() });
+      ui.previewWeapon = w; ui.updateShowcase(-1.6);
+      this.renderWeapons(main, cls); ui.wireSounds(main);
+    }));
   }
 
   itemList(clsId) {

@@ -151,3 +151,21 @@ test('xp is computed from stats with anti-exploit caps; level curve is monotonic
   assert.equal(levelFromXp(0).level, 1);
   assert.equal(levelFromXp(xpForLevel(1)).level, 2);
 });
+
+test('weapon loadouts: every class has a valid arsenal and picks are sanitized', async () => {
+  const { resolveWeapons, sanitizeWeaponLoadouts } = await import('../src/shared/config/classes.js');
+  for (const id of CLASS_IDS) {
+    const c = CLASSES[id];
+    assert.equal(c.arsenal.length, 3, `${id} arsenal has 3 slots`);
+    c.arsenal.forEach((list, slot) => {
+      assert.equal(list[0], c.weapons[slot], `${id} default listed first`);
+      assert.ok(list.length >= 2, `${id} slot ${slot} has an alternate`);
+      for (const w of list) assert.equal(WEAPONS[w].slot, slot, `${w} in slot ${slot}`);
+    });
+  }
+  assert.deepEqual(resolveWeapons('scout', ['kickback', 'claymore', '<x>']), ['kickback', 'sidekick', 'streetbat']);
+  assert.deepEqual(resolveWeapons('demolitionist', null), CLASSES.demolitionist.weapons);
+  const all = sanitizeWeaponLoadouts({ spy: ['derringer', 'longsix', 'stiletto'], scout: 'junk' });
+  assert.deepEqual(all.spy, ['derringer', 'longsix', 'stiletto']);
+  assert.deepEqual(all.scout, CLASSES.scout.weapons);
+});

@@ -9,6 +9,7 @@ import { CLASSES, CLASS_IDS, getClass } from '../shared/config/classes.js';
 import { WEAPONS } from '../shared/config/weapons.js';
 import { MODES, SCORE_VALUES, MATCH_DEFAULTS } from '../shared/config/modes.js';
 import { sanitizeLoadouts, randomLoadouts } from '../shared/config/cosmetics.js';
+import { resolveWeapons, sanitizeWeaponLoadouts } from '../shared/config/classes.js';
 import { World } from '../shared/physics.js';
 import { NavGraph } from '../shared/nav.js';
 import { createMoveState, stepMovement, moveParamsFor, eyeHeight } from '../shared/movement.js';
@@ -27,6 +28,13 @@ import { round2, round3, wrapAngle } from '../shared/math.js';
 
 const TICK_DT = 1 / SERVER_TICK_RATE;
 const navCache = new Map();
+
+// Bots pick a random weapon from each slot's arsenal so alternates show up in matches.
+function randomWeaponPicks() {
+  const out = {};
+  for (const id of CLASS_IDS) out[id] = (getClass(id).arsenal || []).map((list) => list[Math.floor(Math.random() * list.length)]);
+  return sanitizeWeaponLoadouts(out);
+}
 
 // Cosmetics the player currently wears: their loadout for the class they're playing (empty slots dropped).
 function wornBy(p) {
@@ -204,6 +212,7 @@ export class ServerGame {
       case 'chat': if (p) this.onChat(p, msg); return;
       case 'pong': if (p && p.pingSent && msg.n === p.pingN) { p.ping = Math.round((Date.now() - p.pingSent) / 1); p.pingSent = 0; } return;
       case 'cos': if (p) { p.loadouts = sanitizeLoadouts(msg.loadouts); this.sendRoster(); } return;
+      case 'wpn': if (p) p.weaponPicks = sanitizeWeaponLoadouts(msg.weapons); return; // applied at the next spawn
       case 'host': if (connId === this.hostConn) this.onHostCommand(msg); return;
       default:
     }
@@ -233,7 +242,7 @@ export class ServerGame {
       const team = this.pickTeam(msg.team ?? -1);
       if (team < 0) { this.send(connId, { t: 'error', reason: 'Server is full.' }); return; }
       const classId = CLASS_IDS.includes(msg.classId) && classAllowed([...this.players.values()], team, msg.classId, getClass(msg.classId).limit) ? msg.classId : this.pickClass(team);
-      p = this.createPlayer({ name: this.uniqueName(name), team, classId, isBot: false, connId, loadouts: sanitizeLoadouts(msg.loadouts), token: msg.token || randomToken() });
+      p = this.createPlayer({ name: this.uniqueName(name), team, classId, isBot: false, connId, loadouts: sanitizeLoadouts(msg.loadouts), weaponPicks: sanitizeWeaponLoadouts(msg.weapons), token: msg.token || randomToken() });
     }
     this.conns.set(connId, p.id);
     if (this.hostConn === null) this.hostConn = connId;
@@ -285,13 +294,13 @@ export class ServerGame {
     return 'scout';
   }
 
-  createPlayer({ name, team, classId, isBot, connId, loadouts, token }) {
+  createPlayer({ name, team, classId, isBot, connId, loadouts, weaponPicks, token }) {
     const id = this.nextId++;
     const cls = getClass(classId);
     const p = {
-      id, name, team, classId, nextClassId: classId, isBot, connId: connId ?? null, token, loadouts: loadouts || sanitizeLoadouts({}),
+      id, name, team, classId, nextClassId: classId, isBot, connId: connId ?? null, token, loadouts: loadouts || sanitizeLoadouts({}), weaponPicks: weaponPicks || sanitizeWeaponLoadouts({}),
       alive: false, hp: 0, maxHp: cls.health, respawnAt: this.time + 0.5, spawnCount: 0,
-      ms: createMoveState(), ws: createWeaponState(cls), cmdQueue: [], cmdBudget: 0, lastSeq: 0,
+      ms: createMoveState(), ws: createWeaponState(cls), weapons: [...cls.weapons], cmdQueue: [], cmdBudget: 0, lastSeq: 0,
       history: [], spawnProtectUntil: 0, prevAbilityBtn: false,
       ability: { cdUntil: 0, activeUntil: 0, charge: 0, active: false },
       disguise: null, burn: null, revealedUntil: 0, healTarget: -1, lastBeam: 0, healedBy: new Map(),
@@ -314,7 +323,7 @@ export class ServerGame {
       if (team < 0) break;
       const used = new Set([...this.players.values()].map((p) => p.name));
       const name = BOT_NAMES.find((n) => !used.has(n)) || `Bot${this.nextId}`;
-      const p = this.createPlayer({ name, team, classId: this.pickClass(team), isBot: true, loadouts: randomLoadouts(Math.random) });
+      const p = this.createPlayer({ name, team, classId: this.pickClass(team), isBot: true, loadouts: randomLoadouts(Math.random), weaponPicks: randomWeaponPicks() });
       p.respawnAt = this.time + 0.5 + Math.random();
       total++;
     }
@@ -555,7 +564,9 @@ export class ServerGame {
     const sp = this.chooseSpawn(p);
     p.ms = createMoveState(sp.pos[0], sp.pos[1], sp.pos[2], sp.yaw);
     p.ms.grounded = true;
-    p.ws = createWeaponState(cls);
+    p.weapons = resolveWeapons(p.classId, p.weaponPicks?.[p.classId]);
+    p.ws = createWeaponState(cls, 0, p.weapons);
+    this.rosterDirty = true;
     p.ws.time = 0;
     p.alive = true;
     p.maxHp = cls.health;
@@ -850,7 +861,7 @@ export class ServerGame {
         w: packWeaponState(p.ws),
         ab: [Math.max(0, round2(p.ability.cdUntil - this.time)), Math.max(0, round2(p.ability.activeUntil - this.time)), round3(p.ability.charge), p.ability.active ? 1 : 0],
         ra: p.alive ? 0 : Math.max(0, round2(p.respawnAt - this.time)),
-        cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying,
+        cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying, wp: p.weapons,
       };
       this.send(p.connId, { ...common, p: plist, me });
     }
@@ -860,7 +871,7 @@ export class ServerGame {
     const list = [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, team: p.team, cls: p.classId, bot: p.isBot, k: p.stats.kills, d: p.stats.deaths,
       a: p.stats.assists, s: p.stats.score, cap: p.stats.captures, dmg: Math.round(p.stats.damage), heal: Math.round(p.stats.healing),
-      ping: p.isBot ? 0 : p.ping, alive: p.alive, cos: wornBy(p), host: p.connId !== null && p.connId === this.hostConn,
+      ping: p.isBot ? 0 : p.ping, alive: p.alive, cos: wornBy(p), wp: p.weapons, host: p.connId !== null && p.connId === this.hostConn,
     }));
     this.broadcast({ t: 'r', players: list, room: this.roomName, mapId: this.mapId, mode: this.modeId, botFill: this.botFill });
   }

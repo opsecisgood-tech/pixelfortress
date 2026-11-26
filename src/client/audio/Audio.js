@@ -20,6 +20,23 @@ const WEAPON_SOUNDS = {
   flarelauncher: { kind: 'launcher', f: 600, dur: 0.3, thump: 200, vol: 0.8 },
   blastcaster: { kind: 'launcher', f: 380, dur: 0.45, thump: 80, vol: 1.0 },
   chargelauncher: { kind: 'launcher', f: 500, dur: 0.3, thump: 120, vol: 0.85 },
+  // alternates
+  kickback: { kind: 'shotgun', f: 800, dur: 0.36, thump: 60, vol: 1.1 },
+  peashooter: { kind: 'pistol', f: 2600, dur: 0.09, thump: 170, vol: 0.55 },
+  derringer: { kind: 'pistol', f: 1300, dur: 0.22, thump: 80, vol: 0.9 },
+  longsix: { kind: 'pistol', f: 1250, dur: 0.34, thump: 70, vol: 1.05 },
+  longbow: { kind: 'pneumatic', f: 500, dur: 0.12, thump: 0, vol: 0.5 },
+  scrubcarbine: { kind: 'pistol', f: 2300, dur: 0.09, thump: 140, vol: 0.65 },
+  pumpgun: { kind: 'shotgun', f: 750, dur: 0.36, thump: 62, vol: 1.05 },
+  servicepistol: { kind: 'pistol', f: 2000, dur: 0.12, thump: 130, vol: 0.7 },
+  crossbow: { kind: 'pneumatic', f: 700, dur: 0.1, thump: 0, vol: 0.55 },
+  rapidmender: { kind: 'none' },
+  brassthunder: { kind: 'rotary', f: 1500, dur: 0.07, thump: 95, vol: 0.62 },
+  slugthrower: { kind: 'shotgun', f: 600, dur: 0.4, thump: 55, vol: 1.1 },
+  backdraft: { kind: 'none' },
+  signalshotgun: { kind: 'shotgun', f: 850, dur: 0.34, thump: 66, vol: 1.0 },
+  pinpoint: { kind: 'launcher', f: 450, dur: 0.38, thump: 90, vol: 1.0 },
+  trenchmortar: { kind: 'launcher', f: 320, dur: 0.4, thump: 70, vol: 1.0 },
 };
 
 const SURFACE = {

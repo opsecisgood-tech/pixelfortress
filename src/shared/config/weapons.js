@@ -245,6 +245,191 @@ def('demohammer', {
 });
 
 // Ability "pseudo-weapons" used for kill feed / damage attribution.
+// ============================================================================
+// ALTERNATE WEAPONS — original designs, one per slot per class. Each trades
+// something away against the default so loadouts are sidegrades, not upgrades.
+// ============================================================================
+const SHOTGUN = { reloadMode: 'single', reloadStart: 0.3, reloadTime: 0.5, reloadInterrupt: 'fire', spread: 0.07, spreadMove: 0.01, spreadAir: 0.015, range: 40, effectiveRange: 6, minFalloff: 0.3, recoil: { pitch: 0.05, yaw: 0.012 }, kick: 1.2, crosshair: 'shotgun', botRange: 6 };
+
+// ---------------- SCOUT ----------------
+def('kickback', {
+  name: 'Kickback Coach Gun', slot: 0, type: 'hitscan', category: 'Coach Gun',
+  description: 'Twin-barrel scattergun. Two fast shells that shove targets away; reloads both at once.',
+  damage: 5.5, pellets: 12, fireInterval: 0.32, clip: 2, reserve: 32, reloadTime: 1.35,
+  spread: 0.085, spreadMove: 0.01, spreadAir: 0.015, range: 40, effectiveRange: 4.5, minFalloff: 0.3,
+  knockback: 7, recoil: { pitch: 0.07, yaw: 0.015 }, kick: 1.5, crosshair: 'shotgun', botRange: 5, deployTime: 0.3,
+});
+def('peashooter', {
+  name: 'Pocket Peashooter', slot: 1, type: 'hitscan', category: 'Pocket Pistol',
+  description: 'Tiny pistol with a fast trigger and deep magazine. Less punch per shot.',
+  damage: 10, fireInterval: 0.11, clip: 9, reserve: 45, reloadTime: 1.0,
+  headshotMult: 1.25, spread: 0.014, spreadMove: 0.02, spreadAir: 0.03, range: 60, effectiveRange: 12, minFalloff: 0.5,
+  recoil: { pitch: 0.012, yaw: 0.005 }, kick: 0.45, botRange: 12, deployTime: 0.2,
+});
+def('slugger', {
+  name: 'Ironwood Slugger', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Iron-banded club. Heavier hits, slower swings.',
+  damage: 46, fireInterval: 0.75, auto: true,
+  melee: { range: 2.3, angle: 0.55, windup: 0.14 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+});
+
+// ---------------- SPY ----------------
+def('derringer', {
+  name: 'Twin Derringer', slot: 0, type: 'hitscan', category: 'Derringer',
+  description: 'Two heavy rounds for point-blank surprises. Long reload.',
+  damage: 38, fireInterval: 0.35, clip: 2, reserve: 18, reloadTime: 1.5,
+  headshotMult: 1.3, spread: 0.02, spreadMove: 0.02, spreadAir: 0.04, range: 50, effectiveRange: 6, minFalloff: 0.4,
+  recoil: { pitch: 0.05, yaw: 0.01 }, kick: 1.0, botRange: 6, deployTime: 0.25,
+});
+def('longsix', {
+  name: "Gentleman's Long Six", slot: 1, type: 'hitscan', category: 'Revolver',
+  description: 'Long-barrel revolver. Slow but pinpoint; headshots double damage.',
+  damage: 34, fireInterval: 0.75, clip: 6, reserve: 24, reloadTime: 1.2,
+  headshotMult: 2, spread: 0.004, spreadMove: 0.02, spreadAir: 0.04, range: 120, effectiveRange: 28, minFalloff: 0.55,
+  recoil: { pitch: 0.06, yaw: 0.008 }, kick: 1.1, botRange: 20,
+});
+def('stiletto', {
+  name: 'Parlour Stiletto', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Needle-thin blade. Quicker strikes, shorter reach. Back strikes still lethal.',
+  damage: 32, fireInterval: 0.55, auto: true,
+  melee: { range: 1.85, angle: 0.45, windup: 0.05, backstab: true }, crosshair: 'melee', botRange: 2, deployTime: 0.2,
+});
+
+// ---------------- MARKSMAN ----------------
+def('longbow', {
+  name: 'Recurve Longbow', slot: 0, type: 'projectile', category: 'Bow',
+  description: 'Silent arrows with an arc. No scope needed; lead your targets.',
+  damage: 70, fireInterval: 0.9, clip: 1, reserve: 14, reloadTime: 1.0,
+  projectile: { kind: 'arrow', speed: 58, gravity: 7, radius: 0.08, lifetime: 3 },
+  recoil: { pitch: 0.03, yaw: 0.005 }, kick: 0.6, botRange: 24, deployTime: 0.4,
+});
+def('scrubcarbine', {
+  name: 'Scrub Carbine', slot: 1, type: 'hitscan', category: 'Carbine',
+  description: 'Heavier bullets than the SMG, slower cycle, smaller magazine.',
+  damage: 12, fireInterval: 0.14, auto: true, clip: 18, reserve: 54, reloadTime: 1.4,
+  headshotMult: 1.2, spread: 0.018, spreadMove: 0.012, spreadAir: 0.03, range: 60, effectiveRange: 16, minFalloff: 0.45,
+  recoil: { pitch: 0.012, yaw: 0.007 }, kick: 0.45, botRange: 14,
+});
+def('machete', {
+  name: 'Bush Machete', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Broad jungle blade. Big hits, slow recovery.',
+  damage: 56, fireInterval: 0.95, auto: true,
+  melee: { range: 2.3, angle: 0.55, windup: 0.16 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.35,
+});
+
+// ---------------- MECHANIC ----------------
+def('pumpgun', {
+  name: 'Frontier Pump Gun', slot: 0, type: 'hitscan', category: 'Shotgun',
+  description: 'Hard-hitting pump shotgun with a small tube.',
+  damage: 7, pellets: 9, fireInterval: 0.65, clip: 4, reserve: 32, ...SHOTGUN,
+});
+def('servicepistol', {
+  name: 'Service Pistol', slot: 1, type: 'hitscan', category: 'Pistol',
+  description: 'Reliable sidearm. Trades the repair beam for steady ranged damage.',
+  damage: 14, fireInterval: 0.16, clip: 12, reserve: 60, reloadTime: 1.1,
+  headshotMult: 1.25, spread: 0.012, spreadMove: 0.018, spreadAir: 0.03, range: 70, effectiveRange: 15, minFalloff: 0.5,
+  recoil: { pitch: 0.018, yaw: 0.006 }, kick: 0.6, botRange: 14, deployTime: 0.25,
+});
+def('pipewrench', {
+  name: 'Pipe Wrench', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Long-handled wrench. Hits harder, repairs turrets a little less per swing.',
+  damage: 42, fireInterval: 0.8, auto: true,
+  melee: { range: 2.4, angle: 0.55, windup: 0.15, repair: { hp: 30, ammo: 30 } }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+});
+
+// ---------------- DOCTOR ----------------
+def('crossbow', {
+  name: 'Field Crossbow', slot: 0, type: 'projectile', category: 'Crossbow',
+  description: 'Single heavy bolt per load. Rewards accuracy over volume.',
+  damage: 58, fireInterval: 0.3, clip: 1, reserve: 30, reloadTime: 1.5,
+  projectile: { kind: 'bolt', speed: 72, gravity: 4, radius: 0.08, lifetime: 2.5 },
+  recoil: { pitch: 0.03, yaw: 0.005 }, kick: 0.7, botRange: 22,
+});
+def('rapidmender', {
+  name: 'Rapid Mender', slot: 1, type: 'beam', category: 'Healing Beam',
+  description: 'Faster healing with a shorter reach and less overheal. Builds Overcharge.',
+  damage: 0, fireInterval: 0.1, auto: true, clip: -1,
+  beam: { range: 12, breakRange: 16, healRate: 38, overhealMax: 1.25, overhealRate: 0.35, lockAngle: 0.35 },
+  crosshair: 'beam', tracer: 0xffd27f, botRange: 6, deployTime: 0.3,
+});
+def('wardcleaver', {
+  name: 'Ward Cleaver', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Heavy cleaver. More damage, less Overcharge per hit.',
+  damage: 52, fireInterval: 0.95, auto: true,
+  melee: { range: 2.1, angle: 0.5, windup: 0.16, overchargeOnHit: 0.05 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+});
+
+// ---------------- JUGGERNAUT ----------------
+def('brassthunder', {
+  name: 'Brass Thunder', slot: 0, type: 'hitscan', category: 'Rotary Cannon',
+  description: 'Heavier rotary cannon. More damage per round; slower to spin and to move with.',
+  damage: 10.5, fireInterval: 0.085, auto: true, clip: 200, reserve: 200, reloadTime: 3.2,
+  spread: 0.04, spreadMove: 0.015, spreadAir: 0.03, range: 65, effectiveRange: 12, minFalloff: 0.35,
+  spinUp: 1.1, spinMoveMult: 0.4,
+  recoil: { pitch: 0.004, yaw: 0.006 }, kick: 0.3, botRange: 12, deployTime: 0.65,
+});
+def('slugthrower', {
+  name: 'Slugthrower', slot: 1, type: 'hitscan', category: 'Slug Shotgun',
+  description: 'Fires three heavy slugs in a tight group. Better at mid range.',
+  damage: 20, pellets: 3, fireInterval: 0.75, clip: 4, reserve: 28, ...SHOTGUN,
+  spread: 0.025, effectiveRange: 11, minFalloff: 0.45, botRange: 10,
+});
+def('ironknuckles', {
+  name: 'Iron Knuckles', slot: 2, type: 'melee', category: 'Fists',
+  description: 'Weighted knuckles. Short reach, quick punches.',
+  damage: 48, fireInterval: 0.7, auto: true,
+  melee: { range: 1.9, angle: 0.55, windup: 0.1 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.3,
+});
+
+// ---------------- INCINERATOR ----------------
+def('backdraft', {
+  name: 'Backdraft Projector', slot: 0, type: 'flame', category: 'Flamethrower',
+  description: 'Narrower jet. Critical damage to targets facing away.',
+  damage: 6, fireInterval: 0.08, auto: true, clip: 200, reserve: 200, reloadTime: 2.2,
+  flame: { range: 7, angle: 0.3, afterburnDps: 6, afterburnTime: 4, farMult: 0.5 },
+  crit: { fromBehind: true }, critMult: 1.8,
+  range: 7, effectiveRange: 4, crosshair: 'flame', tracer: 0xff6a2a, botRange: 5,
+});
+def('signalshotgun', {
+  name: 'Signal Shotgun', slot: 1, type: 'hitscan', category: 'Shotgun',
+  description: 'Standard pump shotgun for finishing off fleeing targets.',
+  damage: 6.5, pellets: 8, fireInterval: 0.65, clip: 6, reserve: 32, ...SHOTGUN,
+});
+def('hydranthook', {
+  name: 'Hydrant Hook', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Fire hook. Doubles damage on burning targets, weaker otherwise.',
+  damage: 38, fireInterval: 0.75, auto: true,
+  melee: { range: 2.4, angle: 0.55, windup: 0.14 }, crit: { vsBurning: true }, critMult: 2, crosshair: 'melee', botRange: 2,
+});
+
+// ---------------- DEMOLITIONIST ----------------
+def('pinpoint', {
+  name: 'Pinpoint Launcher', slot: 0, type: 'projectile', category: 'Shell Launcher',
+  description: 'Faster, harder-hitting shells with a much smaller blast.',
+  damage: 105, fireInterval: 0.8, clip: 4, reserve: 20,
+  reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.8, reloadInterrupt: 'fire',
+  crit: { directHit: true }, critMult: 1.2, explosive: true,
+  projectile: { kind: 'shell', speed: 42, gravity: 0, radius: 0.16, lifetime: 4,
+    explode: { radius: 2.3, minMult: 0.4, knockback: 8, selfKnockback: 12, selfMult: 0.5 } },
+  recoil: { pitch: 0.06, yaw: 0.01 }, kick: 1.5, crosshair: 'circle', botRange: 16,
+});
+def('trenchmortar', {
+  name: 'Trench Mortar', slot: 1, type: 'projectile', category: 'Mortar',
+  description: 'Slow lobbed bombs with a big blast and a longer fuse.',
+  damage: 92, fireInterval: 0.85, clip: 3, reserve: 15,
+  reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.75, reloadInterrupt: 'fire',
+  crit: { directHit: true }, critMult: 1.2, explosive: true,
+  projectile: { kind: 'charge', speed: 19, gravity: 16, radius: 0.17, lifetime: 2.6, bounce: 0.3, fuseExplode: true,
+    explode: { radius: 4.1, minMult: 0.3, knockback: 9, selfKnockback: 12, selfMult: 0.5 } },
+  recoil: { pitch: 0.05, yaw: 0.01 }, kick: 1.2, crosshair: 'circle', botRange: 14,
+});
+def('claymore', {
+  name: 'Highland Claymore', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Two-handed sword. The longest reach of any melee weapon.',
+  damage: 62, fireInterval: 0.85, auto: true,
+  melee: { range: 3.0, angle: 0.5, windup: 0.2 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 3, deployTime: 0.45,
+});
+
 export const ABILITY_SOURCES = {
   turret: { id: 'turret', name: 'Automated Turret', damage: 8, range: 22, fireInterval: 0.16, maxHp: 160, maxAmmo: 150, turnRate: 3.2, spread: 0.035, buildTime: 1.2 },
   detcharge: { id: 'detcharge', name: 'Detonation Charge' },

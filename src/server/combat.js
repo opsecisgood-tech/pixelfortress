@@ -78,8 +78,8 @@ export class Combat {
       ends.push([round2(hit.point[0]), round2(hit.point[1]), round2(hit.point[2]), hit.kind === 'player' ? 1 : hit.kind === 'world' ? 0 : hit.kind === 'turret' ? 3 : 2]);
       if (hit.kind === 'player') {
         const { damage, headshot } = hitscanDamage(def, { dist: hit.t, headshot: hit.headshot, charge: ev.charge, scoped: ev.scoped });
-        const acc = perTarget.get(hit.target) || { dmg: 0, headshot: false, point: hit.point };
-        acc.dmg += damage; acc.headshot = acc.headshot || headshot;
+        const acc = perTarget.get(hit.target) || { dmg: 0, headshot: false, point: hit.point, n: 0 };
+        acc.dmg += damage; acc.headshot = acc.headshot || headshot; acc.n++;
         perTarget.set(hit.target, acc);
       } else if (hit.kind === 'turret') {
         this.g.abilities.damageTurret(hit.target, hitscanDamage(def, { dist: hit.t }).damage, p);
@@ -87,7 +87,9 @@ export class Combat {
     }
     this.g.event(['f', p.id, def.id, ev.shot, round2(eye[0]), round2(eye[1]), round2(eye[2]), ends], p.ms, p.id);
     for (const [target, acc] of perTarget) {
-      this.damage(target, acc.dmg, p, def.id, { headshot: acc.headshot, point: acc.point });
+      // knockback weapons push proportionally to how many pellets connected
+      const knock = def.knockback ? def.knockback * (acc.n / def.pellets) : 0;
+      this.damage(target, acc.dmg, p, def.id, { headshot: acc.headshot, point: acc.point, knock });
       if (def.id === 'longshot' || def.scope) this.reveal(target, p);
     }
   }
@@ -110,8 +112,10 @@ export class Combat {
       const ang = Math.acos(Math.min(1, cos));
       if (ang > f.angle && d > 1.2) continue;
       if (!this.g.world.los(eye, c)) continue;
-      const mult = d <= def.effectiveRange ? 1 : f.farMult;
-      this.damage(q, def.damage * mult, p, def.id, { isFire: true, point: c });
+      let mult = d <= def.effectiveRange ? 1 : f.farMult;
+      let crit = false;
+      if (def.crit.fromBehind && isBehind([p.ms.x, 0, p.ms.z], p.ms.yaw, [q.ms.x, 0, q.ms.z], q.ms.yaw)) { mult *= def.critMult; crit = true; }
+      this.damage(q, def.damage * mult, p, def.id, { isFire: true, point: c, crit });
       if (q.alive) this.ignite(q, p, f.afterburnDps, f.afterburnTime);
     }
     // turrets

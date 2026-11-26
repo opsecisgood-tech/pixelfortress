@@ -355,6 +355,8 @@ export class Game {
     const col = TEAM_COLORS_HEX[team];
     switch (kind) {
       case 'rivet': bx(g, 0, -0.03, 0, 0.05, 0.05, 0.28, 0xffc060, { basic: true }); break;
+      case 'arrow': bx(g, 0, -0.02, 0, 0.03, 0.03, 0.7, 0x6e4220); bx(g, 0, -0.025, -0.36, 0.06, 0.06, 0.08, 0xc8cdd2); bx(g, 0, -0.02, 0.3, 0.02, 0.1, 0.12, col); break;
+      case 'bolt': bx(g, 0, -0.02, 0, 0.04, 0.04, 0.45, 0x34373d); bx(g, 0, -0.025, -0.24, 0.07, 0.07, 0.06, 0xc8cdd2); bx(g, 0, -0.02, 0.2, 0.02, 0.08, 0.08, col); break;
       case 'syringe': bx(g, 0, -0.03, 0, 0.05, 0.05, 0.25, 0x7fffb0, { basic: true }); bx(g, 0, -0.02, 0.12, 0.08, 0.04, 0.04, 0xffffff); break;
       case 'flare': bx(g, 0, -0.08, 0, 0.16, 0.16, 0.16, 0xffa030, { basic: true }); break;
       case 'shell': bx(g, 0, -0.1, 0, 0.2, 0.2, 0.5, 0x5e6a3a); bx(g, 0, -0.06, -0.27, 0.12, 0.12, 0.08, col); bx(g, 0, -0.07, 0.27, 0.14, 0.14, 0.06, 0xffa030, { basic: true }); break;
@@ -514,7 +516,7 @@ export class Game {
       R.root.rotation.y = s.yaw;
       const slot = a[8];
       const cls = getClass(CLASS_BY_INDEX[a[9]]);
-      const weaponId = cls.weapons[slot] || cls.weapons[0];
+      const weaponId = (entry.cls === cls.id && entry.wp?.[slot]) || cls.weapons[slot] || cls.weapons[0];
       const shownWeapon = ap.disguised && ap.classId !== cls.id && entry.team !== myTeam ? getClass(ap.classId).weapons[Math.min(slot, 2)] : weaponId;
       R.rig.setWeapon(shownWeapon, entry.cos?.weaponSkin);
       R.weaponId = weaponId;

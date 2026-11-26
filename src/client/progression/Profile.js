@@ -2,7 +2,7 @@
 // cosmetic inventory with per-class loadouts. (Item acquisition will be added later; for now players
 // own the starter set plus anything migrated from older profiles.)
 import { levelFromXp, computeMatchXp, ACHIEVEMENTS } from '../../shared/config/progression.js';
-import { CLASS_IDS } from '../../shared/config/classes.js';
+import { CLASS_IDS, resolveWeapons, sanitizeWeaponLoadouts } from '../../shared/config/classes.js';
 import { SLOTS, STARTER_ITEMS, LEGACY_MAP, ITEMS, getItem, canWear } from '../../shared/config/cosmetics.js';
 
 const KEY = 'pf_profile_v1';
@@ -50,7 +50,7 @@ export class Profile {
     try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { d = null; }
     const blank = {
       name: '', xp: 0, stats: blankStats(), achievements: [], selectedClass: 'scout', recent: [], created: Date.now(),
-      inventory: {}, newItems: [], loadouts: {},
+      inventory: {}, newItems: [], loadouts: {}, weapons: {},
     };
     this.data = d ? { ...blank, ...d, stats: { ...blankStats(), ...(d.stats || {}) } } : blank;
     const D = this.data;
@@ -66,6 +66,7 @@ export class Profile {
       D.loadouts[c] = lo;
     }
     for (const id of Object.keys(D.inventory)) if (!getItem(id)) delete D.inventory[id];
+    D.weapons = sanitizeWeaponLoadouts(D.weapons);
   }
 
   migrateLegacy(d) {
@@ -108,6 +109,19 @@ export class Profile {
   loadout(classId = this.data.selectedClass) { return { ...this.data.loadouts[classId] }; }
   cosmetics(classId = this.data.selectedClass) { return this.loadout(classId); }
   loadoutsPayload() { return JSON.parse(JSON.stringify(this.data.loadouts)); }
+
+  // ---------------------------------------------------------------- weapon loadouts (per class)
+  weaponsFor(classId = this.data.selectedClass) { return resolveWeapons(classId, this.data.weapons[classId]); }
+  weaponsPayload() { return sanitizeWeaponLoadouts(this.data.weapons); }
+  setWeapon(classId, slot, weaponId) {
+    const next = this.weaponsFor(classId);
+    next[slot] = weaponId;
+    const fixed = resolveWeapons(classId, next);
+    if (fixed[slot] !== weaponId) return false;
+    this.data.weapons[classId] = fixed;
+    this.save();
+    return true;
+  }
 
   // id null = unequip (slots with a default fall back to it).
   equip(classId, slot, id) {

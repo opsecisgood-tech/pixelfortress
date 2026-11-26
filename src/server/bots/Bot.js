@@ -238,9 +238,9 @@ export class BotController {
     }
 
     if (t && this.reaction <= 0 && !(p.classId === 'doctor' && this.slotWanted === 1)) {
-      const wdef = WEAPONS[p.ws.w[this.slotWanted]?.id] || WEAPONS[cls.weapons[0]];
+      const wdef = WEAPONS[p.ws.w[this.slotWanted]?.id] || WEAPONS[p.ws.w[0].id];
       // weapon selection
-      const prim = WEAPONS[cls.weapons[0]], sec = WEAPONS[cls.weapons[1]];
+      const prim = WEAPONS[p.ws.w[0].id], sec = WEAPONS[p.ws.w[1].id];
       const pw = p.ws.w[0], sw = p.ws.w[1];
       if (p.classId === 'spy') this.slotWanted = dist < 3 ? 2 : 1;
       else if (dist < 2.2 && p.classId !== 'incinerator' && p.classId !== 'juggernaut') this.slotWanted = 2;

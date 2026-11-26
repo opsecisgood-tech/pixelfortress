@@ -140,7 +140,7 @@ export class UI {
     const p = this.app.profile;
     const cos = { ...p.cosmetics(), ...(this.previewCos || {}) };
     const sc = this.app.renderer.showcase;
-    sc.setCharacters([{ classId: p.data.selectedClass, team: this.previewTeam, cosmetics: cos, weaponId: this.previewWeapon || getClass(p.data.selectedClass).weapons[0], skin: cos.weaponSkin }]);
+    sc.setCharacters([{ classId: p.data.selectedClass, team: this.previewTeam, cosmetics: cos, weaponId: this.previewWeapon || p.weaponsFor()[0], skin: cos.weaponSkin }]);
     // main menu: hero character stands to the right of the panels, turned toward them
     sc.offsetX = offsetX ?? (window.innerWidth > 760 ? 1.45 : 0);
     sc.heroYaw = offsetX === undefined ? -1.0 : 0;
@@ -393,7 +393,7 @@ export class UI {
       <div><h3>${esc(cls.displayName)} <span class="muted small" style="font-family:var(--ui)">${esc(cls.role)}</span></h3><p class="note" style="margin:6px 0 0;font-size:14px">${esc(cls.description)}</p>
       <div class="note" style="margin-top:8px">Health <b style="color:var(--bone)">${cls.health}</b> · Speed <b style="color:var(--bone)">${Math.round(cls.speed * 100)}%</b> · Difficulty <b style="color:var(--bone)">${esc(cls.difficultyLabel)}</b></div>
       <div class="ab"><b>${esc(cls.ability.name)}</b> — ${esc(cls.ability.description)}<br><span class="note"><b>${esc(cls.passive.name)}:</b> ${esc(cls.passive.description)}</span></div>
-      <div class="weap-row">${cls.weapons.map((w) => { const d = WEAPONS[w]; return `<div class="weap"><img src="${icons.weapons[w]}" alt=""><div class="nm">${esc(d.name)}</div><div class="d">${esc(d.description)}</div></div>`; }).join('')}</div></div></div>`;
+      <div class="weap-row">${this.app.profile.weaponsFor(cls.id).map((w) => { const d = WEAPONS[w]; return `<div class="weap"><img src="${icons.weapons[w]}" alt=""><div class="nm">${esc(d.name)}</div><div class="d">${esc(d.description)}</div></div>`; }).join('')}</div></div></div>`;
       body.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { cur = b.dataset.c; render(); this.wireSounds(body); if (!inGame) { p.data.selectedClass = cur; p.save(); this.previewWeapon = null; this.updateShowcase(); this.renderShowcaseLabel(); this.renderProfileCard(); } }));
       body.querySelector('.pick').addEventListener('click', () => {
         p.data.selectedClass = cur; p.save();

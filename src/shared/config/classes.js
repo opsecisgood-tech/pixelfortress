@@ -22,6 +22,7 @@ const BASE_CLASSES = {
     difficulty: 2,                   // 1 easy .. 4 expert
     difficultyLabel: 'Medium',
     weapons: ['scattershot', 'sidekick', 'streetbat'],
+    arsenal: [['scattershot', 'kickback'], ['sidekick', 'peashooter'], ['streetbat', 'slugger']], // weapon choices per slot (first = default)
     signature: 'scattershot',
     ability: {
       id: 'doublejump', name: 'Double Jump', key: 'JUMP', passiveTrigger: true,
@@ -52,6 +53,7 @@ const BASE_CLASSES = {
     difficulty: 4,
     difficultyLabel: 'High',
     weapons: ['silencedpistol', 'revolver', 'shadowblade'],
+    arsenal: [['silencedpistol', 'derringer'], ['revolver', 'longsix'], ['shadowblade', 'stiletto']], // weapon choices per slot (first = default)
     signature: 'shadowblade',
     ability: {
       id: 'disguise', name: 'Disguise', key: 'E',
@@ -83,6 +85,7 @@ const BASE_CLASSES = {
     difficulty: 3,
     difficultyLabel: 'Medium-High',
     weapons: ['longshot', 'compactsmg', 'utilityknife'],
+    arsenal: [['longshot', 'longbow'], ['compactsmg', 'scrubcarbine'], ['utilityknife', 'machete']], // weapon choices per slot (first = default)
     signature: 'longshot',
     ability: {
       id: 'focus', name: 'Focus Mode', key: 'E',
@@ -113,6 +116,7 @@ const BASE_CLASSES = {
     difficulty: 2,
     difficultyLabel: 'Medium',
     weapons: ['rivetgun', 'constructor', 'wrench'],
+    arsenal: [['rivetgun', 'pumpgun'], ['constructor', 'servicepistol'], ['wrench', 'pipewrench']], // weapon choices per slot (first = default)
     signature: 'rivetgun',
     ability: {
       id: 'turret', name: 'Automated Turret', key: 'E',
@@ -143,6 +147,7 @@ const BASE_CLASSES = {
     difficulty: 2,
     difficultyLabel: 'Medium',
     weapons: ['syringelauncher', 'medbeam', 'surgicalsaw'],
+    arsenal: [['syringelauncher', 'crossbow'], ['medbeam', 'rapidmender'], ['surgicalsaw', 'wardcleaver']], // weapon choices per slot (first = default)
     signature: 'medbeam',
     ability: {
       id: 'overcharge', name: 'Overcharge', key: 'E',
@@ -173,6 +178,7 @@ const BASE_CLASSES = {
     difficulty: 2,
     difficultyLabel: 'Medium',
     weapons: ['cyclone', 'breacher', 'foundryhammer'],
+    arsenal: [['cyclone', 'brassthunder'], ['breacher', 'slugthrower'], ['foundryhammer', 'ironknuckles']], // weapon choices per slot (first = default)
     signature: 'cyclone',
     ability: {
       id: 'suppression', name: 'Suppression Mode', key: 'E',
@@ -203,6 +209,7 @@ const BASE_CLASSES = {
     difficulty: 2,
     difficultyLabel: 'Medium',
     weapons: ['thermal', 'flarelauncher', 'furnaceaxe'],
+    arsenal: [['thermal', 'backdraft'], ['flarelauncher', 'signalshotgun'], ['furnaceaxe', 'hydranthook']], // weapon choices per slot (first = default)
     signature: 'thermal',
     ability: {
       id: 'thermalburst', name: 'Thermal Burst', key: 'E',
@@ -233,6 +240,7 @@ const BASE_CLASSES = {
     difficulty: 3,
     difficultyLabel: 'Medium-High',
     weapons: ['blastcaster', 'chargelauncher', 'demohammer'],
+    arsenal: [['blastcaster', 'pinpoint'], ['chargelauncher', 'trenchmortar'], ['demohammer', 'claymore']], // weapon choices per slot (first = default)
     signature: 'blastcaster',
     ability: {
       id: 'detcharge', name: 'Detonation Charge', key: 'E',
@@ -255,6 +263,24 @@ export const CLASSES = structuredClone(BASE_CLASSES);
 
 export function getClass(id) {
   return CLASSES[id] || CLASSES.scout;
+}
+
+// Resolve a player's weapon picks for a class into three valid weapon ids (primary, secondary, melee).
+// picks: array of three ids (anything not in the class arsenal falls back to the default for that slot).
+export function resolveWeapons(classId, picks) {
+  const c = getClass(classId);
+  return [0, 1, 2].map((i) => {
+    const want = Array.isArray(picks) ? picks[i] : null;
+    const list = c.arsenal?.[i] || [c.weapons[i]];
+    return typeof want === 'string' && list.includes(want) ? want : c.weapons[i];
+  });
+}
+
+// Sanitize a client's full weapon loadout map { classId: [p, s, m] }.
+export function sanitizeWeaponLoadouts(input) {
+  const out = {};
+  for (const id of CLASS_IDS) out[id] = resolveWeapons(id, input && typeof input === 'object' ? input[id] : null);
+  return out;
 }
 
 // Deep-merge balance overrides, e.g. { juggernaut: { health: 280 } }.
@@ -292,6 +318,11 @@ export function validateClasses(weaponTable) {
         if (!wd) errors.push(`${id} references unknown weapon ${w}`);
         else if (wd.slot !== i) errors.push(`${id} weapon ${w} is in wrong slot`);
       });
+      (c.arsenal || []).forEach((list, i) => list.forEach((w) => {
+        const wd = weaponTable[w];
+        if (!wd) errors.push(`${id} arsenal references unknown weapon ${w}`);
+        else if (wd.slot !== i) errors.push(`${id} arsenal weapon ${w} is in wrong slot`);
+      }));
     }
     if (!(c.health > 0)) errors.push(`${id} invalid health`);
     if (!(c.speed > 0.3 && c.speed < 2)) errors.push(`${id} invalid speed`);
