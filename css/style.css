@@ -1,7 +1,7 @@
 /* TF2 fonts (Valve "TF2 DIY Kit"). Drop the files into /fonts under any of these names. */
 @font-face { font-family: 'TF2 Build'; src: local('TF2 Build'), local('TF2Build'), url('../fonts/tf2build.ttf') format('truetype'), url('../fonts/TF2Build.ttf') format('truetype'), url('../fonts/TF2 Build.ttf') format('truetype'), url('../fonts/tf2build.otf') format('opentype'); font-display: swap; }
-@font-face { font-family: 'TF2 Secondary'; src: local('TF2 Secondary'), local('TF2Secondary'), url('../fonts/tf2secondary.ttf') format('truetype'), url('../fonts/TF2secondary.ttf') format('truetype'), url('../fonts/TF2Secondary.ttf') format('truetype'), url('../fonts/TF2 Secondary.ttf') format('truetype'), url('../fonts/tf2secondary.otf') format('opentype'); font-display: swap; }
-@font-face { font-family: 'TF2'; src: local('TF2'), local('TF2 Regular'), url('../fonts/tf2.ttf') format('truetype'), url('../fonts/TF2.ttf') format('truetype'), url('../fonts/tf2professor.ttf') format('truetype'), url('../fonts/tf2.otf') format('opentype'); font-display: swap; }
+@font-face { font-family: 'TF2 Secondary'; src: local('TF2 Secondary'), local('TF2Secondary'), url('../fonts/TF2secondary.ttf') format('truetype'), url('../fonts/tf2secondary.ttf') format('truetype'), url('../fonts/TF2Secondary.ttf') format('truetype'), url('../fonts/TF2 Secondary.ttf') format('truetype'), url('../fonts/tf2secondary.otf') format('opentype'); font-display: swap; }
+@font-face { font-family: 'TF2'; src: local('TF2'), local('TF2 Regular'), url('../fonts/TF2.ttf') format('truetype'), url('../fonts/tf2.ttf') format('truetype'), url('../fonts/tf2professor.ttf') format('truetype'), url('../fonts/tf2.otf') format('opentype'); font-display: swap; }
 
 /* ============================================================================
    PIXEL FORTRESS — interface
