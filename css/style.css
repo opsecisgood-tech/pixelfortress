@@ -858,3 +858,18 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .wl-row .weap.insp { background: #3a342e; }
 .wl-desc { margin: 4px 0 8px; font-size: 14px; color: #d9cfb6; }
 .wl-desc b { font: 400 18px var(--display); text-transform: uppercase; color: var(--bone); margin-right: 6px; }
+
+/* account */
+.tm-account { display: flex !important; gap: 8px; padding: 0 16px; background: transparent; font: 400 18px var(--display); text-transform: uppercase; color: #d9cfb6 !important; max-width: 260px; }
+.tm-account svg { width: 24px !important; height: 24px !important; flex: none; }
+.tm-account span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-account:hover { background: #2c2824; color: var(--bone) !important; }
+.btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 12px; background: #fff; color: #3c4043; font: 700 16px var(--verdana); text-transform: none; }
+.btn.google:hover { background: #f1f1f1; }
+.acct-or { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: #9a9188; font-size: 13px; }
+.acct-or::before, .acct-or::after { content: ''; flex: 1; height: 1px; background: #4a423b; }
+.acct-tabs { margin-bottom: 10px; }
+.acct-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.acct-row b { font: 400 24px var(--display); text-transform: uppercase; }
+.acct-msg { min-height: 18px; }
+@media (max-width: 760px) { .tm-account span { display: none; } .tm-account { padding: 0 10px; } }

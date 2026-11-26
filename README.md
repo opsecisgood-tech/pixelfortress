@@ -63,6 +63,10 @@ The inventory and per-class loadouts are in place. How players acquire items isn
 
 The catalog is defined in `src/shared/config/cosmetics.js`.
 
+## Accounts (optional)
+
+Players can sign in with Google or with an email and password, and their progress syncs to the cloud. This uses Firebase and stays switched off until you add your own Firebase project's settings to `src/client/auth/config.js`. Follow [docs/ACCOUNTS.md](docs/ACCOUNTS.md) for the steps.
+
 ## Maps
 
 | Map | Theme | Signature features |

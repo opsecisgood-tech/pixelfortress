@@ -85,7 +85,18 @@ export class Profile {
   }
 
   save() {
+    this.data.updatedAt = Date.now();
     try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* ignore */ }
+    this.onSave?.(this.data);
+  }
+
+  // Replace the whole profile (e.g. with a cloud copy after signing in), normalising it like a fresh load.
+  importData(d) {
+    if (!d || typeof d !== 'object') return false;
+    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* ignore */ }
+    this.load();
+    try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* ignore */ }
+    return true;
   }
 
   get level() { return levelFromXp(this.data.xp).level; }

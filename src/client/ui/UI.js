@@ -9,6 +9,7 @@ import { ACHIEVEMENTS, levelFromXp } from '../../shared/config/progression.js';
 import { getItem } from '../../shared/config/cosmetics.js';
 import { Armory } from './Armory.js';
 import { bannerCSS } from '../render/ItemIcons.js';
+import { authErrorText } from '../auth/Auth.js';
 import { mapList, MAP_IDS, getMap } from '../../maps/index.js';
 import { TEAM_NAMES, GAME_VERSION } from '../../shared/constants.js';
 import { saveSettings, resolveQuality, KEY_LABELS, DEFAULT_KEYS, CROSSHAIRS } from '../settings.js';
@@ -35,6 +36,7 @@ const SVG = (() => {
     helmet: w('<path d="M5 20a11 11 0 0 1 22 0z"/><path d="M3 20h26v4H3zM16 9v11"/>'),
   };
 })();
+const GOOGLE_G = '<svg viewBox="0 0 48 48" width="22" height="22" aria-hidden="true"><path fill="#4285F4" d="M45 24.5c0-1.6-.1-2.8-.4-4.1H24v7.8h12c-.2 2-1.6 5-4.6 7l7.1 5.5C42.7 36.8 45 31.2 45 24.5z"/><path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.5c-1.9 1.3-4.4 2.2-7.5 2.2-5.8 0-10.6-3.8-12.4-9.1l-7.3 5.7C7.9 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.6 28.2c-.5-1.3-.7-2.7-.7-4.2s.3-2.9.7-4.2l-7.3-5.7C2.8 17.2 2 20.5 2 24s.8 6.8 2.3 9.9l7.3-5.7z"/><path fill="#EA4335" d="M24 10.7c4.1 0 6.9 1.8 8.5 3.3l6.2-6.1C35 4.5 30 2 24 2 15.4 2 7.9 6.9 4.3 14.1l7.3 5.7c1.8-5.3 6.6-9.1 12.4-9.1z"/></svg>';
 const MODE_ART = {
   tdm: 'repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 8px, transparent 8px 16px), linear-gradient(90deg, #d8473b 0 50%, #3f7fd6 50%)',
   ctf: 'repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 8px, transparent 8px 16px), linear-gradient(135deg, #d8473b 0 30%, #e9e2d0 30% 34%, #3a4048 34% 66%, #e9e2d0 66% 70%, #3f7fd6 70%)',
@@ -99,6 +101,7 @@ export class UI {
         <div class="tm-slots" role="toolbar" aria-label="Class select"></div>
         <span class="tm-grow"></span>
         <button class="tm-icon" data-go="stats" aria-label="Statistics" title="Statistics & badges">${SVG.trophy}</button>
+        <button class="tm-account" data-go="account" title="Account"></button>
         <button class="tm-find" data-go="play">${SVG.find}<span>Find game</span></button>
       </div>
       <div class="tm-left">
@@ -127,6 +130,8 @@ export class UI {
     this.renderProfileCard();
     this.renderRecent();
     this.renderShowcaseLabel();
+    this.renderAccountButton();
+    if (!this.authHooked) { this.authHooked = true; this.app.auth.on(() => { this.renderAccountButton(); if (this.sheetKind === 'account') this.renderAccount(this.sheet.querySelector('.sheet-body')); }); }
     this.wireSounds(m);
     this.updateShowcase();
     this.screen = 'menu';
@@ -199,6 +204,58 @@ export class UI {
     el.innerHTML = rec.map((r) => `<div class="row"><img src="${this.app.icons.portraits[`${r.cls}_0`]}" alt=""><div><b>${esc(getMap(r.map).name)}</b><span class="${r.won ? 'w' : r.draw ? 'd' : 'l'}">${r.won ? 'Victory' : r.draw ? 'Stalemate' : 'Defeat'} · ${r.k}/${r.d}/${r.a} · +${r.xp} xp</span></div></div>`).join('');
   }
 
+  // ---------------------------------------------------------------- ACCOUNT (sign in / sign up)
+  renderAccountButton() {
+    const b = this.menuEl?.querySelector('.tm-account');
+    if (!b) return;
+    const a = this.app.auth;
+    b.innerHTML = a.user ? `${SVG.user}<span>${esc(a.user.name || a.user.email || 'Account')}</span>` : `${SVG.user}<span>Sign in</span>`;
+  }
+
+  renderAccount(body) {
+    const a = this.app.auth;
+    if (!a.enabled) {
+      body.innerHTML = `<p class="note" style="margin-top:0">Accounts are not set up for this copy of the game yet. Without one, your progress is saved in this browser only.</p>
+        <p class="note">To turn on <b>Sign in with Google</b> and <b>email sign-up</b> with cloud save, create a free Firebase project and paste its config into <code>src/client/auth/config.js</code>. Step-by-step instructions are in <code>docs/ACCOUNTS.md</code>.</p>`;
+      return;
+    }
+    if (a.status === 'loading') { body.innerHTML = '<p class="note">Connecting to the account service…</p>'; return; }
+    if (a.status === 'error') { body.innerHTML = `<p class="note">The account service could not be reached (${esc(authErrorText(a.error))}). You can keep playing; progress is saved in this browser.</p>`; return; }
+    if (a.user) {
+      const sync = { idle: '', syncing: 'Syncing…', saved: 'Progress saved to your account.', error: `Cloud save failed: ${esc(authErrorText(a.syncError))}` }[a.syncState];
+      body.innerHTML = `<div class="acct-row"><div><b>${esc(a.user.name || 'Signed in')}</b><div class="note" style="margin:2px 0 0">${esc(a.user.email || '')} · ${a.user.provider === 'google.com' ? 'Google account' : 'Email account'}${a.user.provider !== 'google.com' && !a.user.verified ? ' · email not verified yet' : ''}</div></div><button class="btn signout">Sign out</button></div>
+        <p class="note">${sync}</p><p class="note">Your level, stats, loadouts and weapon choices follow you to any device you sign in on.</p>`;
+      body.querySelector('.signout').addEventListener('click', () => a.signOut().catch((e) => this.toast(esc(authErrorText(e)))));
+      return;
+    }
+    const mode = this.acctMode || 'signin';
+    body.innerHTML = `
+      <button class="btn google wide">${GOOGLE_G} Continue with Google</button>
+      <div class="acct-or"><span>or use email</span></div>
+      <div class="tabs acct-tabs"><button class="btn ${mode === 'signin' ? 'active' : ''}" data-m="signin">Sign in</button><button class="btn ${mode === 'signup' ? 'active' : ''}" data-m="signup">Create account</button></div>
+      ${mode === 'signup' ? '<div class="field"><label>Callsign</label><input class="input a-name" maxlength="16" autocomplete="nickname"></div>' : ''}
+      <div class="field"><label>Email</label><input class="input a-email" type="email" autocomplete="email"></div>
+      <div class="field"><label>Password</label><input class="input a-pass" type="password" autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}" minlength="6"></div>
+      <div class="acct-msg note"></div>
+      <div class="row-btns"><button class="btn primary a-go">${mode === 'signup' ? 'Create account' : 'Sign in'}</button>${mode === 'signin' ? '<button class="btn ghost a-reset">Forgot password?</button>' : ''}</div>`;
+    const msg = (t, good) => { const m = body.querySelector('.acct-msg'); m.textContent = t; m.style.color = good ? 'var(--good)' : 'var(--bad)'; };
+    body.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') body.querySelector('.a-go').click(); }));
+    body.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { this.acctMode = b.dataset.m; this.renderAccount(body); }));
+    body.querySelector('.google').addEventListener('click', () => a.signInGoogle().catch((e) => msg(authErrorText(e))));
+    body.querySelector('.a-go').addEventListener('click', async () => {
+      const email = body.querySelector('.a-email').value.trim(), pass = body.querySelector('.a-pass').value;
+      try {
+        if (mode === 'signup') { await a.signUpEmail(email, pass, body.querySelector('.a-name').value.trim()); }
+        else await a.signInEmail(email, pass);
+      } catch (e) { msg(authErrorText(e)); }
+    });
+    body.querySelector('.a-reset')?.addEventListener('click', async () => {
+      const email = body.querySelector('.a-email').value.trim();
+      if (!email) { msg('Enter your email above first.'); return; }
+      try { await a.resetPassword(email); msg('Password reset email sent.', true); } catch (e) { msg(authErrorText(e)); }
+    });
+  }
+
   promptName() {
     const wrap = h('div', 'sheet-wrap');
     wrap.innerHTML = `<div class="sheet plate stripe-edge" style="width:min(460px,100%)"><div class="sheet-head"><h2>Who's fighting?</h2></div><div class="sheet-body"><div class="field"><label>Callsign shown to other players</label><input class="input" maxlength="16" placeholder="Callsign"></div><div class="row-btns"><button class="btn primary">Enlist</button></div></div></div>`;
@@ -219,18 +276,19 @@ export class UI {
     if (kind === 'loadout') { wrap.style.placeItems = 'center end'; wrap.style.background = 'linear-gradient(90deg, transparent 25%, rgba(10,12,15,.75) 45%)'; }
     const sheet = h('div', 'sheet plate stripe-edge');
     if (kind === 'loadout') sheet.style.width = 'min(780px, 100%)';
+    if (kind === 'account') sheet.style.width = 'min(520px, 100%)';
     wrap.appendChild(sheet);
     this.root.appendChild(wrap);
     this.sheet = wrap;
     this.sheetKind = kind;
     this.menuOpen = true;
     this.app.touch?.setActive(false);
-    const titles = { play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
+    const titles = { account: 'Account', play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
     sheet.innerHTML = `<div class="sheet-head"><h2>${titles[kind] || ''}</h2><button class="btn ghost close-x" aria-label="Close">✕</button></div><div class="sheet-body"></div>`;
     const body = sheet.querySelector('.sheet-body');
     sheet.querySelector('.close-x').addEventListener('click', () => this.closeSheet(true));
     wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) this.closeSheet(true); });
-    const fn = { play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
+    const fn = { account: () => this.renderAccount(body), play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
     if (fn) fn();
     this.wireSounds(sheet);
     if (kind === 'loadout') this.updateShowcase(-1.6);

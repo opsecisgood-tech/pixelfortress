@@ -6,6 +6,7 @@ import { TouchControls } from './input/TouchControls.js';
 import { UI } from './ui/UI.js';
 import { Game } from './Game.js';
 import { Profile } from './progression/Profile.js';
+import { Auth } from './auth/Auth.js';
 import { loadSettings, saveSettings, resolveQuality, isTouchDevice } from './settings.js';
 import { HostSession, PeerClient } from './net/transports.js';
 import { validateClasses } from '../shared/config/classes.js';
@@ -30,6 +31,7 @@ class App {
     if (errs.length) console.warn('Config validation:', errs);
     this.settings = loadSettings();
     this.profile = new Profile();
+    this.auth = new Auth(this);
     if (this.profile.name && !this.settings.name) this.settings.name = this.profile.name;
     this.isTouch = isTouchDevice();
     const canvas = document.getElementById('view');
