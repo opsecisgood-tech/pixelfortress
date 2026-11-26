@@ -7,15 +7,15 @@ import { RARITIES, ITEMS_BY_RARITY } from './cosmetics.js';
 // odds: percent per rarity index [common, uncommon, rare, epic, legendary, mythic, iridescent]
 export const CRATE_TIERS = [
   {
-    id: 'supply', name: 'Supply Crate', cost: 1, tagline: 'A sturdy wooden crate, roped shut.',
+    id: 'supply', name: 'Supply Crate', cost: 1, tagline: 'A sturdy plywood shipping crate.',
     odds: [52, 28, 13, 5, 1.6, 0.4, 0],
   },
   {
-    id: 'armored', name: 'Armored Crate', cost: 3, tagline: 'Steel-banded and chained. Rare or better guaranteed.',
+    id: 'armored', name: 'Armored Crate', cost: 3, tagline: 'The same crate in armored blue. Rare or better guaranteed.',
     odds: [0, 0, 58, 27, 11, 3.5, 0.5],
   },
   {
-    id: 'vault', name: 'Vault Crate', cost: 6, tagline: 'A sealed vault. Epic or better guaranteed.',
+    id: 'vault', name: 'Vault Crate', cost: 6, tagline: 'A steel vault box. Epic or better guaranteed.',
     odds: [0, 0, 0, 56, 30, 11, 3],
   },
 ];

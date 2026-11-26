@@ -6,6 +6,7 @@ import { CRATE_TIERS, CRATE_BY_ID, epicPerKey } from '../../shared/config/crates
 import { RARITIES, ITEMS_BY_RARITY, SLOT_NAMES } from '../../shared/config/cosmetics.js';
 import { KEY_RULES } from '../../shared/rewards.js';
 import { getClass } from '../../shared/config/classes.js';
+import { CrateStage } from '../render/CrateStage.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -23,12 +24,14 @@ export class CrateUI {
   render(body) {
     const p = this.app.profile;
     const keys = p.keys;
+    let icons = {};
+    try { icons = CrateStage.icons(this.app.renderer.gl); } catch (e) { console.warn('crate icons', e); }
     body.innerHTML = `
       <div class="cr-top"><div class="cr-keys">${KEY_SVG}<b>${keys}</b><span>${keys === 1 ? 'key' : 'keys'}</span></div>
         <p class="note cr-how">Earn keys by <b>winning a match with ${KEY_RULES.TEAM_KILLS_REQUIRED}+ team kills on real players</b> (bots don't count). Each eligible winner gets 1 key, +1 if the team reached ${KEY_RULES.BONUS_TEAM_KILLS} kills, +1 for ${KEY_RULES.PERSONAL_KILLS}+ kills of your own (max ${KEY_RULES.MAX_KEYS} per match).</p></div>
       <div class="cr-tiers">${CRATE_TIERS.map((t) => `
         <div class="cr-tier cr-${t.id}">
-          <div class="cr-art"><i class="cr-box"></i></div>
+          <div class="cr-art">${icons[t.id] ? `<img class="cr-img" src="${icons[t.id]}" alt="">` : '<i class="cr-box"></i>'}</div>
           <div class="cr-name">${esc(t.name)}</div>
           <div class="cr-tag note">${esc(t.tagline)}</div>
           <div class="cr-odds">${t.odds.map((o, r) => (o > 0 ? `<div class="cr-odd"><span class="cr-dot" style="background:${rarityCss(r)}"></span><span>${RARITIES[r].name}</span><b>${o < 1 ? o.toFixed(1) : o % 1 ? o.toFixed(1) : o}%</b></div>` : '')).join('')}</div>
