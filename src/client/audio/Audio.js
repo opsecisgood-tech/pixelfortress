@@ -23,9 +23,9 @@ const WEAPON_SOUNDS = {
 };
 
 const SURFACE = {
-  metal: ['metalfloor', 'grate', 'metalstair', 'metal', 'darkmetal', 'steel', 'flatcar', 'conveyor', 'rustmetal'],
-  wood: ['woodplank', 'crate', 'plank', 'pallet'],
-  soft: ['sand', 'snow', 'grass', 'dirt', 'moss'],
+  metal: ['metalfloor', 'grate', 'metalstair', 'metal', 'darkmetal', 'steel', 'flatcar', 'conveyor', 'rustmetal', 'diamondplate'],
+  wood: ['woodplank', 'crate', 'plank', 'pallet', 'woodfloor', 'woodwall'],
+  soft: ['sand', 'snow', 'grass', 'dirt', 'moss', 'carpet'],
 };
 
 export class AudioEngine {

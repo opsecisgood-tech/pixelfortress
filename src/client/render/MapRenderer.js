@@ -5,6 +5,7 @@ import { getWorldMaterial, materialRecipe } from './textures.js';
 import { buildProp, animateProp } from './props.js';
 import { mergeStatic, bx, colorMat } from './blocks.js';
 import { mulberry32 } from '../../shared/math.js';
+import { variantFor, makeCeilingTest, buildMapDetails } from './MapDetail.js';
 
 const CHUNK = 24;
 
@@ -33,14 +34,25 @@ export class MapRenderer {
 
   buildGeometry(map) {
     const buckets = new Map();
-    for (const b of map.boxes) {
-      if (b.vis === false || !b.mat) continue;
+    const ceil = makeCeilingTest(map);
+    this.occ = ceil.occ;
+    const bucketFor = (mat, b) => {
       const cx = Math.floor((b.min[0] + b.max[0]) / 2 / CHUNK);
       const cz = Math.floor((b.min[2] + b.max[2]) / 2 / CHUNK);
-      const key = `${b.mat}|${cx}|${cz}`;
+      const key = `${mat}|${cx}|${cz}`;
       let bucket = buckets.get(key);
-      if (!bucket) { bucket = { mat: b.mat, pos: [], nor: [], uv: [], col: [], idx: [], n: 0 }; buckets.set(key, bucket); }
-      appendBox(bucket, b);
+      if (!bucket) { bucket = { mat, pos: [], nor: [], uv: [], col: [], idx: [], n: 0 }; buckets.set(key, bucket); }
+      return bucket;
+    };
+    for (const b of map.boxes) {
+      if (b.vis === false || !b.mat) continue;
+      // texture variants per box, and a ceiling material for undersides seen from inside
+      const mat = variantFor(b.mat, b);
+      const ceilMat = ceil.ceilingFor(b);
+      if (ceilMat) {
+        appendBox(bucketFor(mat, b), b, mat, 'nobottom');
+        appendBox(bucketFor(ceilMat, b), b, ceilMat, 'bottom');
+      } else appendBox(bucketFor(mat, b), b, mat, 'all');
     }
     for (const bucket of buckets.values()) {
       const g = new THREE.BufferGeometry();
@@ -67,6 +79,7 @@ export class MapRenderer {
       if (detail < 1 && ['tumbleweed', 'fern', 'lilypad', 'mushroom', 'icicles', 'vine'].includes(d.type) && Math.abs(d.pos[0] * 7 + d.pos[2]) % 2 < 1) continue;
       staticRoot.add(buildProp(d));
     }
+    staticRoot.add(buildMapDetails(map, { ...this.quality, propDetail: Math.max(0.4, detail) }, this.occ));
     const merged = mergeStatic(staticRoot);
     merged.traverse((o) => {
       if (o.userData && o.userData.anim) this.dynamicProps.push(o);
@@ -210,9 +223,9 @@ export class MapRenderer {
 }
 
 // Append the 6 faces of a box with world-space UVs and baked AO vertex colours.
-function appendBox(bk, b) {
+function appendBox(bk, b, matName = b.mat, which = 'all') {
   const [x0, y0, z0] = b.min, [x1, y1, z1] = b.max;
-  const rec = materialRecipe(b.mat);
+  const rec = materialRecipe(matName);
   const tile = rec.tile;
   const faceMode = tile === 'face';
   const ts = faceMode ? 1 : 1 / tile;
@@ -232,6 +245,8 @@ function appendBox(bk, b) {
   ];
   for (const [n, vs] of faces) {
     if (n[1] === -1 && y0 <= 0.05) continue; // ground-level bottoms never visible
+    if (which === 'bottom' && n[1] !== -1) continue;
+    if (which === 'nobottom' && n[1] === -1) continue;
     const vertical = n[1] === 0;
     const base = bk.n;
     for (let i = 0; i < 4; i++) {

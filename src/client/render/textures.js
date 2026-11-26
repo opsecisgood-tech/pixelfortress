@@ -104,6 +104,20 @@ export const MATERIALS = {
   rustmetal: { tile: 2, paint: (c, r) => { noiseFill(c, 32, 32, 0x7c6a5a, 0.1, r); panelLines(c, '#5a4c40', 16); rust(c, r, 30); } },
   water: { tile: 4, alpha: true, opacity: 0.75, paint: (c, r) => { noiseFill(c, 32, 32, 0x2f7f86, 0.08, r); for (let i = 0; i < 10; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#6fc3c8', 4, 1); } },
   bark: { tile: 1, paint: (c, r) => { noiseFill(c, 32, 32, 0x5e4026, 0.14, r); for (let x = 0; x < 32; x += 5) px(c, x, 0, '#402a16', 1, 32); } },
+  // Ceilings (picked automatically for undersides of enclosed roofs/slabs)
+  ceiltile: { tile: 2, paint: (c, r) => { noiseFill(c, 32, 32, 0xd8d6cc, 0.05, r); grid(c, '#a8a69c', 16); for (let i = 0; i < 40; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#bdbbb0'); for (let i = 0; i < 2; i++) px(c, (r() * 2 | 0) * 16 + 4, (r() * 2 | 0) * 16 + 4, '#c8b48a', 6, 5); } },
+  ceilbeam: { tile: 4, paint: (c, r) => { noiseFill(c, 32, 32, 0x9a8264, 0.07, r); for (let y = 0; y < 32; y += 4) px(c, 0, y, '#86705a', 32, 1); px(c, 0, 0, '#6a543e', 32, 4); px(c, 0, 4, '#54402e', 32, 1); px(c, 0, 0, '#7e6850', 32, 1); } },
+  ceilmetal: { tile: 2, paint: (c, r) => { noiseFill(c, 32, 32, 0x3c4048, 0.08, r); for (let x = 0; x < 32; x += 8) { px(c, x, 0, '#2a2d33', 2, 32); px(c, x + 2, 0, '#4c5058', 1, 32); } rivets(c, '#5c6168', 16); } },
+  ceilconcrete: { tile: 3, paint: (c, r) => { noiseFill(c, 32, 32, 0x8e8e84, 0.1, r); panelLines(c, '#74746a', 16); for (let i = 0; i < 18; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#5d8a3a', 1, 1 + (r() * 3 | 0)); for (let i = 0; i < 4; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#4a4a42', 1, 5); } },
+  // Extra floors / walls so interiors don't share one texture
+  woodfloor: { tile: 3, paint: (c, r) => { noiseFill(c, 32, 32, 0x9a6e44, 0.08, r); for (let y = 0; y < 32; y += 4) { px(c, 0, y, '#6a4a2a', 32, 1); const o = r() * 32 | 0; px(c, o, y, '#6a4a2a', 1, 4); } for (let i = 0; i < 10; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#7e5834', 2, 1); } },
+  checker: { tile: 2, paint: (c, r) => { for (let y = 0; y < 32; y += 8) for (let x = 0; x < 32; x += 8) { c.fillStyle = ((x + y) / 8) % 2 ? '#2a2830' : '#d8d2c4'; c.fillRect(x, y, 8, 8); } for (let i = 0; i < 30; i++) px(c, r() * 32 | 0, r() * 32 | 0, 'rgba(0,0,0,.12)'); } },
+  stonefloor: { tile: 3, paint: (c, r) => { noiseFill(c, 32, 32, 0x7a7a72, 0.1, r); for (let i = 0; i < 9; i++) { const x = r() * 28 | 0, y = r() * 28 | 0; px(c, x, y, shade(0x7a7a72, 0.85 + r() * 0.3), 6 + (r() * 6 | 0), 5 + (r() * 5 | 0)); } grid(c, '#55554e', 16); for (let i = 0; i < 25; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#5d8a3a'); } },
+  carpet: { tile: 2, paint: (c, r) => { noiseFill(c, 32, 32, 0x4a2a4a, 0.08, r); for (let y = 0; y < 32; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < 32; x += 8) px(c, x + 2, y + 2, '#7a3a7a', 3, 3); px(c, 0, 0, '#2a1a2a', 32, 1); } },
+  diamondplate: { tile: 2, paint: (c, r) => { noiseFill(c, 32, 32, 0x8a8e92, 0.06, r); for (let y = 1; y < 32; y += 4) for (let x = (y % 8 === 1) ? 0 : 2; x < 32; x += 4) { px(c, x, y, '#b4b8bc', 2, 1); px(c, x, y + 1, '#5e6266', 2, 1); } } },
+  tilewall: { tile: 2, paint: (c, r) => { noiseFill(c, 32, 32, 0xe2ddd0, 0.04, r); grid(c, '#b4ae9e', 4); px(c, 0, 24, '#3a72c4', 32, 2); for (let i = 0; i < 6; i++) px(c, (r() * 8 | 0) * 4 + 1, (r() * 6 | 0) * 4 + 1, '#cfc8b6', 3, 3); } },
+  woodwall: { tile: 2, paint: (c, r) => { noiseFill(c, 32, 32, 0x7a5a3a, 0.08, r); for (let x = 0; x < 32; x += 8) { px(c, x, 0, '#4a321e', 1, 32); px(c, x + 1, 0, '#8e6c48', 1, 32); } px(c, 0, 26, '#4a321e', 32, 2); for (let i = 0; i < 8; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#5e4428', 1, 3); } },
+  pavers: { tile: 3, paint: (c, r) => bricks(c, r, 0x8a8478, '#5e5a52', 8, 8) },
   leaves: { tile: 1, paint: (c, r) => { noiseFill(c, 32, 32, 0x3f7a2c, 0.25, r, 2); for (let i = 0; i < 20; i++) px(c, r() * 32 | 0, r() * 32 | 0, '#6aa848', 2, 2); } },
 };
 
@@ -135,8 +149,31 @@ function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h
 
 const CONTAINER_COLORS = { red: 0xb2412e, blue: 0x2f62a8, green: 0x3f7f43, yellow: 0xd2a128, orange: 0xd06a28 };
 
+// Variant decoration painted over a base recipe: '#1' grime and streaks, '#2' patched panels and cracks.
+function variantDecor(c, r, k) {
+  // Textures repeat every tile, so variants change the overall tone plus a few soft blotches
+  // (no lines or gradients that would visibly repeat).
+  if (k === 1) {
+    c.fillStyle = 'rgba(60,40,20,.10)'; c.fillRect(0, 0, 32, 32);
+    for (let i = 0; i < 5; i++) { c.fillStyle = 'rgba(20,16,12,.08)'; c.fillRect(r() * 28 | 0, r() * 28 | 0, 3 + (r() * 5 | 0), 2 + (r() * 4 | 0)); }
+  } else if (k === 2) {
+    c.fillStyle = 'rgba(200,215,230,.08)'; c.fillRect(0, 0, 32, 32);
+    for (let i = 0; i < 4; i++) { c.fillStyle = 'rgba(255,250,235,.08)'; c.fillRect(r() * 28 | 0, r() * 28 | 0, 3 + (r() * 4 | 0), 3 + (r() * 4 | 0)); }
+  }
+}
+
 export function materialRecipe(name) {
   if (MATERIALS[name]) return MATERIALS[name];
+  if (name && name.includes('#')) {
+    const [baseName, k] = name.split('#');
+    const base = materialRecipe(baseName);
+    if (!base.alpha && !base.emissive) {
+      const rec = { ...base, paint: (c, r) => { base.paint(c, r); variantDecor(c, r, +k); } };
+      MATERIALS[name] = rec;
+      return rec;
+    }
+    return base;
+  }
   if (name && name.startsWith('container_')) {
     const col = CONTAINER_COLORS[name.slice(10)] || 0x888888;
     return { tile: 2.6, paint: (c, r) => { noiseFill(c, 32, 32, col, 0.08, r); for (let x = 0; x < 32; x += 4) { px(c, x, 0, shade(col, 0.72), 1, 32); px(c, x + 2, 0, shade(col, 1.15), 1, 32); } px(c, 0, 0, shade(col, 0.6), 32, 2); px(c, 0, 30, shade(col, 0.6), 32, 2); rust(c, r, 6); } };

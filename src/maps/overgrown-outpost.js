@@ -27,7 +27,7 @@ export function buildOvergrownOutpost() {
     cliffBorder(s, -60, 60, -40, 40, 'rockgrey', 14, 23, [-17, 17]);
     standardBase(s, {
       X0: -58, X1: -40, hw: 16, H: 10,
-      wall: 'mossconcrete', inner: 'concrete', floor: 'tile', upper: 'rustmetal', roof: 'moss', trim: 'team', stair: 'rustmetal', label: 'OUTPOST',
+      wall: 'mossconcrete', inner: 'woodwall', floor: 'stonefloor', upper: 'rustmetal', roof: 'moss', trim: 'team', stair: 'rustmetal', label: 'OUTPOST',
     });
     s.box(-36, 0, -7, 1, 1.1, 4, 'sandbag');
     s.box(-36.5, 0, 6, 1, 1.1, 3, 'sandbag');

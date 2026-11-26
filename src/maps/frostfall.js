@@ -27,7 +27,7 @@ export function buildFrostfall() {
     cliffBorder(s, -60, 60, -42, 42, 'snowrock', 16, 11, [-17, 17]);
     standardBase(s, {
       X0: -58, X1: -40, hw: 16, H: 10,
-      wall: 'insulated', inner: 'labwall', floor: 'labfloor', upper: 'metalfloor', roof: 'steel', trim: 'team', stair: 'metalstair', label: 'OUTPOST',
+      wall: 'insulated', inner: 'tilewall', floor: 'labfloor', upper: 'metalfloor', roof: 'steel', trim: 'team', stair: 'metalstair', label: 'OUTPOST',
     });
     // snow drifts and barricades in front of HQ
     s.box(-35, 0, -6, 1, 1.2, 4, 'snowrock');

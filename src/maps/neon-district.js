@@ -32,7 +32,7 @@ export function buildNeonDistrict() {
     // ---------------- TEAM BLOCK (base) ----------------
     standardBase(s, {
       X0: -56, X1: -38, hw: 15, H: 10,
-      wall: 'citybrick', inner: 'citywall', floor: 'tile', upper: 'metalfloor', roof: 'darkmetal', trim: 'team', stair: 'metalstair', label: 'HQ',
+      wall: 'citybrick', inner: 'citywall', floor: 'checker', upper: 'metalfloor', roof: 'darkmetal', trim: 'team', stair: 'metalstair', label: 'HQ',
     });
     s.prop('neonSign', -37.7, 6.5, -9, { label: 'RED·HQ', fg: '#ff5a6a', rot: -Math.PI / 2, w: 3 });
 
@@ -47,7 +47,7 @@ export function buildNeonDistrict() {
 
     // ---------------- BLOCK A: corner store (south-west), roof bridge anchor ----------------
     const AH = 6;
-    s.room({ x0: -33, z0: -30, x1: -15, z1: -11, y: 0, h: AH, t: 0.5, wall: 'citywall', floor: 'tile', roof: 'darkmetal',
+    s.room({ x0: -33, z0: -30, x1: -15, z1: -11, y: 0, h: AH, t: 0.5, wall: 'citywall', floor: 'carpet', roof: 'darkmetal',
       doors: { zmax: [{ at: -28, w: 2.6, h: 3 }, { at: -19, w: 3.4, h: 3 }], xmax: [{ at: -20, w: 2.4, h: 3 }], xmin: [{ at: -24, w: 2.4, h: 3 }] } });
     s.box(-24, 0, -18, 6, 1.1, 1.2, 'shelf');
     s.box(-28, 0, -24, 1.2, 2.2, 5, 'shelf');

@@ -32,7 +32,7 @@ export function buildDustyDepot() {
     // ---------------- TEAM HQ ----------------
     standardBase(s, {
       X0: -60, X1: -41, hw: 16, H: 10,
-      wall: 'concrete', inner: 'plaster', floor: 'tile', upper: 'metalfloor', roof: 'roof', trim: 'team',
+      wall: 'concrete', inner: 'plaster', floor: 'woodfloor', upper: 'diamondplate', roof: 'roof', trim: 'team',
       stair: 'metalstair', label: 'DEPOT',
     });
     // sandbag walls and barriers in front of HQ
@@ -58,7 +58,7 @@ export function buildDustyDepot() {
     ]);
     // roof halves with glass skylight strip in the centre
     s.aabb(-15, H, -11, -3, H + 0.5, 11, 'roof');
-    s.floor(-15, -11, 0, 11, 0.06, 'concrete', 0.1);
+    s.floor(-15, -11, 0, 11, 0.06, 'pavers', 0.1);
     // catwalk along zmin wall
     s.aabb(-14.5, 4, -10.5, 14.5, 4.3, -8.3, 'grate');
     s.aabb(-14.5, 4.3, -8.4, -13.1, 5.3, -8.3, 'railing', { shot: false, trans: true });
