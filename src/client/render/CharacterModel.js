@@ -739,7 +739,7 @@ function partTexture(classId, team, part, dims, gloves) {
 }
 
 // ---------------------------------------------------------------- class accessories (simple boxes in pixel units)
-function accessories(classId, team, j, s, prop) {
+function accessories(classId, team, j, s, prop, cos) {
   const tc = TEAM_COLORS_HEX[team], td = TEAM_DARK_HEX[team];
   const A = (parent, x, y, z, w, h, d, col, glow) => {
     const m = new THREE.Mesh(boxGeo(w * s, h * s, d * s), glow ? colorMat(col, { basic: true }) : colorMat(col));
@@ -814,6 +814,9 @@ function accessories(classId, team, j, s, prop) {
         A(j.torso, -x, y + 1.25, bd / 2 + 0.7, 0.9, 0.7, 1.1, 0xe08a3a);
       }
       A(j.torso, bw / 2 - 1.6, 0.2, -(bd / 2 + 0.8), 2.6, 3.4, 1.6, 0x2e2e2c); A(j.torso, bw / 2 - 1.6, 1.6, -(bd / 2 + 1.65), 2.6, 0.6, 0.1, 0x3e3e3a);
+      // red boxing gloves wrapped around both hands
+      const gcol = gloveSpec(cos?.gloves, team)?.main;
+      for (const [arm, inner] of [[j.armR, -1], [j.armL, 1]]) boxingGlove((x, y, z, w, h, d, c) => A(arm, x, y, z, w, h, d, c), prop.arm, inner, gcol ?? GLOVE_RED);
       break;
     }
     case 'incinerator': {
@@ -854,6 +857,21 @@ function accessories(classId, team, j, s, prop) {
     default:
   }
   return hat;
+}
+
+// ---------------------------------------------------------------- boxing gloves (Juggernaut)
+// A(x, y, z, w, h, d, colour) adds a box in arm space (pixels); arm = [w, len, d]; inner = side of the thumb.
+const GLOVE_RED = 0xc4282a, GLOVE_DARK = 0x941c1e, GLOVE_CUFF = 0xefe8d8;
+function boxingGlove(A, arm, inner, col = GLOVE_RED) {
+  const [aw, al, ad] = arm;
+  const end = -(al - aw / 2);           // bottom of the arm
+  const cy = end + 1.6;                 // glove centre
+  const dark = (col & 0xfefefe) >> 1 | 0;
+  A(0, cy, -0.3, aw + 2, 5.2, ad + 2.6, col);                     // fist
+  A(0, cy - 1.2, -(ad / 2 + 1.25), aw + 1.4, 2.2, 0.4, col === GLOVE_RED ? GLOVE_DARK : dark); // knuckle pad
+  A(inner * (aw / 2 + 1.3), cy + 0.6, -1.2, 1.4, 3.2, 2.6, col);  // thumb
+  A(0, cy + 3.1, 0, aw + 1.4, 1.4, ad + 1.4, GLOVE_CUFF);          // cuff
+  A(0, cy + 3.1, -(ad / 2 + 0.75), 0.6, 1.5, 0.1, 0x3a3a3a);      // lace
 }
 
 // ---------------------------------------------------------------- rig
@@ -922,7 +940,7 @@ export class CharacterRig {
     j.handR = new THREE.Group(); j.handR.position.y = -(prop.arm[1] - prop.arm[0] / 2 - 0.5) * s; j.armR.add(j.handR);
     j.bodyH = prop.body[1]; j.bodyW = prop.body[0]; j.bodyD = prop.body[2];
     this.j = j;
-    this.classHat = accessories(this.classId, this.team, j, s, prop);
+    this.classHat = accessories(this.classId, this.team, j, s, prop, this.opts.cosmetics);
     const hatOn = !!getItem(this.opts.cosmetics?.hat);
     const hairGeo = hairVoxels(this.classId, this.team, s, hatOn);
     if (hairGeo) {
@@ -1145,6 +1163,20 @@ export function buildArmMesh(classId, team, gloves, len) {
   // slimmer cross-section in first person so the arm frames the weapon instead of covering it
   g.scale.set(0.5, 0.5, 1);
   g.add(m);
+  if (classId === 'juggernaut') {
+    // boxing glove, parented to the arm mesh so it uses the same space as the third-person arm
+    // (offset by the mesh centre); widened to undo the slimmer first-person cross-section.
+    const gp = new THREE.Group();
+    gp.scale.set(1.7, 1, 1.7);
+    const gs = gloveSpec(gloves, team);
+    const off = dims[1] / 2 - dims[0] / 2;
+    boxingGlove((x, y, z, w, h, d, c) => {
+      const mm = new THREE.Mesh(boxGeo(w * s, h * s, d * s), colorMat(gs && c !== GLOVE_CUFF ? gs.main : c));
+      mm.position.set(x * s, (y + off) * s, z * s);
+      gp.add(mm);
+    }, dims, -1);
+    m.add(gp);
+  }
   g.userData.thick = dims[0] * s * 0.5;
   return g;
 }

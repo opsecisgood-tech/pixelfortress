@@ -295,9 +295,9 @@ export class BotController {
       switch (cls.ability.id) {
         case 'suppression': if (dist < 18 && p.hp < p.maxHp * 0.8) this.pulseAbility(); break;
         case 'thermalburst': if (dist < 4.5) this.pulseAbility(); break;
-        case 'focus': if (alt && dist > 15) this.pulseAbility(); break;
+        case 'esp': if (dist > 25 || Math.random() < 0.004) this.pulseAbility(); break;
+        case 'adrenaline': if (p.carrying >= 0 || p.hp < p.maxHp * 0.4 || Math.random() < 0.003) this.pulseAbility(); break;
         case 'detcharge': if (dist < 16 && Math.random() < 0.02) this.pulseAbility(); break;
-        case 'doublejump': if (Math.random() < 0.02) buttons |= BTN.JUMP; break;
         default:
       }
       if (cls.ability.id === 'detcharge' && this.g.abilities.charges.has(p.id)) {

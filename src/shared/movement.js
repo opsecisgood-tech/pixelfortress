@@ -286,7 +286,7 @@ export function moveParamsFor(cls, extra = {}) {
   return {
     speed: cls.speed,
     jump: cls.jumpPower,
-    airJumps: cls.ability.airJumps || 0,
+    airJumps: cls.airJumps ?? cls.ability.airJumps ?? 0,
     landingRecovery: cls.passive.landingRecovery ?? 1,
     moveMult: 1,
     canSprint: true,

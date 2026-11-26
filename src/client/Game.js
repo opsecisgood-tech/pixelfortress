@@ -18,6 +18,7 @@ import { dirFromAngles, damp, clamp, wrapAngle } from '../shared/math.js';
 
 const CLASS_BY_INDEX = CLASS_IDS.reduce((a, id) => { a[CLASSES[id].index] = id; return a; }, {});
 const tmpV = new THREE.Vector3();
+const shadeHex = (c, f) => (Math.min(255, ((c >> 16) & 255) * f) << 16) | (Math.min(255, ((c >> 8) & 255) * f) << 8) | Math.min(255, (c & 255) * f);
 const tmpV2 = new THREE.Vector3();
 
 export class Game {
@@ -313,7 +314,7 @@ export class Game {
     this.r.vm.onFire(def);
     const rp = def.recoil || { pitch: 0.01, yaw: 0 };
     const supp = n.abilityActive('suppression') ? 0.5 : 1;
-    this.recoil += rp.pitch * supp * (n.abilityActive('focus') ? 0.3 : 1);
+    this.recoil += rp.pitch * supp;
     this.recoilYaw += (Math.random() - 0.5) * rp.yaw * 2 * supp;
     if (def.type === 'flame' || def.type === 'beam') return;
     this.audio.weaponFire(def.id, null, true);
@@ -409,7 +410,10 @@ export class Game {
     }
     // vertical FOV from horizontal-ish preference (keep consistent across aspect ratios)
     const aspect = this.r.aspect;
-    const vfov = aspect >= 4 / 3 ? 2 * Math.atan(Math.tan((this.fov * Math.PI) / 360) / (4 / 3)) * 180 / Math.PI : this.fov * 0.82;
+    // Adrenaline Rush widens the view a little for a sense of speed
+    this.fovBoost = damp(this.fovBoost || 0, this.net.abilityActive?.('adrenaline') ? 8 : 0, 6, dt);
+    const fovH = this.fov + this.fovBoost;
+    const vfov = aspect >= 4 / 3 ? 2 * Math.atan(Math.tan((fovH * Math.PI) / 360) / (4 / 3)) * 180 / Math.PI : fovH * 0.82;
     if (Math.abs(cam.fov - vfov) > 0.01) { cam.fov = vfov; cam.updateProjectionMatrix(); }
   }
 
@@ -633,8 +637,44 @@ export class Game {
       }
       if (def && def.spinUp && (R.flags & PF.SPUN)) this.audio.loop(`s${id}`, 'spin', pos, true);
       else this.audio.loop(`s${id}`, null, null, false);
+      if (R.flags & PF.ABILITY) this.abilityAura(R, dt);
     }
     fx.endBeams();
+  }
+
+  // Continuous effects while another player's ability is active, so it is readable at a glance.
+  abilityAura(R, dt) {
+    const fx = this.effects;
+    const p = R.root.position;
+    const team = R.realTeam ? 0x6ab8ff : 0xff7a6a;
+    const chance = (rate) => Math.random() < rate * dt;
+    const trueCls = this.net.roster.get(R.id)?.cls;
+    if (!trueCls || (R.flags & PF.DISGUISED)) return;
+    switch (getClass(trueCls).ability.id) {
+      case 'adrenaline':
+        if (chance(30)) fx.spawn({ x: p.x + (Math.random() - 0.5) * 0.6, y: p.y + 0.3 + Math.random() * 1.4, z: p.z + (Math.random() - 0.5) * 0.6, life: 0.35, size: 0.06, end: 0.2, color: 0xffffff, g: 0, drag: 4 });
+        break;
+      case 'esp': {
+        // amber glint at the eyes
+        if (chance(12)) { const fwd = dirFromAngles(R.root.rotation.y, 0); fx.spawn({ x: p.x + fwd[0] * 0.3, y: p.y + 1.62, z: p.z + fwd[2] * 0.3, life: 0.25, size: 0.07, end: 0.1, color: 0xffb030, g: 0, drag: 6 }); }
+        break;
+      }
+      case 'suppression':
+        if (chance(26)) { const a = Math.random() * Math.PI * 2; fx.spawn({ x: p.x + Math.cos(a) * 0.9, y: p.y + 0.08, z: p.z + Math.sin(a) * 0.9, vy: 0.6, life: 0.4, size: 0.08, end: 0.3, color: team, g: 0, drag: 2 }); }
+        break;
+      case 'overcharge':
+        if (chance(22)) fx.spawn({ x: p.x + (Math.random() - 0.5) * 0.9, y: p.y + Math.random() * 2, z: p.z + (Math.random() - 0.5) * 0.9, vy: 0.8, life: 0.6, size: 0.07, end: 0.2, color: Math.random() < 0.5 ? 0xfff28a : 0xffffff, g: -0.5, drag: 1 });
+        break;
+      default:
+    }
+  }
+
+  // Expanding ring of heat for Thermal Burst.
+  heatRing(x, y, z) {
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      this.effects.spawn({ x, y, z, vx: Math.cos(a) * 11, vy: 0.4, vz: Math.sin(a) * 11, life: 0.45, size: 0.16, end: 0.4, color: i % 3 ? 0xff9a30 : 0xffe070, g: 0, drag: 3 });
+    }
   }
 
   // ---------------------------------------------------------------- projectiles
@@ -700,19 +740,77 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- turrets
+  // Tripod sentry: angled legs, swivel yoke, boxy team-coloured head with a round gun housing, checkered
+  // side panels, side ammo box and a siren light on top. Animated in updateTurrets().
   turretModel(team) {
     const g = new THREE.Group();
     const col = TEAM_COLORS_HEX[team];
-    bx(g, 0, 0, 0, 0.9, 0.15, 0.9, 0x3a3f45);
-    bx(g, 0, 0.15, 0, 0.22, 0.45, 0.22, 0x5a5f66);
-    const head = new THREE.Group(); head.position.y = 0.7;
-    bx(head, 0, -0.15, 0, 0.55, 0.4, 0.6, col);
-    bx(head, 0, -0.08, -0.4, 0.12, 0.12, 0.5, 0x2b2e33);
-    bx(head, 0.12, -0.08, -0.36, 0.08, 0.08, 0.4, 0x2b2e33);
-    bx(head, 0, 0.06, -0.31, 0.2, 0.08, 0.02, 0xff3a2a, { basic: true });
-    bx(head, -0.3, -0.12, 0.05, 0.08, 0.25, 0.4, 0xc9a14a);
-    g.add(head);
-    g.userData.head = head;
+    const dark = 0x2c2e30, metal = 0x4a4d50;
+    const strut = (parent, a, b, w, color) => {
+      const len = a.distanceTo(b);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, w, len), colorMat(color));
+      m.position.copy(a).add(b).multiplyScalar(0.5);
+      m.lookAt(b);
+      m.castShadow = true;
+      parent.add(m);
+      return m;
+    };
+    const cyl = (parent, x, y, z, r, len, color, opts = {}) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 10), opts.basic ? colorMat(color, { basic: true }) : colorMat(color));
+      m.position.set(x, y, z);
+      if (opts.forward) m.rotation.x = Math.PI / 2;
+      m.castShadow = true;
+      parent.add(m);
+      return m;
+    };
+    // tripod
+    const legs = new THREE.Group();
+    g.add(legs);
+    const hub = new THREE.Vector3(0, 0.46, 0);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + Math.PI / 6;
+      const knee = new THREE.Vector3(Math.cos(a) * 0.2, 0.28, Math.sin(a) * 0.2);
+      const foot = new THREE.Vector3(Math.cos(a) * 0.42, 0.03, Math.sin(a) * 0.42);
+      strut(legs, hub, knee, 0.075, dark);
+      strut(legs, knee, foot, 0.065, dark);
+      bx(legs, foot.x, 0, foot.z, 0.16, 0.04, 0.16, 0x1c1d1e);
+      bx(legs, knee.x, knee.y - 0.03, knee.z, 0.09, 0.06, 0.09, metal);
+    }
+    bx(legs, 0, 0.4, 0, 0.16, 0.12, 0.16, metal);
+    bx(legs, 0, 0.52, 0, 0.09, 0.2, 0.09, dark);
+    // swivel (yaw) + yoke
+    const yawG = new THREE.Group(); yawG.position.y = 0.7; g.add(yawG);
+    bx(yawG, 0, 0, 0, 0.5, 0.05, 0.16, dark);
+    for (const sx of [-1, 1]) bx(yawG, sx * 0.27, 0, 0, 0.05, 0.24, 0.09, dark);
+    // head (pitch)
+    const head = new THREE.Group(); head.position.y = 0.21; yawG.add(head);
+    bx(head, 0, -0.17, 0, 0.5, 0.36, 0.48, col);
+    bx(head, 0, -0.17, -0.245, 0.46, 0.3, 0.03, 0x232426);
+    bx(head, 0, 0.19, 0, 0.42, 0.03, 0.4, shadeHex(col, 0.75));
+    // checkered side panels
+    for (const sx of [-1, 1]) for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
+      bx(head, sx * 0.252, 0.0 - r * 0.1, -0.14 + c * 0.09, 0.012, 0.085, 0.085, (r + c) % 2 ? 0xf2efe6 : shadeHex(col, 0.9));
+    }
+    // gun housing, lens and barrel
+    cyl(head, 0.03, -0.01, -0.27, 0.11, 0.06, 0x1a1b1c, { forward: true });
+    cyl(head, 0.03, -0.01, -0.3, 0.075, 0.03, 0x3a3c3e, { forward: true });
+    const barrel = new THREE.Group(); head.add(barrel);
+    cyl(barrel, 0.03, -0.01, -0.38, 0.04, 0.18, 0x2a2b2c, { forward: true });
+    cyl(barrel, 0.03, -0.01, -0.47, 0.05, 0.03, 0x111111, { forward: true });
+    const muzzle = new THREE.Object3D(); muzzle.position.set(0.03, -0.01, -0.5); barrel.add(muzzle);
+    const eye = bx(head, -0.16, 0.08, -0.262, 0.07, 0.05, 0.01, 0xff3a2a, { basic: true });
+    // side ammo box with belt
+    bx(head, 0.32, -0.22, 0.02, 0.13, 0.18, 0.26, 0x3a3c3a);
+    bx(head, 0.32, -0.13, 0.02, 0.135, 0.02, 0.265, 0xc9a14a);
+    bx(head, 0.27, -0.2, -0.13, 0.05, 0.04, 0.1, 0xc9a14a);
+    // siren light on top
+    cyl(head, 0, 0.225, 0, 0.075, 0.05, 0x151515);
+    const sirenMat = new THREE.MeshBasicMaterial({ color: col });
+    const siren = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.068, 0.1, 10), sirenMat);
+    siren.position.set(0, 0.3, 0); head.add(siren);
+    const sirenCap = bx(head, 0, 0.35, 0, 0.05, 0.02, 0.05, 0xffffff, { basic: true });
+    const blade = bx(siren, 0.035, -0.05, 0, 0.012, 0.08, 0.05, 0xffffff, { basic: true });
+    g.userData = { legs, yawG, head, barrel, muzzle, siren, sirenMat, eye, sirenCap, blade, col, recoil: 0, buildT: 0 };
     return g;
   }
 
@@ -720,14 +818,41 @@ export class Game {
     const snap = this.net.latest;
     const live = new Set();
     if (snap) for (const t of snap.tu) {
-      const [id, team, x, y, z, yaw, hp, maxHp, owner, ammo, building] = t;
+      const [id, team, x, y, z, yaw, hp, maxHp, owner, ammo, building, target] = t;
       live.add(id);
       let T = this.turrets.get(id);
-      if (!T) { const g = this.turretModel(team); this.mapObjects.add(g); T = { g, yaw }; this.turrets.set(id, T); }
+      if (!T) { const g = this.turretModel(team); this.mapObjects.add(g); T = { g, yaw, pitch: 0, sweep: Math.random() * 6 }; this.turrets.set(id, T); }
+      const U = T.g.userData;
       T.g.position.set(x, y, z);
-      T.yaw = T.yaw + wrapAngle(yaw - T.yaw) * Math.min(1, dt * 12);
-      T.g.userData.head.rotation.y = T.yaw;
-      T.g.scale.setScalar(building ? 0.6 + 0.4 * Math.abs(Math.sin(this.time * 4)) : 1);
+      // unfold while building: legs spread, head rises and grows
+      U.buildT = building ? Math.min(1.2, U.buildT + dt) : 1.2;
+      const bp = U.buildT / 1.2;
+      U.legs.scale.set(0.4 + 0.6 * bp, 0.5 + 0.5 * bp, 0.4 + 0.6 * bp);
+      U.yawG.position.y = 0.35 + 0.35 * bp;
+      U.head.scale.setScalar(0.5 + 0.5 * bp);
+      // aim: server yaw, plus an idle sweep when nothing is targeted; pitch toward the target
+      const tgt = target >= 0 ? (target === this.net.myId ? new THREE.Vector3(this.net.ms.x, this.net.ms.y, this.net.ms.z) : this.rigs.get(target)?.root.position) : null;
+      T.sweep += dt;
+      const idle = !building && !tgt;
+      const wantYaw = yaw + (idle ? Math.sin(T.sweep * 0.9) * 0.55 : 0);
+      T.yaw = T.yaw + wrapAngle(wantYaw - T.yaw) * Math.min(1, dt * (idle ? 3 : 12));
+      U.yawG.rotation.y = T.yaw;
+      let wantPitch = 0;
+      if (tgt) { const dx = tgt.x - x, dz = tgt.z - z; wantPitch = Math.atan2((tgt.y + 1.0) - (y + 0.9), Math.hypot(dx, dz)); }
+      T.pitch = damp(T.pitch, Math.max(-0.6, Math.min(0.6, wantPitch)), 8, dt);
+      U.head.rotation.x = T.pitch;
+      // barrel recoil
+      U.recoil = Math.max(0, U.recoil - dt * 8);
+      U.barrel.position.z = U.recoil * 0.06;
+      // siren: slow pulse when idle, spinning fast flash when it has a target
+      if (tgt) { U.siren.rotation.y += dt * 14; U.sirenMat.color.setHex(Math.sin(this.time * 18) > 0 ? 0xffffff : U.col); }
+      else { U.sirenMat.color.setHex(U.col).multiplyScalar(0.55 + 0.45 * (0.5 + 0.5 * Math.sin(this.time * 2.5))); }
+      U.eye.visible = !building && (tgt ? true : Math.sin(this.time * 3) > -0.6);
+      // damaged: smoke
+      if (hp < maxHp * 0.35 && Math.random() < dt * 8) {
+        const hpw = U.head.getWorldPosition(tmpV);
+        this.effects.spawn({ x: hpw.x + (Math.random() - 0.5) * 0.2, y: hpw.y, z: hpw.z + (Math.random() - 0.5) * 0.2, vy: 1, life: 1, size: 0.14, end: 0.8, color: 0x3a3a3a, g: -0.5, drag: 1 });
+      }
       T.hp = hp; T.maxHp = maxHp; T.ammo = ammo; T.owner = owner; T.team = team;
     }
     for (const [id, T] of this.turrets) if (!live.has(id)) { this.mapObjects.remove(T.g); this.turrets.delete(id); }
@@ -870,7 +995,8 @@ export class Game {
           const [, tid, x, y, z, hit] = e;
           const T = this.turrets.get(tid);
           if (T) {
-            const m = T.g.userData.head.localToWorld(new THREE.Vector3(0, -0.08, -0.65));
+            const m = T.g.userData.muzzle.getWorldPosition(new THREE.Vector3());
+            T.g.userData.recoil = 1;
             this.effects.tracer([m.x, m.y, m.z], [x, y, z], 0xffe07a, 0.025);
             this.effects.muzzle(m, null, 'hitscan');
             this.audio.turretFire([m.x, m.y, m.z]);
@@ -957,7 +1083,8 @@ export class Game {
     const pos = this.rigPos(pid);
     if (pid === me) {
       if (on) { this.r.vm.onAbility(id); this.audio.ability(id, null, true); this.ui.hud.abilityFlash(id); }
-      if (id === 'thermalburst') { this.effects.burst(this.net.ms.x, this.net.ms.y + 1, this.net.ms.z, 40, { color: [0xff9a30, 0xffe070, 0xffffff], speed: 9, life: 0.4, size: 0.12, g: 0 }); this.shake = Math.max(this.shake, 0.4); }
+      if (id === 'thermalburst') { this.heatRing(this.net.ms.x, this.net.ms.y + 0.9, this.net.ms.z); this.shake = Math.max(this.shake, 0.4); }
+      if (id === 'esp' && on) this.ui.hud.notify('Recon Sweep: all enemies marked for 5s', 'short');
       if (id === 'disguise') this.ui.hud.notify(on ? 'Disguised — attack or heavy damage reveals you' : 'Disguise removed', 'short');
       return;
     }
@@ -967,9 +1094,11 @@ export class Game {
     if (on) this.audio.ability(id, pos, false);
     switch (id) {
       case 'disguise': this.effects.burst(pos[0], pos[1], pos[2], 24, { color: [0x555555, 0x888888, 0x333333], speed: 2, life: 0.8, size: 0.2, g: -1 }); break;
-      case 'thermalburst': this.effects.burst(pos[0], pos[1], pos[2], 40, { color: [0xff9a30, 0xffe070, 0xffffff], speed: 9, life: 0.4, size: 0.12, g: 0 }); if (extra) this.ui.hud.notify(`${extra} projectile(s) incinerated`, 'short'); break;
+      case 'thermalburst': this.heatRing(pos[0], pos[1] - 0.3, pos[2]); if (extra) this.ui.hud.notify(`${extra} projectile(s) incinerated`, 'short'); break;
       case 'overcharge': if (on) this.effects.burst(pos[0], pos[1], pos[2], 30, { color: [0xffffff, 0xfff28a], speed: 4, life: 0.8, size: 0.1, g: -2 }); break;
       case 'suppression': if (on) this.effects.burst(pos[0], pos[1] - 1, pos[2], 16, { color: [0x8a8070, 0x5a5040], speed: 3, life: 0.5, size: 0.12, g: 6 }); break;
+      case 'adrenaline': if (on) this.effects.burst(pos[0], pos[1] - 0.8, pos[2], 14, { color: [0xffffff, 0xd8f0ff], speed: 4, life: 0.4, size: 0.08, g: 2 }); break;
+      case 'esp': if (on) this.effects.burst(pos[0], pos[1] + 0.5, pos[2], 10, { color: [0xffb030, 0xffe070], speed: 1.5, life: 0.5, size: 0.06, g: -1 }); break;
       default:
     }
   }

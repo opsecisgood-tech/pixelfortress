@@ -43,9 +43,9 @@ You can drag and resize the touch buttons under **Settings → Touch → Edit la
 
 | Class | HP | Speed | Primary / Secondary / Melee | Ability | Passive |
 | --- | --- | --- | --- | --- | --- |
-| Scout | 125 | 115% | Scattershot / Sidekick / Street Bat | Double Jump | Quick Recovery |
+| Scout | 125 | 115% | Scattershot / Sidekick / Street Bat | Adrenaline Rush: +30% speed, faster reloads for 4s | Double Jump |
 | Spy | 100 | 100% | Silenced Pistol / Precision Revolver / Shadow Blade | Disguise (attacking or taking 20+ damage reveals you; 8 s cooldown) | Quiet Movement; back attacks deal 220 |
-| Marksman | 110 | 100% | Longshot Rifle (charged scope) / Compact SMG / Utility Knife | Focus Mode | Recon: hits reveal the target to your team |
+| Marksman | 110 | 100% | Longshot Rifle (charged scope) / Compact SMG / Utility Knife | Recon Sweep: see every enemy through walls for 5s, 35% slower | Recon: hits reveal the target to your team |
 | Mechanic | 125 | 95% | Rivet Gun / Construction Device (repair beam) / Reinforced Wrench | Automated Turret (limited HP, ammo and range; one per player) | Repair deployables |
 | Doctor | 125 | 103% | Syringe Launcher / Medical Beam / Surgical Saw | Overcharge (built by healing) | Medical Assist |
 | Juggernaut | 300 | 75% | Cyclone Rotary Cannon / Breacher Shotgun / Foundry Hammer | Suppression Mode | Frontline Presence |

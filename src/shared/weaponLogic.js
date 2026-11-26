@@ -61,7 +61,6 @@ export function isReloading(ws) {
 export function computeSpread(def, ctx, ws) {
   const w = ws.w[ws.slot];
   if (def.scope && ws.scoped && ctx.time - (w.scopeStart || 0) >= 0) return 0;
-  if (ctx.focus) return 0;
   let s = def.spread || 0;
   s += (def.spreadMove || 0) * Math.min(1, (ctx.hspeed || 0) / 7);
   if (!ctx.grounded) s += def.spreadAir || 0;
@@ -112,7 +111,7 @@ export function shotDirections(yaw, pitch, spread, pellets, seed) {
 
 /**
  * Step weapon logic for one command.
- * ctx: { pid, alive, reloadMult, explosiveReloadMult, focus, focusChargeMult, spreadMult, hspeed, grounded, crouch, sprinting, disarmed }
+ * ctx: { pid, alive, reloadMult, explosiveReloadMult, spreadMult, hspeed, grounded, crouch, sprinting, disarmed }
  * returns array of events.
  */
 export function stepWeapons(ws, cmd, ctx) {
@@ -163,7 +162,7 @@ export function stepWeapons(ws, cmd, ctx) {
     if (wantScope && !ws.scoped) { ws.scoped = true; w.scopeStart = t + def.scope.delay; w.charge = 0; events.push({ type: 'scope', on: true }); }
     else if (!wantScope && ws.scoped) { ws.scoped = false; w.charge = 0; events.push({ type: 'scope', on: false }); }
     if (ws.scoped && t >= w.next && t >= w.scopeStart) {
-      w.charge = Math.min(1, w.charge + (dt / def.scope.chargeTime) * (ctx.focus ? (ctx.focusChargeMult || 1) : 1));
+      w.charge = Math.min(1, w.charge + dt / def.scope.chargeTime);
     }
   }
 

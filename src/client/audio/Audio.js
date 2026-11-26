@@ -380,7 +380,8 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     switch (id) {
       case 'disguise': this.noise(d, t, 0.5, { type: 'bandpass', f: 400, f2: 3000, q: 3, vol: 0.5 }); [880, 1100, 1320].forEach((f, i) => this.tone(d, t + i * 0.06, 0.2, { type: 'sine', f, vol: 0.12 })); break;
-      case 'focus': [0, 0.5].forEach((o) => { this.tone(d, t + o, 0.14, { type: 'sine', f: 70, f2: 45, vol: 0.8 }); this.tone(d, t + o + 0.16, 0.12, { type: 'sine', f: 65, f2: 45, vol: 0.6 }); }); break;
+      case 'adrenaline': this.tone(d, t, 0.25, { type: 'sawtooth', f: 220, f2: 880, vol: 0.12 }); this.noise(d, t, 0.35, { type: 'bandpass', f: 800, f2: 4000, q: 2, vol: 0.3 }); [0.08, 0.2].forEach((o) => this.tone(d, t + o, 0.1, { type: 'square', f: 1320, vol: 0.06 })); break;
+      case 'esp': this.tone(d, t, 0.6, { type: 'sine', f: 1200, f2: 300, vol: 0.12 }); [0.05, 0.35].forEach((o) => this.noise(d, t + o, 0.25, { type: 'bandpass', f: 2400, q: 8, vol: 0.18 })); [0, 0.5].forEach((o) => { this.tone(d, t + o, 0.14, { type: 'sine', f: 70, f2: 45, vol: 0.8 }); this.tone(d, t + o + 0.16, 0.12, { type: 'sine', f: 65, f2: 45, vol: 0.6 }); }); break;
       case 'turret': for (let i = 0; i < 5; i++) this.noise(d, t + i * 0.12, 0.05, { type: 'bandpass', f: 1500 + i * 200, q: 6, vol: 0.5 }); this.tone(d, t + 0.7, 0.3, { type: 'square', f: 660, f2: 990, vol: 0.08 }); break;
       case 'overcharge': [523, 659, 784, 1047].forEach((f, i) => this.tone(d, t + i * 0.07, 0.6, { type: 'triangle', f, vol: 0.18 })); this.noise(d, t, 0.8, { type: 'bandpass', f: 1000, f2: 5000, q: 2, vol: 0.2 }); break;
       case 'suppression': this.tone(d, t, 0.3, { type: 'square', f: 90, f2: 60, vol: 0.3 }); this.noise(d, t, 0.15, { type: 'bandpass', f: 1200, q: 4, vol: 0.5 }); break;

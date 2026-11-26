@@ -1,5 +1,5 @@
-// Class abilities (server-authoritative): Disguise, Focus, Turret, Overcharge, Suppression,
-// Thermal Burst, Detonation Charge. Double Jump lives in shared movement (predicted).
+// Class abilities (server-authoritative): Adrenaline Rush, Disguise, Recon Sweep, Turret, Overcharge,
+// Suppression, Thermal Burst, Detonation Charge. Scout's innate double jump lives in shared movement.
 import { getClass, CLASSES, CLASS_IDS } from '../shared/config/classes.js';
 import { ABILITY_SOURCES } from '../shared/config/weapons.js';
 import { dirFromAngles, round2, wrapAngle } from '../shared/math.js';
@@ -44,7 +44,8 @@ export class Abilities {
         if (t < p.ability.cdUntil) return;
         this.disguise(p);
         return;
-      case 'focus':
+      case 'adrenaline':
+      case 'esp':
       case 'suppression':
         if (t < p.ability.cdUntil || p.ability.active) return;
         p.ability.active = true;

@@ -33,6 +33,7 @@ export class Hud {
       <div class="hx-obj"></div>
       <div class="flagstrip hidden"></div>
       <div class="flagmarkers"></div>
+      <div class="esp-layer"></div>
       <div class="netstat"></div>
       <div class="killfeed"></div>
       <div class="crosshair"></div>
@@ -116,6 +117,41 @@ export class Hud {
     if (this.sbVisible) this.renderScoreboard();
   }
 
+  // Recon Sweep: a marker on every living enemy (true team, so disguised spies show), through walls.
+  // Off-screen enemies get an arrow pinned to the screen edge.
+  updateEsp(s, on) {
+    const layer = this.root.querySelector('.esp-layer');
+    if (!on || !s.rigs || !s.camera) { if (this.espOn) { layer.innerHTML = ''; this.espOn = false; } return; }
+    this.espOn = true;
+    const myTeam = s.me.team;
+    const W = window.innerWidth, H = window.innerHeight;
+    const cam = s.camera;
+    const v = this.espV || (this.espV = new THREE.Vector3());
+    const camPos = cam.position;
+    let html = '';
+    for (const [id, R] of s.rigs) {
+      if (id === s.myId || !R.alive || R.realTeam === myTeam || !R.root.visible) continue;
+      v.copy(R.root.position); v.y += 2.15;
+      const dist = Math.round(v.distanceTo(camPos));
+      v.project(cam);
+      const behind = v.z > 1;
+      let x = (v.x * 0.5 + 0.5) * W, y = (-v.y * 0.5 + 0.5) * H;
+      const off = behind || x < 30 || x > W - 30 || y < 30 || y > H - 30;
+      if (off) {
+        let dx = x - W / 2, dy = y - H / 2;
+        if (behind) { dx = -dx; dy = -dy; }
+        const k = Math.min((W / 2 - 40) / Math.abs(dx || 1), (H / 2 - 40) / Math.abs(dy || 1));
+        x = W / 2 + dx * k; y = H / 2 + dy * k;
+        const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+        html += `<div class="esp-arrow" style="transform:translate(${x.toFixed(0)}px,${y.toFixed(0)}px) rotate(${ang.toFixed(0)}deg)"></div>`;
+      } else {
+        const ent = s.roster.get(id);
+        html += `<div class="esp-mark t${R.realTeam}" style="transform:translate(${x.toFixed(0)}px,${y.toFixed(0)}px)"><i></i><span>${esc(ent?.name || '')} · ${dist}m</span></div>`;
+      }
+    }
+    layer.innerHTML = html;
+  }
+
   // ---------------------------------------------------------------- per-frame
   update(s) {
     const el = this.el;
@@ -141,7 +177,7 @@ export class Hud {
       this.lastCls = `${me.cls}${me.team}`;
       el.clsIc.src = this.app.icons.portraits[`${me.cls}_${me.team}`] || '';
       el.abNm.textContent = cls.ability.name;
-      el.abKey.textContent = cls.ability.id === 'doublejump' ? '2×' : 'E';
+      el.abKey.textContent = 'E';
     }
     const hp = me.alive ? me.hp : 0;
     if (hp !== this.lastHp) {
@@ -173,8 +209,6 @@ export class Hud {
     if (ab.id === 'overcharge') {
       frac = charge;
       label = isActive ? `${active.toFixed(1)}s` : `${Math.floor(charge * 100)}%`;
-    } else if (ab.id === 'doublejump') {
-      frac = s.ms.grounded || s.ms.airJumps > 0 ? 1 : 0; label = 'Passive';
     } else if (isActive) { frac = ab.duration ? active / ab.duration : 1; label = `${active.toFixed(1)}s`; }
     else if (cd > 0) { const total = ab.cooldown || 10; frac = 1 - Math.min(1, cd / total); label = `${cd.toFixed(1)}s`; }
     if (ab.id === 'detcharge' && s.snap.ch && s.snap.ch.some((c) => c[0] === s.myId)) label = 'E: detonate';
@@ -183,7 +217,10 @@ export class Hud {
     el.ab.classList.toggle('ready', frac >= 1 && !isActive);
     el.ab.classList.toggle('active', !!isActive);
     el.ab.classList.toggle('hidden', ab.id === 'overcharge');
-    el.focus.style.opacity = isActive && ab.id === 'focus' ? 1 : 0;
+    el.focus.style.opacity = isActive && ab.id === 'esp' ? 1 : 0;
+    this.updateEsp(s, !!isActive && ab.id === 'esp');
+    el.focus.classList.toggle('rush', !!isActive && ab.id === 'adrenaline');
+    if (isActive && ab.id === 'adrenaline') el.focus.style.opacity = 1;
     // weapon
     const w = s.weapon;
     if (w) {

@@ -444,8 +444,8 @@ export class ServerGame {
     let moveMult = 1;
     const wst = p.ws.w[p.ws.slot];
     if (def.spinUp && wst.spin > 0) moveMult *= def.spinMoveMult;
-    if (def.scope && p.ws.scoped && !this.abilities.isActive(p, 'focus')) moveMult *= def.scope.moveMult;
-    if (this.abilities.isActive(p, 'suppression')) moveMult *= cls.ability.moveMult;
+    if (def.scope && p.ws.scoped) moveMult *= def.scope.moveMult;
+    if (cls.ability.moveMult && this.abilities.isActive(p, cls.ability.id)) moveMult *= cls.ability.moveMult;
     const frozen = this.state === MATCH_STATE.PREROUND;
     return moveParamsFor(cls, { moveMult, frozen, canSprint: !(def.spinUp && wst.spin > 0) });
   }
@@ -454,8 +454,8 @@ export class ServerGame {
     const cls = getClass(p.classId);
     return {
       pid: p.id, alive: p.alive,
-      reloadMult: cls.reloadSpeed, explosiveReloadMult: cls.passive.explosiveReloadMult || 1,
-      focus: this.abilities.isActive(p, 'focus'), focusChargeMult: cls.ability.chargeRateMult,
+      reloadMult: cls.reloadSpeed * (cls.ability.reloadMult && this.abilities.isActive(p, cls.ability.id) ? cls.ability.reloadMult : 1),
+      explosiveReloadMult: cls.passive.explosiveReloadMult || 1,
       spreadMult: this.abilities.isActive(p, 'suppression') ? cls.ability.spreadMult : 1,
       hspeed: Math.hypot(p.ms.vx, p.ms.vz), grounded: p.ms.grounded, crouch: p.ms.crouch, sprinting: p.ms.sprinting,
       disarmed: this.state === MATCH_STATE.PREROUND || this.state === MATCH_STATE.ENDED,

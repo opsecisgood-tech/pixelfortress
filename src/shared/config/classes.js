@@ -24,12 +24,13 @@ const BASE_CLASSES = {
     weapons: ['scattershot', 'sidekick', 'streetbat'],
     arsenal: [['scattershot', 'kickback'], ['sidekick', 'peashooter'], ['streetbat', 'slugger']], // weapon choices per slot (first = default)
     signature: 'scattershot',
+    airJumps: 1,                     // innate double jump
     ability: {
-      id: 'doublejump', name: 'Double Jump', key: 'JUMP', passiveTrigger: true,
-      cooldown: 0, duration: 0, airJumps: 1,
-      description: 'Jump again while airborne. Redirects your momentum toward your movement keys.',
+      id: 'adrenaline', name: 'Adrenaline Rush', key: 'E',
+      cooldown: 14, duration: 4, moveMult: 1.3, reloadMult: 1.5,
+      description: 'Burst of speed: +30% movement and 50% faster reloads for 4s. Great for flag runs and escapes.',
     },
-    passive: { id: 'quickrecovery', name: 'Quick Recovery', landingRecovery: 0.35, description: 'Recovers from landings 65% faster.' },
+    passive: { id: 'quickrecovery', name: 'Double Jump', landingRecovery: 0.35, description: 'Jump again in mid-air (redirects toward your movement keys). Recovers from landings 65% faster.' },
     hitbox: { width: 0.72, height: 1.8, head: 0.42 },
     model: 'scout', animSet: 'light', audioSet: 'scout',
     portrait: 'scout',
@@ -88,9 +89,9 @@ const BASE_CLASSES = {
     arsenal: [['longshot', 'longbow'], ['compactsmg', 'scrubcarbine'], ['utilityknife', 'machete']], // weapon choices per slot (first = default)
     signature: 'longshot',
     ability: {
-      id: 'focus', name: 'Focus Mode', key: 'E',
-      cooldown: 18, duration: 6, chargeRateMult: 1.8,
-      description: 'Steady breathing: zero spread, faster scope charge and no movement penalty for 6s.',
+      id: 'esp', name: 'Recon Sweep', key: 'E',
+      cooldown: 20, duration: 5, moveMult: 0.65,
+      description: 'For 5s you see every enemy through walls, with distance markers. You move 35% slower while it lasts.',
     },
     passive: { id: 'recon', name: 'Recon', revealTime: 4, description: 'Enemies you hit are revealed to your team for 4s.' },
     hitbox: { width: 0.74, height: 1.84, head: 0.42 },

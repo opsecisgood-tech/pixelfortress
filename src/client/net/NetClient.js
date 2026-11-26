@@ -161,8 +161,8 @@ export class NetClient {
     const def = WEAPONS[w.id];
     let moveMult = 1;
     if (def.spinUp && w.spin > 0) moveMult *= def.spinMoveMult;
-    if (def.scope && this.ws.scoped && !this.abilityActive('focus')) moveMult *= def.scope.moveMult;
-    if (this.abilityActive('suppression')) moveMult *= cls.ability.moveMult;
+    if (def.scope && this.ws.scoped) moveMult *= def.scope.moveMult;
+    if (cls.ability.moveMult && this.abilityActive(cls.ability.id)) moveMult *= cls.ability.moveMult;
     return moveParamsFor(cls, { moveMult, frozen: this.latest?.ms === MATCH_STATE.PREROUND, canSprint: !(def.spinUp && w.spin > 0) });
   }
 
@@ -171,8 +171,8 @@ export class NetClient {
     const st = this.latest?.ms;
     return {
       pid: this.myId, alive: !!this.me?.alive,
-      reloadMult: cls.reloadSpeed, explosiveReloadMult: cls.passive.explosiveReloadMult || 1,
-      focus: this.abilityActive('focus'), focusChargeMult: cls.ability.chargeRateMult,
+      reloadMult: cls.reloadSpeed * (cls.ability.reloadMult && this.abilityActive(cls.ability.id) ? cls.ability.reloadMult : 1),
+      explosiveReloadMult: cls.passive.explosiveReloadMult || 1,
       spreadMult: this.abilityActive('suppression') ? cls.ability.spreadMult : 1,
       hspeed: Math.hypot(this.ms.vx, this.ms.vz), grounded: this.ms.grounded, crouch: this.ms.crouch, sprinting: this.ms.sprinting,
       disarmed: st === MATCH_STATE.PREROUND || st === MATCH_STATE.ENDED,
