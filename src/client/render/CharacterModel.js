@@ -870,7 +870,7 @@ const GLOVE_RED = 0xc4282a, GLOVE_DARK = 0x941c1e, GLOVE_CUFF = 0xefe8d8;
 function boxingGlove(A, arm, inner, col = GLOVE_RED) {
   const [aw, al, ad] = arm;
   const end = -(al - aw / 2);           // bottom of the arm
-  const cy = end + 1.6;                 // glove centre
+  const cy = end + 1.0;                 // glove centre: sits over the fist, past the end of the arm
   const dark = (col & 0xfefefe) >> 1 | 0;
   A(0, cy, -0.3, aw + 2, 5.2, ad + 2.6, col);                     // fist
   A(0, cy - 1.2, -(ad / 2 + 1.25), aw + 1.4, 2.2, 0.4, col === GLOVE_RED ? GLOVE_DARK : dark); // knuckle pad
@@ -1191,12 +1191,12 @@ export function buildArmMesh(classId, team, gloves, len, boxing = false) {
   if (boxing) {
     // boxing glove (weapon), parented to the arm mesh so it uses the same space as the third-person arm
     // (offset by the mesh centre); widened to undo the slimmer first-person cross-section.
+    // positions stay true (so the glove sits on the fist); only the box sizes are slimmed
     const gp = new THREE.Group();
-    gp.scale.set(0.8, 0.55, 0.8);
     const off = dims[1] / 2 - dims[0] / 2;
     boxingGlove((x, y, z, w, h, d, c) => {
-      const mm = new THREE.Mesh(boxGeo(w * s, h * s, d * s), colorMat(c));
-      mm.position.set(x * s, (y + off) * s, z * s);
+      const mm = new THREE.Mesh(boxGeo(w * s * 0.8, h * s * 0.6, d * s * 0.8), colorMat(c));
+      mm.position.set(x * s * 0.8, (y + off) * s, z * s * 0.8);
       gp.add(mm);
     }, dims, -1);
     m.add(gp);
