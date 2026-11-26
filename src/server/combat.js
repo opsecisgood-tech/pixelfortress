@@ -346,6 +346,7 @@ export class Combat {
     const cls = getClass(victim.classId);
     const self = attacker && attacker.id === victim.id;
     if (attacker && !self && attacker.team === victim.team && !g.modeCfg.friendlyFire) return 0;
+    if (victim.admin?.god) return 0;
     let dmg = amount;
     if (!opts.raw) {
       let frontline = false;

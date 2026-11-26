@@ -165,6 +165,16 @@ export class Profile {
 
   collection() { return { owned: this.ownedCount(), total: ITEMS.length }; }
 
+  // ---------------------------------------------------------------- admin ("owner" account)
+  static isOwner(auth) { return !!auth?.user && String(auth.username || '').toLowerCase() === 'owner'; }
+  adminApply(m, auth) {
+    if (!Profile.isOwner(auth)) return 'Keys and items can only be changed while signed in to the "owner" account.';
+    if (m.action === 'keys') { this.data.keys = Math.max(0, m.n | 0); this.save(); return `Keys set to ${this.data.keys}.`; }
+    if (m.action === 'addkeys') { this.data.keys = Math.max(0, this.data.keys + (m.n | 0)); this.save(); return `Keys: ${this.data.keys}.`; }
+    if (m.action === 'items') { let n = 0; for (const it of ITEMS) if (!this.owns(it.id)) { this.data.inventory[it.id] = 1; n++; } this.save(); return `Unlocked ${n} items (all ${ITEMS.length}).`; }
+    return '';
+  }
+
   // ---------------------------------------------------------------- keys & crates
   get keys() { return this.data.keys; }
   /**

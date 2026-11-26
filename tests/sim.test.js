@@ -507,3 +507,36 @@ test('server: results carry key rewards; bot kills are never recorded', () => {
   assert.deepEqual(g.results.keys, {});
   assert.equal(g.results.keyInfo.required, 10);
 });
+
+test('server: admin commands only for the verified "owner" (or the host of their own listen game)', () => {
+  const out = new Map();
+  const { g } = makeServer({ send: (c, m) => { if (!out.has(c)) out.set(c, []); out.get(c).push(m); } });
+  // a guest typing the admin name is renamed and gets nothing
+  const fake = join(g, 1, 'owner');
+  assert.notEqual(fake.name.toLowerCase(), 'owner');
+  assert.equal(fake.admin, null);
+  g.handleMessage(1, { t: 'chat', text: '/god' });
+  assert.ok(out.get(1).some((m) => m.t === 'notice' && /only for the server owner/.test(m.text)));
+  // the verified owner account
+  g.handleMessage(2, { t: 'hello', protocol: PROTOCOL_VERSION, name: 'x' }, { account: { uid: 'u-owner', username: 'owner' } });
+  const own = [...g.players.values()].find((p) => p.connId === 2);
+  assert.ok(own.admin, 'verified owner is admin');
+  startPlaying(g);
+  g.handleMessage(2, { t: 'chat', text: '/god' });
+  g.handleMessage(2, { t: 'chat', text: '/ammo' });
+  g.handleMessage(2, { t: 'chat', text: '/nocd' });
+  g.handleMessage(2, { t: 'chat', text: '/keys 50' });
+  assert.ok(own.admin.god && own.admin.ammo && own.admin.nocd);
+  assert.ok(out.get(2).some((m) => m.t === 'admin' && m.action === 'keys' && m.n === 50));
+  const hp = own.hp; g.combat.damage(own, 500, fake, 'revolver'); assert.equal(own.hp, hp, 'god mode');
+  own.ability.cdUntil = g.time + 30; own.ws.w[0].clip = 0; g.tick();
+  assert.ok(own.ability.cdUntil <= g.time, 'no cooldowns');
+  assert.ok(own.ws.w[0].clip > 0, 'infinite ammo');
+  // listen server: the host named owner is admin; a later joiner named owner is not
+  const L = makeServer({ trustHostName: true });
+  const host = join(L.g, 1, 'owner');
+  const other = join(L.g, 2, 'owner');
+  assert.ok(host.admin && host.name === 'owner');
+  assert.equal(other.admin, null);
+  assert.notEqual(other.name.toLowerCase(), 'owner');
+});

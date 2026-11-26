@@ -31,6 +31,7 @@ self.onmessage = (ev) => {
       game = new ServerGame({
         ...m.opts,
         persistent: true,
+        trustHostName: true, // listen server: the hosting player (first to join) may use the admin name
         send: (connId, data) => post('send', { connId, data }),
         log: (s) => post('log', { text: s }),
       });

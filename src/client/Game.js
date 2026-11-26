@@ -95,6 +95,7 @@ export class Game {
       .on('results', (r) => this.onResults(r))
       .on('chat', (m) => this.ui.hud.chatMessage(m))
       .on('notice', (m) => this.ui.hud.notify(m.text, m.short ? 'short' : 'info'))
+      .on('admin', (m) => this.onAdmin(m))
       .on('spawned', (me) => this.onSpawned(me))
       .on('died', () => this.onDied())
       .on('matchstate', (st, prev) => this.onMatchState(st, prev))
@@ -1155,6 +1156,13 @@ export class Game {
       this.ui.hud.killConfirm(vEntry?.name, flags, this.streak);
       if (this.streak === 3 || this.streak === 5 || this.streak === 10) { this.audio.jingle('killstreak'); this.audio.announce(this.streak === 3 ? 'Triple threat' : this.streak === 5 ? 'Unstoppable' : 'Rampage'); }
     } else if (assister === me) this.ui.hud.notify(`Assist on ${vEntry?.name || '?'}`, 'short');
+  }
+
+  // Admin profile commands from the server. Keys and items live in this browser's profile, so they're
+  // applied only when signed in to the account that owns the admin username.
+  onAdmin(m) {
+    const msg = this.app.profile.adminApply(m, this.app.auth);
+    this.ui.hud.notify(msg, 'info');
   }
 
   onCloakEvent(e) {

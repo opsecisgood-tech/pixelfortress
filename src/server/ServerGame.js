@@ -28,6 +28,7 @@ import { BotController, BOT_NAMES } from './bots/Bot.js';
 import { round2, round3, wrapAngle } from '../shared/math.js';
 
 const TICK_DT = 1 / SERVER_TICK_RATE;
+export const ADMIN_NAME = 'owner'; // the verified account with this username gets admin commands
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const navCache = new Map();
 
@@ -149,6 +150,68 @@ export class ServerGame {
     this.log(`match ended winner=${winner} ${reason}`);
   }
 
+  // ------------------------------------------------------------------ admin commands (/help)
+  adminCommand(p, text) {
+    const say = (t) => this.send(p.connId, { t: 'notice', text: t });
+    if (!p.admin) { say('Commands are only for the server owner.'); return; }
+    const [cmd, ...args] = text.slice(1).split(/\s+/);
+    const A = p.admin;
+    const findPlayer = (n) => { const k = String(n || '').toLowerCase(); return [...this.players.values()].find((q) => q.name.toLowerCase() === k) || [...this.players.values()].find((q) => q.name.toLowerCase().startsWith(k)); };
+    const toggle = (key, label) => { A[key] = args[0] === 'on' ? true : args[0] === 'off' ? false : !A[key]; say(`${label}: ${A[key] ? 'ON' : 'OFF'}`); };
+    this.opts.audit?.({ ev: 'admin', name: p.name, uid: p.uid || null, verified: !!p.verified, text });
+    switch ((cmd || '').toLowerCase()) {
+      case 'help':
+        say('Admin: /keys N · /addkeys N · /items · /nocd · /god · /ammo · /speed X · /heal · /class NAME · /tp PLAYER · /kill PLAYER · /kick PLAYER · /bots N · /map ID [tdm|ctf] · /restart · /end · /admin (status)');
+        return;
+      case 'admin': say(`Admin status · nocd ${A.nocd ? 'on' : 'off'} · god ${A.god ? 'on' : 'off'} · ammo ${A.ammo ? 'on' : 'off'} · speed x${A.speed}`); return;
+      // profile changes are applied by the admin's own game (keys and items live in their profile)
+      case 'keys': { const n = Math.max(0, Math.min(9999, parseInt(args[0], 10) || 0)); this.send(p.connId, { t: 'admin', action: 'keys', n }); return; }
+      case 'addkeys': { const n = Math.max(-9999, Math.min(9999, parseInt(args[0], 10) || 0)); this.send(p.connId, { t: 'admin', action: 'addkeys', n }); return; }
+      case 'items': this.send(p.connId, { t: 'admin', action: 'items' }); return;
+      case 'nocd': toggle('nocd', 'No cooldowns'); return;
+      case 'god': toggle('god', 'God mode'); return;
+      case 'ammo': toggle('ammo', 'Infinite ammo'); return;
+      case 'speed': { const x = Math.max(0.5, Math.min(3, parseFloat(args[0]) || 1)); A.speed = x; say(`Speed x${x}`); return; }
+      case 'heal': if (p.alive) { p.hp = Math.max(p.hp, p.maxHp * 1.5); say('Healed.'); } return;
+      case 'class': {
+        const id = String(args[0] || '').toLowerCase();
+        if (!CLASS_IDS.includes(id)) { say(`Classes: ${CLASS_IDS.join(', ')}`); return; }
+        p.nextClassId = id;
+        if (p.alive) { const pos = [p.ms.x, p.ms.y, p.ms.z, p.ms.yaw]; this.spawnPlayer(p, true); p.ms.x = pos[0]; p.ms.y = pos[1]; p.ms.z = pos[2]; p.ms.yaw = pos[3]; }
+        say(`Class: ${getClass(id).displayName}`);
+        return;
+      }
+      case 'tp': { const q = findPlayer(args[0]); if (!q || !q.alive || !p.alive) { say('No such player alive.'); return; } p.ms.x = q.ms.x + 1; p.ms.y = q.ms.y + 0.5; p.ms.z = q.ms.z; p.ms.vx = p.ms.vy = p.ms.vz = 0; say(`Teleported to ${q.name}.`); return; }
+      case 'kill': { const q = findPlayer(args[0]); if (!q || !q.alive) { say('No such player alive.'); return; } this.combat.kill(q, p, 'admin'); return; }
+      case 'kick': {
+        const q = findPlayer(args[0]);
+        if (!q || q === p) { say('No such player.'); return; }
+        if (q.isBot) { this.removePlayer(q, false); say(`Removed ${q.name}.`); return; }
+        this.send(q.connId, { t: 'error', reason: 'You were removed from this server.' });
+        const cid = q.connId; this.conns.delete(cid); this.removePlayer(q, false);
+        say(`Kicked ${q.name}.`);
+        return;
+      }
+      case 'bots': this.botFill = Math.max(0, Math.min(16, parseInt(args[0], 10) || 0)); this.balanceBots(); this.sendRoster(); say(`Bots fill to ${this.botFill}.`); return;
+      case 'map': { const id = args[0]; if (!MAP_IDS.includes(id)) { say(`Maps: ${MAP_IDS.join(', ')}`); return; } this.changeMap(id, MODES[args[1]] ? args[1] : this.modeId); return; }
+      case 'restart': this.changeMap(this.mapId, this.modeId); return;
+      case 'end': this.endMatch(this.scores[0] === this.scores[1] ? -1 : this.scores[0] > this.scores[1] ? 0 : 1, 'admin'); return;
+      default: say(`Unknown command /${cmd}. Type /help.`);
+    }
+  }
+
+  // keep admin toggles applied every tick
+  applyAdmin(p) {
+    const A = p.admin;
+    if (!A || !p.alive) return;
+    if (A.nocd) {
+      if (p.ability.cdUntil > this.time) p.ability.cdUntil = this.time;
+      if (p.ability.charge < 1 && getClass(p.classId).ability.id === 'overcharge' && !p.ability.active) p.ability.charge = 1;
+      if (p.cloak) { p.cloak.meter = 1; p.cloak.attackAt = 0; }
+    }
+    if (A.ammo) for (const w of p.ws.w) { const d = WEAPONS[w.id]; if (d.clip > 0) w.clip = d.clip; if (d.reserve > 0) w.reserve = d.reserve; }
+  }
+
   // Server-authoritative key rewards for this match (see shared/rewards.js).
   keyRewards(winner) {
     const end = this.time, start = this.matchStart ?? end;
@@ -248,6 +311,9 @@ export class ServerGame {
     const verified = !!account?.username;
     if (verified) name = account.username;
     else if (trusted?.guestName) name = trusted.guestName;
+    // the admin name is reserved: only its verified owner (or the host of their own browser-hosted game) may use it
+    const localHost = !!this.opts.trustHostName && (this.hostConn === null || this.hostConn === connId);
+    if (!verified && name.toLowerCase() === ADMIN_NAME && !localHost) name = `Guest${Math.floor(1000 + Math.random() * 9000)}`;
     // Reconnection
     const ghost = msg.token ? this.ghosts.get(msg.token) : null;
     let p;
@@ -283,6 +349,10 @@ export class ServerGame {
     p.verified = verified;
     this.conns.set(connId, p.id);
     if (this.hostConn === null) this.hostConn = connId;
+    const isAdmin = (verified && name.toLowerCase() === ADMIN_NAME) || !!trusted?.admin
+      || (!!this.opts.trustHostName && connId === this.hostConn && name.toLowerCase() === ADMIN_NAME);
+    p.admin = isAdmin ? (p.admin || { nocd: false, god: false, ammo: false, speed: 1 }) : null;
+    if (isAdmin) this.send(connId, { t: 'notice', text: 'Admin commands enabled. Type /help in chat.' });
     this.sendWelcome(p, 'welcome');
     this.event(['ann', 'join', p.name, p.team]);
     if (this.state === MATCH_STATE.WARMUP) {
@@ -459,6 +529,7 @@ export class ServerGame {
   onChat(p, msg) {
     const text = String(msg.text || '').slice(0, 120).replace(/[<>]/g, '');
     if (!text.trim()) return;
+    if (text.startsWith('/')) { this.adminCommand(p, text.trim()); return; }
     const now = this.time;
     if (p.lastChat && now - p.lastChat < 0.7) return;
     p.lastChat = now;
@@ -508,6 +579,7 @@ export class ServerGame {
     if (def.scope && p.ws.scoped) moveMult *= def.scope.moveMult;
     if (cls.ability.moveMult && this.abilities.isActive(p, cls.ability.id)) moveMult *= cls.ability.moveMult;
     if (p.rallyUntil > this.time) moveMult *= CLASSES.soldier.ability.rallyMoveMult;
+    if (p.admin?.speed) moveMult *= p.admin.speed;
     const frozen = this.state === MATCH_STATE.PREROUND;
     return moveParamsFor(cls, { moveMult, frozen, canSprint: !(def.spinUp && wst.spin > 0) });
   }
@@ -686,7 +758,7 @@ export class ServerGame {
     for (const p of this.players.values()) if (p.bot) p.bot.update(dt);
 
     // commands
-    for (const p of this.players.values()) this.processCommands(p);
+    for (const p of this.players.values()) { this.processCommands(p); if (p.admin) this.applyAdmin(p); }
 
     // per-player server-side effects
     for (const p of this.players.values()) this.updatePlayer(p, dt);
@@ -944,6 +1016,7 @@ export class ServerGame {
         ab: [Math.max(0, round2(p.ability.cdUntil - this.time)), Math.max(0, round2(p.ability.activeUntil - this.time)), round3(p.ability.charge), p.ability.active ? 1 : 0],
         ra: p.alive ? 0 : Math.max(0, round2(p.respawnAt - this.time)),
         ry: p.rallyUntil > this.time ? round2(p.rallyUntil - this.time) : 0,
+        adm: p.admin ? { ...p.admin } : null,
         ck: p.classId === 'spy' ? [round2(p.cloak.meter), p.cloak.on ? 1 : 0, Math.max(0, round2(p.cloak.attackAt - this.time))] : null,
         cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying, wp: p.weapons,
       };

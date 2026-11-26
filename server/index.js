@@ -11,6 +11,7 @@
 //   REQUIRE_ACCOUNT=1                only signed-in players with a username may join
 //   LOG_FILE=logs/players.log        append join/leave/chat records (one JSON object per line)
 //   BANNED_UIDS=uid1,uid2            account ids that may not join
+//   ADMIN_UIDS=uid1                  extra admin accounts (the verified username "owner" is always admin)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,6 +32,8 @@ const ACCOUNTS = {
   requireAccount: process.env.REQUIRE_ACCOUNT === '1',
   banned: new Set((process.env.BANNED_UIDS || '').split(',').map((s) => s.trim()).filter(Boolean)),
 };
+// Extra admin accounts (besides the verified username "owner"): ADMIN_UIDS=uid1,uid2
+const ADMIN_UIDS = new Set((process.env.ADMIN_UIDS || '').split(',').map((s) => s.trim()).filter(Boolean));
 const LOG_FILE = process.env.LOG_FILE || '';
 if (LOG_FILE) fs.mkdirSync(path.dirname(path.resolve(LOG_FILE)), { recursive: true });
 
@@ -143,7 +146,7 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({ t: 'error', reason: res.reject }));
           return;
         }
-        r.game.handleMessage(connId, msg, { account: res.account || null, guestName: res.guestName || null });
+        r.game.handleMessage(connId, msg, { account: res.account || null, guestName: res.guestName || null, admin: !!(res.account?.uid && ADMIN_UIDS.has(res.account.uid)) });
       }).catch((e) => { joining = false; console.error('account check failed', e); ws.send(JSON.stringify({ t: 'error', reason: 'Could not check your account. Try again.' })); });
       return;
     }

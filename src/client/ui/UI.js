@@ -231,6 +231,14 @@ export class UI {
         <div class="field" style="margin-top:12px"><label>Username ${a.username ? '<span class="vcheck">✓</span>' : ''}</label><div class="row-btns" style="margin:0"><input class="input a-user" maxlength="16" value="${esc(a.username || this.app.profile.name || '')}" placeholder="Pick a unique username"><button class="btn a-claim">${a.username ? 'Change' : 'Claim'}</button></div>
         <div class="note a-umsg">${a.username ? 'Servers that verify accounts show this name with a check mark, and nobody else can use it there.' : 'Claim a unique username. Servers that verify accounts show it with a check mark.'}</div></div>
         <p class="note">${sync}</p><p class="note">Your level, stats, loadouts and weapon choices follow you to any device you sign in on.</p>`;
+      if (String(a.username || '').toLowerCase() === 'owner') {
+        // owner tools (profile-side: keys and items live in this profile)
+        const adm = h('div', 'field adm-panel', `<label>Owner tools</label><div class="row-btns" style="margin:0"><input class="input adm-keys" type="number" min="0" max="9999" value="${this.app.profile.keys}" style="max-width:110px"><button class="btn adm-setkeys">Set keys</button><button class="btn adm-items">Get all items</button></div><div class="note">In a match, type <b>/help</b> in chat for admin commands: no cooldowns, god mode, infinite ammo, speed, class, teleport, kick, bots, map and more.</div>`);
+        body.appendChild(adm);
+        adm.querySelector('.adm-keys').addEventListener('keydown', (e) => e.stopPropagation());
+        adm.querySelector('.adm-setkeys').addEventListener('click', () => { this.toast(esc(this.app.profile.adminApply({ action: 'keys', n: +adm.querySelector('.adm-keys').value }, a))); this.renderProfileCard(); });
+        adm.querySelector('.adm-items').addEventListener('click', () => { this.toast(esc(this.app.profile.adminApply({ action: 'items' }, a))); });
+      }
       const uin = body.querySelector('.a-user');
       uin.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') body.querySelector('.a-claim').click(); });
       body.querySelector('.a-claim').addEventListener('click', async () => {
