@@ -194,6 +194,8 @@ export class Combat {
       if (m.backstab && behind) { dmg = getClass(p.classId).backstab?.damage || 200; backstab = true; }
       else if (def.crit.fromBehind && behind) { dmg *= def.critMult; crit = true; }
       if (def.crit.vsBurning && q.burn) { dmg *= def.critMult; crit = true; }
+      // airborne strike after a rocket jump (or within a moment of landing): critical, instant elimination
+      if (def.crit.blastJump && ((p.ms.blastJump && !p.ms.grounded) || p.ms.blastLand > 0)) { dmg = Math.max(dmg, 1000); crit = true; }
       if (m.overchargeOnHit && getClass(p.classId).ability.id === 'overcharge' && !p.ability.active) {
         p.ability.charge = Math.min(1, p.ability.charge + m.overchargeOnHit);
       }
@@ -292,6 +294,7 @@ export class Combat {
       if (!q.alive) continue;
       const self = owner && q.id === owner.id;
       if (!self && owner && q.team === o.team) continue;
+      if (!self && o.noEnemy) continue; // Sky Hopper: harmless to everyone else
       const hb = getClass(q.classId).hitbox;
       // distance from explosion to the player's box
       const cx = Math.max(q.ms.x - hb.width / 2, Math.min(pt[0], q.ms.x + hb.width / 2));
@@ -317,11 +320,15 @@ export class Combat {
         const kl = Math.hypot(kx, ky, kz) || 1;
         const qc = getClass(q.classId);
         const k = kb * (1 - 0.6 * dist / o.radius) * (qc.id === 'juggernaut' ? 0.5 : 1) * (self ? qc.passive.selfKnockbackMult || 1 : 1);
-        applyImpulse(q.ms, (kx / kl) * k, (ky / kl) * k + (self ? 2 : 1), (kz / kl) * k);
+        const hk = self && o.hopper ? 1.2 : 1; // Sky Hopper adds extra horizontal carry
+        applyImpulse(q.ms, (kx / kl) * k * hk, (ky / kl) * k + (self ? 2 : 1), (kz / kl) * k * hk);
+        // launched by your own blast: tracked for airborne shovel crits (and the Sky Hopper's boost)
+        if (self && !q.ms.grounded) q.ms.blastJump = o.hopper ? 2 : Math.max(q.ms.blastJump || 0, 1);
       }
       this.damage(q, dmg, owner, o.weaponId, { crit, self, point: [cx, cy, cz], explosive: true });
     }
     for (const tu of [...g.abilities.turrets.values()]) {
+      if (o.noEnemy) break;
       if (owner && tu.team === o.team) continue;
       const dist = Math.hypot(tu.x - pt[0], tu.y + 0.6 - pt[1], tu.z - pt[2]);
       if (dist < o.radius) g.abilities.damageTurret(tu, explosionDamage(o.damage, dist, o.radius, o.minMult ?? 0.35), owner);
@@ -448,6 +455,10 @@ export class Combat {
         if (!assister) assister = a;
       }
       if (counted) g.mode.onKill(killer, victim);
+      // key rewards: record kills between two real players only (bots never count)
+      if (counted && !killer.isBot && !victim.isBot && killer.team !== victim.team) {
+        (g.humanKills ||= []).push({ killer: killer.id, victim: victim.id, team: killer.team, killerTeam: killer.team, victimTeam: victim.team });
+      }
       if (killer.bot) killer.bot.onKill(victim);
     }
     g.abilities.onOwnerDeath(victim);

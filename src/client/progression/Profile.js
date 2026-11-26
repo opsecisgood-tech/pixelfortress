@@ -4,6 +4,11 @@
 import { levelFromXp, computeMatchXp, ACHIEVEMENTS } from '../../shared/config/progression.js';
 import { CLASS_IDS, resolveWeapons, sanitizeWeaponLoadouts } from '../../shared/config/classes.js';
 import { SLOTS, STARTER_ITEMS, LEGACY_MAP, ITEMS, getItem, canWear } from '../../shared/config/cosmetics.js';
+import { CRATE_BY_ID, rollCrate } from '../../shared/config/crates.js';
+
+const secureRandom = () => {
+  try { return crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296; } catch { return Math.random(); }
+};
 
 const KEY = 'pf_profile_v1';
 
@@ -50,7 +55,7 @@ export class Profile {
     try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { d = null; }
     const blank = {
       name: '', xp: 0, stats: blankStats(), achievements: [], selectedClass: 'scout', recent: [], created: Date.now(),
-      inventory: {}, newItems: [], loadouts: {}, weapons: {},
+      inventory: {}, newItems: [], loadouts: {}, weapons: {}, keys: 0, keysEarned: 0, crateLog: [],
     };
     this.data = d ? { ...blank, ...d, stats: { ...blankStats(), ...(d.stats || {}) } } : blank;
     const D = this.data;
@@ -67,6 +72,8 @@ export class Profile {
     }
     for (const id of Object.keys(D.inventory)) if (!getItem(id)) delete D.inventory[id];
     D.weapons = sanitizeWeaponLoadouts(D.weapons);
+    D.keys = Math.max(0, Math.floor(+D.keys || 0));
+    if (!Array.isArray(D.crateLog)) D.crateLog = [];
   }
 
   migrateLegacy(d) {
@@ -158,6 +165,25 @@ export class Profile {
 
   collection() { return { owned: this.ownedCount(), total: ITEMS.length }; }
 
+  // ---------------------------------------------------------------- keys & crates
+  get keys() { return this.data.keys; }
+  /**
+   * Open a crate tier. The result is decided and saved BEFORE the opening animation plays, so closing
+   * or reloading the page mid-animation can't re-roll it. Returns { tier, item, rarity, refund } or null.
+   */
+  openCrate(tierId, rnd = secureRandom) {
+    const tier = CRATE_BY_ID[tierId];
+    if (!tier || this.data.keys < tier.cost) return null;
+    const res = rollCrate(tier, (id) => this.owns(id), rnd);
+    this.data.keys -= tier.cost;
+    if (res.item) this.grantItem(res.item.id);
+    else this.data.keys += res.refund;
+    this.data.crateLog.unshift({ t: Date.now(), tier: tier.id, item: res.item ? res.item.id : null, rarity: res.rarity, refund: res.refund });
+    this.data.crateLog = this.data.crateLog.slice(0, 20);
+    this.save();
+    return { tier, ...res };
+  }
+
   achievementProgress(a) {
     const v = this.data.stats[a.stat] || 0;
     return { value: v, done: this.data.achievements.includes(a.id), pct: Math.min(1, v / a.goal) };
@@ -191,6 +217,10 @@ export class Profile {
     s.awards += myAwards.length;
 
     this.data.xp += xp.total;
+    // keys decided by the game server at match end (winning team, 10+ kills on real players)
+    const keys = Math.max(0, Math.min(3, Math.floor(+results.keys?.[myId] || 0)));
+    this.data.keys += keys;
+    this.data.keysEarned = (this.data.keysEarned || 0) + keys;
     // achievements
     const newAchievements = [];
     for (const a of ACHIEVEMENTS) {
@@ -200,6 +230,7 @@ export class Profile {
     this.data.recent.unshift({ t: now, map: results.mapId, mode: results.mode, cls: me.classId, won, draw, k: st.kills, d: st.deaths, a: st.assists, score: st.score, xp: xp.total });
     this.data.recent = this.data.recent.slice(0, 12);
     this.save();
-    return { xp, levelBefore, levelAfter: this.level, newAchievements, awards: myAwards, won, draw };
+    const keyInfo = results.keyInfo ? results.keyInfo.teams?.[me.team] : null;
+    return { xp, levelBefore, levelAfter: this.level, newAchievements, awards: myAwards, won, draw, keys, keyInfo, keysRequired: results.keyInfo?.required ?? 10 };
   }
 }

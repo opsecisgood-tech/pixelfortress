@@ -169,3 +169,39 @@ test('weapon loadouts: every class has a valid arsenal and picks are sanitized',
   assert.deepEqual(all.spy, ['longsix', 'derringer', 'stiletto']);
   assert.deepEqual(all.scout, CLASSES.scout.weapons);
 });
+
+test('key rewards: only human-vs-human kills count, anti-farm caps, winners only', async () => {
+  const { computeKeyRewards, KEY_RULES } = await import('../src/shared/rewards.js');
+  const players = [
+    { id: 1, team: 0, presence: 300 }, { id: 2, team: 0, presence: 300 }, { id: 3, team: 0, presence: 10 },
+    { id: 10, team: 1, presence: 300 }, { id: 11, team: 1, presence: 300 }, { id: 12, team: 1, presence: 300 },
+    { id: 50, team: 1, isBot: true, presence: 300 },
+  ];
+  const k = (killer, victim, team = 0) => ({ killer, victim, team, killerTeam: team, victimTeam: 1 - team });
+  // 30 bot kills never count
+  const botKills = Array.from({ length: 30 }, () => k(1, 50));
+  let r = computeKeyRewards({ kills: botKills, players, winner: 0, duration: 300 });
+  assert.equal(r.teams[0].counted, 0);
+  assert.deepEqual(r.keys, {});
+  // farming one victim is capped (pair cap 3, victim cap 5)
+  r = computeKeyRewards({ kills: Array.from({ length: 20 }, () => k(1, 10)), players, winner: 0, duration: 300 });
+  assert.equal(r.teams[0].counted, KEY_RULES.PAIR_CAP);
+  assert.equal(r.teams[0].qualified, false);
+  // 12 legitimate kills spread across three enemies -> qualifies
+  const legit = [];
+  for (const v of [10, 11, 12]) for (const killer of [1, 2]) legit.push(k(killer, v), k(killer, v));
+  r = computeKeyRewards({ kills: legit, players, winner: 0, duration: 300 });
+  assert.equal(r.teams[0].counted, 12);
+  assert.equal(r.teams[0].qualified, true);
+  assert.equal(r.keys[1], 2, 'base key + personal bonus (6 kills)');
+  assert.equal(r.keys[2], 2);
+  assert.equal(r.keys[3], undefined, 'joined too late and got no kills');
+  assert.equal(r.keys[10], undefined, 'losing team gets nothing');
+  // same kills but the team lost / draw / match too short -> nothing
+  assert.deepEqual(computeKeyRewards({ kills: legit, players, winner: 1, duration: 300 }).keys, {});
+  assert.deepEqual(computeKeyRewards({ kills: legit, players, winner: -1, duration: 300 }).keys, {});
+  assert.deepEqual(computeKeyRewards({ kills: legit, players, winner: 0, duration: 30 }).keys, {});
+  // unknown ids (not in the server's player list) never count
+  r = computeKeyRewards({ kills: Array.from({ length: 12 }, (_, i) => k(1, 900 + i)), players, winner: 0, duration: 300 });
+  assert.equal(r.teams[0].counted, 0);
+});

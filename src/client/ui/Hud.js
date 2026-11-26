@@ -487,6 +487,14 @@ export class Hud {
   }
 
   // ---------------------------------------------------------------- chat
+  // Big green "CRITICAL HIT!!!" over the target: pops in, floats up, fades.
+  critPopup(x, y) {
+    const d = h('div', 'crit-pop', 'CRITICAL<br>HIT!!!');
+    d.style.left = `${x}px`; d.style.top = `${y}px`;
+    this.el.dmg.appendChild(d);
+    setTimeout(() => d.remove(), 1300);
+  }
+
   chatMessage(m) {
     const d = h('div', 'chatline', `${m.teamOnly ? '(Team) ' : ''}<b class="t${m.team}">${esc(m.from)}</b>${m.v ? VERIFIED : ''}: ${esc(m.text)}`);
     this.el.chat.appendChild(d);

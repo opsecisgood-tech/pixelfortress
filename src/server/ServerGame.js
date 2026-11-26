@@ -17,6 +17,7 @@ import { createWeaponState, stepWeapons, packWeaponState, refillAmmo, needsAmmo 
 import { chooseTeam, canSwitchTeam, classAllowed, isValidTeam } from '../shared/teams.js';
 import { fallDamage } from '../shared/damage.js';
 import { assignAwards, mvpScore } from '../shared/awards.js';
+import { computeKeyRewards, KEY_RULES } from '../shared/rewards.js';
 import { getMap, MAP_IDS } from '../maps/index.js';
 import { Combat } from './combat.js';
 import { Projectiles } from './projectiles.js';
@@ -33,7 +34,7 @@ const navCache = new Map();
 // Bots pick a random weapon from each slot's arsenal so alternates show up in matches.
 function randomWeaponPicks() {
   const out = {};
-  for (const id of CLASS_IDS) out[id] = (getClass(id).arsenal || []).map((list) => list[Math.floor(Math.random() * list.length)]);
+  for (const id of CLASS_IDS) out[id] = (getClass(id).arsenal || []).map((list) => { const ok = list.filter((w) => !WEAPONS[w]?.botAvoid); return ok[Math.floor(Math.random() * ok.length)] || list[0]; });
   return sanitizeWeaponLoadouts(out);
 }
 
@@ -98,6 +99,7 @@ export class ServerGame {
     this.timeLeft = this.modeCfg.duration;
     this.matchStart = this.time;
     this.results = null;
+    this.humanKills = [];   // kills between real players this match (for key rewards)
     this.announced = {};
   }
 
@@ -135,6 +137,7 @@ export class ServerGame {
     this.results = {
       winner, reason, scores: [...this.scores], duration: Math.round(this.time - this.matchStart),
       mapId: this.mapId, mode: this.modeId, players: list, awards, mvps,
+      ...this.keyRewards(winner),
       teamStats: [0, 1].map((t) => {
         const ps = list.filter((p) => p.team === t);
         const sum = (k) => ps.reduce((s, p) => s + (p.stats[k] || 0), 0);
@@ -144,6 +147,18 @@ export class ServerGame {
     this.broadcast({ t: 'res', r: this.results });
     this.event(['ann', 'end', winner]);
     this.log(`match ended winner=${winner} ${reason}`);
+  }
+
+  // Server-authoritative key rewards for this match (see shared/rewards.js).
+  keyRewards(winner) {
+    const end = this.time, start = this.matchStart ?? end;
+    const players = [...this.players.values()].map((p) => ({ id: p.id, team: p.team, isBot: p.isBot, presence: end - Math.max(p.joinedAt ?? start, start) }));
+    const r = computeKeyRewards({ kills: this.humanKills || [], players, winner, duration: end - start });
+    for (const [id, n] of Object.entries(r.keys)) {
+      const p = this.players.get(+id);
+      if (p) this.opts.audit?.({ ev: 'keys', name: p.name, uid: p.uid || null, verified: !!p.verified, keys: n });
+    }
+    return { keys: r.keys, keyInfo: { teams: r.teams, required: KEY_RULES.TEAM_KILLS_REQUIRED } };
   }
 
   nextMatch() {
@@ -349,7 +364,7 @@ export class ServerGame {
       cloak: { on: false, meter: 1, attackAt: 0 }, rallyUntil: 0, prevAltBtn: false,
       disguise: null, burn: null, revealedUntil: 0, healTarget: -1, lastBeam: 0, healedBy: new Map(),
       damageLog: [], stats: emptyStats(), carrying: -1, ping: 0, pingN: 0, pingSent: 0,
-      firingUntil: 0, lastResupply: 0, lastCmdTime: this.time, bot: null, lagTime: 0,
+      firingUntil: 0, lastResupply: 0, lastCmdTime: this.time, bot: null, lagTime: 0, joinedAt: this.time,
     };
     if (isBot) p.bot = new BotController(this, p);
     this.players.set(id, p);
@@ -924,7 +939,7 @@ export class ServerGame {
       const me = {
         id: p.id, ack: p.lastSeq, sc: p.spawnCount, alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxHp,
         m: [round3(p.ms.x), round3(p.ms.y), round3(p.ms.z), round3(p.ms.vx), round3(p.ms.vy), round3(p.ms.vz),
-          p.ms.grounded ? 1 : 0, p.ms.crouch ? 1 : 0, p.ms.airJumps, round3(p.ms.coyote), round3(p.ms.jumpBuffer), p.ms.prevButtons, round3(p.ms.landTimer), round3(p.ms.airTime)],
+          p.ms.grounded ? 1 : 0, p.ms.crouch ? 1 : 0, p.ms.airJumps, round3(p.ms.coyote), round3(p.ms.jumpBuffer), p.ms.prevButtons, round3(p.ms.landTimer), round3(p.ms.airTime), p.ms.blastJump | 0, round3(p.ms.blastLand || 0)],
         w: packWeaponState(p.ws),
         ab: [Math.max(0, round2(p.ability.cdUntil - this.time)), Math.max(0, round2(p.ability.activeUntil - this.time)), round3(p.ability.charge), p.ability.active ? 1 : 0],
         ra: p.alive ? 0 : Math.max(0, round2(p.respawnAt - this.time)),

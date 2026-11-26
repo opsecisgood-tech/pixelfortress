@@ -65,3 +65,24 @@ test('profile inventory: starter items, match results grant XP only, class-locke
   assert.equal(p.equip('spy', 'hat', null), true);
   assert.equal(p.loadout('spy').hat, null);
 });
+
+test('crates: tier odds are valid, better tiers give more per key, rolls avoid duplicates', async () => {
+  const { CRATE_TIERS, CRATE_BY_ID, rollRarity, rollCrate, epicPerKey } = await import('../src/shared/config/crates.js');
+  assert.equal(CRATE_TIERS.length, 3);
+  for (let i = 1; i < CRATE_TIERS.length; i++) {
+    assert.ok(CRATE_TIERS[i].cost > CRATE_TIERS[i - 1].cost);
+    assert.ok(epicPerKey(CRATE_TIERS[i]) > epicPerKey(CRATE_TIERS[i - 1]), 'more keys = better value');
+  }
+  // the empirical distribution matches the advertised odds
+  let seed = 7; const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  const tier = CRATE_BY_ID.armored, n = 40000, hist = new Array(7).fill(0);
+  for (let i = 0; i < n; i++) hist[rollRarity(tier, rnd)]++;
+  tier.odds.forEach((p, r) => assert.ok(Math.abs(hist[r] / n * 100 - p) < 1.2, `rarity ${r}: ${hist[r] / n * 100} vs ${p}`));
+  assert.equal(hist[0] + hist[1], 0, 'armored crates never drop common/uncommon');
+  // no duplicates while unowned items remain
+  const owned = new Set();
+  for (let i = 0; i < 200; i++) { const r = rollCrate(CRATE_BY_ID.vault, (id) => owned.has(id), rnd); assert.ok(r.item && !owned.has(r.item.id)); owned.add(r.item.id); }
+  // owning everything from the rolled rarity up gives keys back
+  const all = rollCrate(CRATE_BY_ID.vault, () => true, rnd);
+  assert.equal(all.item, null); assert.ok(all.refund >= 1);
+});

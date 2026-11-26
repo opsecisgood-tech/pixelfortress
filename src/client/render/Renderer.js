@@ -2,6 +2,7 @@
 // presets, resize handling, and offscreen generation of class portraits & weapon icons.
 import * as THREE from 'three';
 import { Viewmodel } from './Viewmodel.js';
+import { CrateStage } from './CrateStage.js';
 import { CharacterRig } from './CharacterModel.js';
 import { buildWeapon } from './WeaponModels.js';
 import { tickCosmeticFx } from './CosmeticModels.js';
@@ -26,6 +27,7 @@ export class Renderer {
     this.scene.add(this.camera);
     this.vm = new Viewmodel();
     this.showcase = new Showcase();
+    this.crateStage = new CrateStage();
     this.resize();
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 200));
@@ -63,10 +65,15 @@ export class Renderer {
   }
 
   renderMenu(dt) {
-    this.showcase.update(dt, this.aspect);
     tickCosmeticFx(performance.now() / 1000);
     this.gl.setRenderTarget(null);
     this.gl.clear();
+    if (this.crateStage.active) {
+      this.crateStage.update(dt, this.aspect);
+      this.gl.render(this.crateStage.scene, this.crateStage.camera);
+      return;
+    }
+    this.showcase.update(dt, this.aspect);
     this.gl.render(this.showcase.scene, this.showcase.camera);
   }
 

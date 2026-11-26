@@ -8,6 +8,7 @@ import { MODES } from '../../shared/config/modes.js';
 import { ACHIEVEMENTS, levelFromXp } from '../../shared/config/progression.js';
 import { getItem } from '../../shared/config/cosmetics.js';
 import { Armory } from './Armory.js';
+import { CrateUI, KEY_SVG } from './Crates.js';
 import { bannerCSS } from '../render/ItemIcons.js';
 import { authErrorText } from '../auth/Auth.js';
 import { mapList, MAP_IDS, getMap } from '../../maps/index.js';
@@ -66,6 +67,7 @@ export class UI {
     this.root.appendChild(this.toasts);
     this.previewTeam = 0;
     this.armory = new Armory(this);
+    this.crates = new CrateUI(this);
   }
 
   sfx(kind) { if (kind === 'hover') this.app.audio.uiHover(); else this.app.audio.uiClick(); }
@@ -110,7 +112,7 @@ export class UI {
         <div class="tm-panel tm-recent"></div>
         <div class="tm-bigbtns">
           <button class="tm-big" data-go="loadout">Loadout</button>
-          <button class="tm-big" data-go="stats">Achievements</button>
+          <button class="tm-big tm-crates" data-go="crates">Crates <span class="tm-keys"></span></button>
         </div>
         <button class="tm-news" title="Play ${esc(featured.name)} against bots">
           <span class="art">${featured.preview.map((c) => `<i style="background:${c}"></i>`).join('')}</span>
@@ -184,6 +186,8 @@ export class UI {
     const s = p.data.stats;
     const segs = 10, on = Math.floor((L.into / L.need) * segs);
     const rank = L.level < 5 ? 'Recruit' : L.level < 10 ? 'Private' : L.level < 20 ? 'Corporal' : L.level < 35 ? 'Sergeant' : 'Veteran';
+    const kb = this.menuEl.querySelector('.tm-keys');
+    if (kb) kb.innerHTML = `${KEY_SVG}${p.keys}`;
     const card = this.menuEl.querySelector('.tm-profile');
     card.innerHTML = `
       <img class="av" src="${this.app.icons.portraits[`${cls.id}_${this.previewTeam}`]}" alt="">
@@ -287,18 +291,19 @@ export class UI {
     const sheet = h('div', 'sheet plate stripe-edge');
     if (kind === 'loadout') sheet.style.width = 'min(780px, 100%)';
     if (kind === 'account') sheet.style.width = 'min(520px, 100%)';
+    if (kind === 'crates') sheet.style.width = 'min(980px, 100%)';
     wrap.appendChild(sheet);
     this.root.appendChild(wrap);
     this.sheet = wrap;
     this.sheetKind = kind;
     this.menuOpen = true;
     this.app.touch?.setActive(false);
-    const titles = { account: 'Account', play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
+    const titles = { crates: 'Crates', account: 'Account', play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
     sheet.innerHTML = `<div class="sheet-head"><h2>${titles[kind] || ''}</h2><button class="btn ghost close-x" aria-label="Close">✕</button></div><div class="sheet-body"></div>`;
     const body = sheet.querySelector('.sheet-body');
     sheet.querySelector('.close-x').addEventListener('click', () => this.closeSheet(true));
     wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) this.closeSheet(true); });
-    const fn = { account: () => this.renderAccount(body), play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
+    const fn = { crates: () => this.crates.render(body), account: () => this.renderAccount(body), play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
     if (fn) fn();
     this.wireSounds(sheet);
     if (kind === 'loadout') this.updateShowcase(-1.6);
@@ -693,13 +698,14 @@ export class UI {
       <div class="res-mid">
         <div class="awards">${r.awards.map((a) => `<div class="award plate thin"><img src="${icons.portraits[`${a.classId}_${a.team}`]}" alt=""><div><div class="t">${esc(a.title)}</div><div class="n" style="color:${a.team ? '#8fb8ff' : '#ff8f80'}">${esc(a.name)}${a.playerId === myId ? ' (you)' : ''}</div><div class="v">${a.value.toLocaleString()} ${esc(a.unit)}</div></div></div>`).join('')}</div>
         <div class="podium-names">${mvps.map((p, i) => `<div><span>${['MVP', '2nd', '3rd'][i]}</span>${esc(p.name)}</div>`).join('')}</div>
-        <div class="xp-panel plate">${summary ? `<h3>${summary.won ? 'Victory' : summary.draw ? 'Draw' : 'Defeat'} · XP earned</h3>${summary.xp.lines.map((l) => `<div class="xp-line"><span>${esc(l.label)}${l.count > 1 ? ` ×${l.count}` : ''}</span><b>+${l.xp}</b></div>`).join('')}<div class="xp-total"><span>Total</span><span>+${summary.xp.total}</span></div>${summary.levelAfter > summary.levelBefore ? `<div class="levelup">Level up! You are now level ${summary.levelAfter}</div>` : ''}${summary.newAchievements.map((a) => `<div class="levelup" style="font-family:var(--ui);font-weight:700">Badge unlocked: ${esc(a.name)}</div>`).join('')}<div class="xpbar" style="margin-top:12px"><i style="width:${levelFromXp(this.app.profile.data.xp).into / levelFromXp(this.app.profile.data.xp).need * 100}%"></i></div>` : '<p class="note">Spectated match</p>'}</div>
+        <div class="xp-panel plate">${summary ? `<h3>${summary.won ? 'Victory' : summary.draw ? 'Draw' : 'Defeat'} · XP earned</h3>${summary.xp.lines.map((l) => `<div class="xp-line"><span>${esc(l.label)}${l.count > 1 ? ` ×${l.count}` : ''}</span><b>+${l.xp}</b></div>`).join('')}<div class="xp-total"><span>Total</span><span>+${summary.xp.total}</span></div>${summary.levelAfter > summary.levelBefore ? `<div class="levelup">Level up! You are now level ${summary.levelAfter}</div>` : ''}${summary.newAchievements.map((a) => `<div class="levelup" style="font-family:var(--ui);font-weight:700">Badge unlocked: ${esc(a.name)}</div>`).join('')}${this.keyLine(summary)}<div class="xpbar" style="margin-top:12px"><i style="width:${levelFromXp(this.app.profile.data.xp).into / levelFromXp(this.app.profile.data.xp).need * 100}%"></i></div>` : '<p class="note">Spectated match</p>'}</div>
       </div>
       <div class="res-table"><table class="tbl"><thead><tr><th>Player</th><th>Team</th><th>Class</th><th class="num">Score</th><th class="num">K</th><th class="num">A</th><th class="num">D</th><th class="num">Damage</th><th class="num">Healing</th>${r.mode === 'ctf' ? '<th class="num">Caps</th><th class="num">Returns</th>' : ''}</tr></thead><tbody>${players.map((p) => `<tr style="${p.id === myId ? 'background:rgba(240,180,41,.15)' : ''}"><td>${esc(p.name)}${p.isBot ? ' <span class="muted small">bot</span>' : ''}</td><td style="color:${p.team ? '#8fb8ff' : '#ff8f80'}">${TEAM_NAMES[p.team]}</td><td>${esc(getClass(p.classId).displayName)}</td><td class="num">${p.stats.score}</td><td class="num">${p.stats.kills}</td><td class="num">${p.stats.assists}</td><td class="num">${p.stats.deaths}</td><td class="num">${Math.round(p.stats.damage)}</td><td class="num">${Math.round(p.stats.healing)}</td>${r.mode === 'ctf' ? `<td class="num">${p.stats.captures}</td><td class="num">${p.stats.returns}</td>` : ''}</tr>`).join('')}</tbody><tfoot>${r.teamStats.map((t, i) => `<tr class="muted"><td>${TEAM_NAMES[i]} total</td><td></td><td></td><td></td><td class="num">${t.kills}</td><td class="num">${t.assists}</td><td class="num">${t.deaths}</td><td class="num">${Math.round(t.damage)}</td><td class="num">${Math.round(t.healing)}</td>${r.mode === 'ctf' ? `<td class="num">${t.captures}</td><td></td>` : ''}</tr>`).join('')}</tfoot></table></div>
       <div class="res-foot"><span class="note next" style="align-self:center">Next match starting soon…</span><button class="btn primary stay">Stay for next match</button><button class="btn leave">Return to menu</button></div>`;
     this.root.appendChild(el);
     this.resultsEl = el;
     el.querySelector('.leave').addEventListener('click', () => this.app.leaveMatch());
+    el.querySelector('.res-crates')?.addEventListener('click', () => { this.app.leaveMatch(); setTimeout(() => this.openSheet('crates'), 300); });
     el.querySelector('.stay').addEventListener('click', () => { el.querySelector('.stay').disabled = true; el.querySelector('.next').textContent = 'Waiting for the server to start the next match…'; });
     this.wireSounds(el);
     // podium: MVP characters with their victory poses
@@ -708,6 +714,15 @@ export class UI {
     this.app.touch?.setActive(false);
     this.hud.show(false);
     this.app.audio.startMusic('results');
+  }
+
+  // Results screen: keys earned this match, or how close the team got.
+  keyLine(s) {
+    if (!s) return '';
+    if (s.keys > 0) return `<div class="res-keys got">${KEY_SVG}<b>+${s.keys} ${s.keys === 1 ? 'key' : 'keys'}</b><button class="btn primary small res-crates">Open crates</button></div>`;
+    const got = s.keyInfo ? s.keyInfo.counted : 0, need = s.keysRequired || 10;
+    const why = !s.won ? 'Keys go to the winning team' : got < need ? `Team kills on real players: ${got}/${need}` : 'Not eligible this match';
+    return `<div class="res-keys">${KEY_SVG}<span>${esc(why)} <span class="muted">(bots don't count)</span></span></div>`;
   }
 
   hideResults() {

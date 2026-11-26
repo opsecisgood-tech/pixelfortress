@@ -3,7 +3,7 @@ import { getClass } from '../shared/config/classes.js';
 import { shotDirections } from '../shared/weaponLogic.js';
 import { rayAabb, round2 } from '../shared/math.js';
 
-export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt', 'sticky'];
+export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt', 'sticky', 'hopshell'];
 export const MAX_STICKIES = 8;
 
 // Shared muzzle offset so client-predicted projectiles line up with server ones.
@@ -34,7 +34,7 @@ export class Projectiles {
         gravity: pr.gravity, radius: pr.radius, life: pr.lifetime, bounce: pr.bounce || 0,
         explode: pr.explode || null, damage: def.damage, ignite: !!pr.ignite, fuseExplode: !!pr.fuseExplode,
         crit: def.crit, critMult: def.critMult, key: ev.shot,
-        stick: !!pr.stick, noAutoExplode: !!pr.noAutoExplode, armTime: pr.armTime || 0,
+        stick: !!pr.stick, noAutoExplode: !!pr.noAutoExplode, armTime: pr.armTime || 0, passPlayers: !!pr.passPlayers,
       });
     }
     if (pr.kind === 'sticky') this.capStickies(p.id);
@@ -75,7 +75,7 @@ export class Projectiles {
       gravity: o.gravity || 0, radius: o.radius || 0.1, born: this.g.time, die: this.g.time + (o.life || 3),
       bounce: o.bounce || 0, explode: o.explode, damage: o.damage, ignite: o.ignite, fuseExplode: o.fuseExplode,
       stick: !!o.stick, stuck: false, crit: o.crit || {}, critMult: o.critMult || 1, key: o.key || 0, detonate: false,
-      noAutoExplode: !!o.noAutoExplode, armTime: o.armTime || 0,
+      noAutoExplode: !!o.noAutoExplode, armTime: o.armTime || 0, passPlayers: !!o.passPlayers,
     };
     this.list.set(id, pr);
     return pr;
@@ -101,7 +101,7 @@ export class Projectiles {
     const ex = pr.explode;
     this.g.combat.explode([pr.x, pr.y, pr.z], {
       owner, team: pr.team, weaponId: pr.weaponId, damage: pr.damage, radius: ex.radius, minMult: ex.minMult,
-      knockback: ex.knockback, selfKnockback: ex.selfKnockback, selfMult: ex.selfMult,
+      knockback: ex.knockback, selfKnockback: ex.selfKnockback, selfMult: ex.selfMult, noEnemy: !!ex.noEnemy, hopper: !!ex.hopper,
       directTarget: pr.directTarget || null, critMult: pr.crit.directHit ? pr.critMult : 0, key: `${pr.owner}:${pr.key}`,
     });
     this.remove(pr);
@@ -112,7 +112,7 @@ export class Projectiles {
     for (const pr of [...this.list.values()]) {
       if (pr.detonate) { this.detonate(pr); continue; }
       if (g.time >= pr.die) {
-        if (pr.explode && !pr.noAutoExplode && (pr.fuseExplode || pr.kind === 'shell' || pr.kind === 'detcharge')) this.detonate(pr);
+        if (pr.explode && !pr.noAutoExplode && (pr.fuseExplode || pr.kind === 'shell' || pr.kind === 'hopshell' || pr.kind === 'detcharge')) this.detonate(pr);
         else if (pr.kind === 'sticky') this.fizzle(pr);
         else this.remove(pr);
         continue;
@@ -137,7 +137,7 @@ export class Projectiles {
         const wh = g.world.raycast(pr.x, pr.y, pr.z, nx, ny, nz, len + pr.radius);
         let worldT = wh ? Math.max(0, wh.t - pr.radius) : Infinity;
         if (worldT < bestT) bestT = worldT; else worldT = Infinity;
-        if (pr.kind !== 'detcharge') {
+        if (pr.kind !== 'detcharge' && !pr.passPlayers) {
           for (const q of g.players.values()) {
             if (!q.alive || q.team === pr.team) continue;
             if (g.time - pr.born < 0.03 && q.id === pr.owner) continue;

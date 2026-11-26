@@ -284,7 +284,9 @@ export class Game {
       this.r.vm.visible = !ui.thirdPerson;
       const selfCloak = !!me.ck?.[1];
       if (selfCloak || this.vmCloaked) { this.vmCloaked = selfCloak; applyCloak(this.r.vm.rig, selfCloak ? 'self' : null); }
+      const side = (Math.cos(this.yaw) * n.ms.vx - Math.sin(this.yaw) * n.ms.vz) / 7;
       this.r.vm.update(dt, {
+        strafe: Math.max(-1, Math.min(1, side)), vy: n.ms.vy,
         speed: Math.hypot(n.ms.vx, n.ms.vz), grounded: n.ms.grounded, sprint: n.ms.sprinting, crouch: n.ms.crouch,
         scoped, spun: def.spinUp ? w.spin > 0 : false, firing: !!(buttons & 128), lookDX: inp.lookDX, lookDY: inp.lookDY,
         bobScale: this.settings.reduceMotion ? 0.2 : this.settings.viewBob, aspect: this.r.aspect,
@@ -394,6 +396,7 @@ export class Game {
       case 'shell': bx(g, 0, -0.1, 0, 0.2, 0.2, 0.5, 0x5e6a3a); bx(g, 0, -0.06, -0.27, 0.12, 0.12, 0.08, col); bx(g, 0, -0.07, 0.27, 0.14, 0.14, 0.06, 0xffa030, { basic: true }); break;
       case 'charge': bx(g, 0, -0.13, 0, 0.26, 0.26, 0.26, 0x3a3a3a); bx(g, 0, -0.05, 0, 0.28, 0.08, 0.28, col); break;
       case 'detcharge': bx(g, 0, -0.1, 0, 0.36, 0.2, 0.36, 0x545c3c); bx(g, 0, 0.1, 0, 0.12, 0.06, 0.12, 0xff3030, { basic: true, name: 'blink' }); break;
+      case 'hopshell': bx(g, 0, -0.09, 0, 0.18, 0.18, 0.45, 0xf08a24); bx(g, 0, -0.05, -0.25, 0.12, 0.12, 0.08, 0xffffff); bx(g, 0, -0.06, 0.24, 0.13, 0.13, 0.06, 0xffd040, { basic: true }); break;
       case 'sticky': bx(g, 0, -0.11, 0, 0.22, 0.22, 0.22, 0x2e3034); bx(g, 0, -0.05, 0, 0.24, 0.07, 0.24, col); for (const [x, z] of [[0.13, 0], [-0.13, 0], [0, 0.13], [0, -0.13]]) bx(g, x, -0.13, z, 0.06, 0.06, 0.06, 0x8a9098); bx(g, 0, 0.11, 0, 0.07, 0.05, 0.07, team ? 0x7ac8ff : 0xff6a50, { basic: true, name: 'blink' }); break;
       default: bx(g, 0, -0.05, 0, 0.1, 0.1, 0.1, 0xffffff, { basic: true });
     }
@@ -573,10 +576,25 @@ export class Game {
         R.vy = (s.y - R.lastPos[1]) / Math.max(dt, 1e-3);
       }
       R.speed = damp(R.speed || 0, speed, 10, dt);
+      // movement direction relative to facing (for strafe/backpedal animation) and turn rate
+      if (R.lastPos && speed > 0.3) {
+        const vx = (s.x - R.lastPos[0]) / Math.max(dt, 1e-3), vz = (s.z - R.lastPos[2]) / Math.max(dt, 1e-3);
+        const fwd = (-Math.sin(s.yaw) * vx - Math.cos(s.yaw) * vz) / speed, side = (Math.cos(s.yaw) * vx - Math.sin(s.yaw) * vz) / speed;
+        R.fwd = damp(R.fwd ?? 1, fwd, 8, dt); R.side = damp(R.side ?? 0, side, 8, dt);
+      } else { R.fwd = damp(R.fwd ?? 1, 1, 4, dt); R.side = damp(R.side ?? 0, 0, 4, dt); }
+      const turn = R.lastYaw !== undefined ? wrapAngle(s.yaw - R.lastYaw) / Math.max(dt, 1e-3) : 0;
+      R.lastYaw = s.yaw;
+      R.turn = damp(R.turn || 0, Math.max(-6, Math.min(6, turn)), 6, dt);
+      // landing after a real fall
+      const grounded = !!(a[7] & PF.GROUNDED);
+      R.airT = grounded ? 0 : (R.airT || 0) + dt;
+      if (grounded && R.wasAir > 0.35) R.rig.onLand(Math.min(1, R.wasAir / 1.2));
+      R.wasAir = grounded ? 0 : R.airT;
       R.lastPos = [s.x, s.y, s.z];
       R.rig.update(dt, {
-        speed: R.speed, grounded: !!(a[7] & PF.GROUNDED), crouch: !!(a[7] & PF.CROUCH), pitch: s.pitch,
+        speed: R.speed, grounded, crouch: !!(a[7] & PF.CROUCH), pitch: s.pitch,
         firing: !!(a[7] & PF.FIRING), reloading: !!(a[7] & PF.RELOADING), spun: !!(a[7] & PF.SPUN), vy: R.vy || 0,
+        fwd: R.fwd, side: R.side, turn: R.turn,
       });
       // x-ray: revealed enemies (recon), carriers, and teammates behind walls
       const isMate = entry.team === myTeam;
@@ -749,6 +767,7 @@ export class Game {
         const stuck = vx === 0 && vy === 0 && vz === 0;
         m.position.set(x + vx * age, y + vy * age - 0.5 * g * age * age, z + vz * age);
         if (!stuck) m.lookAt(m.position.x + vx, m.position.y + vy - g * age, m.position.z + vz);
+        if (kind === 'hopshell' && Math.random() < 0.6) this.effects.spawn({ x: m.position.x, y: m.position.y, z: m.position.z, life: 0.45, size: 0.11, end: 0.5, color: 0xffffff, g: -0.5, drag: 2 });
         if (kind === 'flare' || kind === 'shell') { if (Math.random() < 0.6) this.effects.spawn({ x: m.position.x, y: m.position.y, z: m.position.z, life: 0.5, size: 0.12, end: 0.6, color: kind === 'flare' ? 0xffa030 : 0x888888, g: -0.5, drag: 2 }); }
         if (kind === 'detcharge') { const b = m.getObjectByName('blink'); if (b) b.visible = Math.sin(this.time * 10) > 0; }
         if (kind === 'sticky') { const b = m.getObjectByName('blink'); if (b) b.visible = stuck && Math.sin(this.time * 6 + id) > -0.2; }
@@ -1079,6 +1098,10 @@ export class Game {
     if (attacker === me && victim !== me) {
       const crit = !!(flags & 2), head = !!(flags & 1);
       this.ui.hud.hitmarker(crit || head ? 'crit' : 'hit');
+      if (crit) {
+        const v = new THREE.Vector3(x, y + 0.7, z).project(this.r.camera);
+        if (v.z < 1) this.ui.hud.critPopup((v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight);
+      }
       this.audio.hitmarker(crit, head, false);
       if (this.settings.damageNumbers) {
         const v = new THREE.Vector3(x, y + 0.3, z).project(this.r.camera);

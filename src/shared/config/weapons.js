@@ -412,7 +412,19 @@ def('shovel', {
   name: 'Shovel', slot: 2, type: 'melee', category: 'Melee',
   description: 'Entrenching shovel. A solid all-round swing.',
   damage: 55, fireInterval: 0.8, auto: true,
-  melee: { range: 2.2, angle: 0.55, windup: 0.14 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+  melee: { range: 2.2, angle: 0.55, windup: 0.14 }, crit: { fromBehind: true, blastJump: true }, crosshair: 'melee', botRange: 2,
+  critNote: 'Hits while rocket-jumping (or just after landing) are critical and eliminate instantly.',
+});
+// Rocket-jump trainer: harmless to everyone else, launches the user high and fast.
+def('skyhopper', {
+  name: 'Sky Hopper', slot: 0, type: 'projectile', category: 'Jump Launcher',
+  description: 'Training launcher. Fire at your feet to launch high and fast with more airtime and air speed. Deals no damage and pushes nobody but you. Pair with the Shovel: a hit while airborne is a critical elimination.',
+  damage: 0, fireInterval: 0.8, clip: 4, reserve: 60,
+  reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.8, reloadInterrupt: 'fire',
+  explosive: true, botAvoid: true,
+  projectile: { kind: 'hopshell', speed: 27, gravity: 0, radius: 0.18, lifetime: 5, passPlayers: true,
+    explode: { radius: 3.4, minMult: 0.35, knockback: 0, selfKnockback: 14, selfMult: 0, noEnemy: true, hopper: true } },
+  recoil: { pitch: 0.05, yaw: 0.01 }, kick: 1.3, crosshair: 'circle', botRange: 14,
 });
 def('stickylauncher', {
   name: 'Sticky Launcher', slot: 1, type: 'projectile', category: 'Sticky Launcher',

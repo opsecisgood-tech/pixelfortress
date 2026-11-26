@@ -58,6 +58,23 @@ export const STOCK_MODELS = {
     },
     fp: { pos: [0.26, -0.22, -0.36], scale: 0.85 },
   },
+  // Sky Hopper: safety-orange training launcher with white bands, a flared padded mouth, a big padded
+  // rear cup and hazard stripes along the top.
+  skyhopper: {
+    w: 62, h: 20, px: 0.0172, grip: [24, 15], muzzle: [61, 8],
+    draw(S) {
+      S.rect(6, 4, 48, 8, 'orange', 7); S.line(7, 5, 53, 5, 'hl'); S.line(6, 11, 53, 11, 'red', 7);
+      for (const x of [14, 26, 44]) S.rect(x, 4, 3, 8, 'white', 7);
+      for (let x = 30; x < 42; x += 3) { S.rect(x, 3, 2, 1, 'yellow', 7); S.rect(x + 1, 3, 1, 1, 'black', 7); }
+      S.poly([[54, 2], [61, 0], [61, 16], [54, 14]], 'orange', 7); S.rect(60, 3, 1, 10, 'black', 7); S.line(54, 2, 61, 0, 'white', 7); S.line(54, 14, 61, 16, 'white', 7);
+      S.poly([[0, 1], [6, 3], [6, 13], [0, 15]], 'white', 7); S.rect(0, 3, 1, 10, 'orange', 7); S.line(1, 2, 5, 3, 'light', 7);
+      S.rect(36, 1, 6, 2, 'dark', 3); S.px(37, 0, 'yellow', 1);
+      S.poly([[22, 12], [27, 12], [26, 19], [21, 19]], 'grip', 3);
+      S.line(27, 12, 27, 14, 'dark', 1); S.line(27, 14, 30, 14, 'dark', 1);
+      S.rect(40, 12, 3, 6, 'grip', 3);
+    },
+    fp: { pos: [0.26, -0.22, -0.36], scale: 0.85 },
+  },
   // Shotgun: pump action with a tube magazine.
   breacher: {
     w: 50, h: 16, px: 0.0172, grip: [15, 11], muzzle: [49, 4],

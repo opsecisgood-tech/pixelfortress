@@ -54,7 +54,7 @@ const BASE_CLASSES = {
     difficulty: 2,
     difficultyLabel: 'Medium',
     weapons: ['blastcaster', 'breacher', 'shovel'],
-    arsenal: [['blastcaster', 'pinpoint'], ['breacher', 'slugthrower'], ['shovel', 'claymore']], // weapon choices per slot (first = default)
+    arsenal: [['blastcaster', 'skyhopper'], ['breacher', 'slugthrower'], ['shovel', 'claymore']], // weapon choices per slot (first = default)
     signature: 'blastcaster',
     ability: {
       id: 'rally', name: 'Rally Cry', key: 'E',

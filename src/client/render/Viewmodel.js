@@ -3,7 +3,7 @@
 // recoil kick per weapon, magazine & shell reloads, melee swings, rotary spin, ability gestures, scope.
 import * as THREE from 'three';
 import { buildWeapon, WEAPON_MODELS } from './WeaponModels.js';
-import { buildArmMesh } from './CharacterModel.js';
+import { buildArmMesh, FIST_MOVES, nextFistMove } from './CharacterModel.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 import { WEAPONS } from '../../shared/config/weapons.js';
 import { damp } from '../../shared/math.js';
@@ -84,6 +84,7 @@ export class Viewmodel {
       this.holder.add(this.armL);
     }
     this.armLBase = this.armL.userData.free ? this.armL.position.clone() : null;
+    this.armLRot = this.armL.rotation.clone();
     this.meleeKind = md.fists ? 'punch' : this.def?.melee?.backstab ? 'stab' : 'slash';
     this.st.equip = 0;
     this.st.reload = -1;
@@ -107,7 +108,10 @@ export class Viewmodel {
     this.st.kick = Math.min(1.6, this.st.kick + k * 0.6);
     this.st.kickRot = Math.min(1.6, this.st.kickRot + k * 0.6);
   }
-  onSwing() { this.st.swing = 0; this.st.punchLeft = !this.st.punchLeft; }
+  onSwing() {
+    this.st.swing = 0;
+    if (this.meleeKind === 'punch') { this.st.combo ||= {}; this.st.fistMove = nextFistMove(this.st.combo, performance.now() / 1000); }
+  }
   onReload(dur, mode) { this.st.reload = 0; this.st.reloadDur = dur; this.st.reloadMode = mode; }
   onReloadDone() { this.st.reload = -1; }
   onEquip() { this.st.equip = 0; }
@@ -138,6 +142,11 @@ export class Viewmodel {
     st.kickRot = damp(st.kickRot, 0, 10, dt);
     st.land = damp(st.land, 0, 8, dt);
     st.ability = Math.max(0, st.ability - dt * 1.6);
+    // strafe roll, jump float (the weapon lags behind vertical motion) and idle breathing
+    st.strafe = damp(st.strafe || 0, s.strafe || 0, 8, dt);
+    st.air = damp(st.air || 0, s.grounded === false ? Math.max(-1, Math.min(1, (s.vy || 0) / 8)) : 0, 6, dt);
+    st.breathT = (st.breathT || 0) + dt;
+    const breath = moving ? 0 : 1;
     const p = this.holder.position, r = this.holder.rotation;
     p.copy(this.base);
     r.copy(this.baseRot);
@@ -147,6 +156,9 @@ export class Viewmodel {
     r.x += st.kickRot * 0.12 - st.tilt * 0.35;
     r.y += st.tilt * 0.6;
     r.z += st.tilt * 0.25 + Math.cos(st.bobT) * 0.01 * bobAmt;
+    p.x -= st.strafe * 0.012; r.z -= st.strafe * 0.07;
+    p.y -= st.air * 0.025; r.x += st.air * 0.06;
+    p.y += Math.sin(st.breathT * 1.6) * 0.003 * breath; r.z += Math.sin(st.breathT * 0.8) * 0.006 * breath; r.x += Math.sin(st.breathT * 1.1) * 0.004 * breath;
     // reload animation: dip & roll
     if (st.reload >= 0) {
       st.reload += dt;
@@ -164,15 +176,16 @@ export class Viewmodel {
     }
     // melee swing: anticipation (windup), a fast accelerating strike, then an eased recovery.
     // slash = high right to low left across the screen; stab = pull back and thrust; punch = alternating jabs.
-    if (this.armL?.userData.free && this.armLBase) this.armL.position.copy(this.armLBase);
+    if (this.armL?.userData.free && this.armLBase) { this.armL.position.copy(this.armLBase); this.armL.rotation.copy(this.armLRot); }
     if (st.swing >= 0) {
       st.swing += dt;
       const kind = this.meleeKind;
       const windup = this.def?.melee?.windup ?? 0.12;
-      const d = kind === 'punch' ? 0.3 : kind === 'stab' ? 0.34 : Math.max(0.4, windup + 0.3);
+      const mv = kind === 'punch' ? (FIST_MOVES[st.fistMove] || FIST_MOVES.jabL) : null;
+      const d = mv ? mv.dur : kind === 'stab' ? 0.34 : Math.max(0.4, windup + 0.3);
       const t = Math.min(1, st.swing / d);
-      const wEnd = kind === 'punch' ? 0.25 : kind === 'stab' ? 0.35 : Math.min(0.4, Math.max(0.22, windup / d));
-      const sEnd = wEnd + 0.22;
+      const wEnd = mv ? mv.w : kind === 'stab' ? 0.35 : Math.min(0.4, Math.max(0.22, windup / d));
+      const sEnd = mv ? mv.s : wEnd + 0.22;
       // key poses as offsets [x, y, z, rotX, rotY, rotZ]
       const POSES = {
         // raise to the upper right with the head tilted right, then sweep down-left across the view
@@ -182,16 +195,20 @@ export class Viewmodel {
         // cock back, then a straight jab toward the crosshair
         punch: [[0.02, -0.03, 0.05, 0, 0, 0], [-0.08, 0.06, -0.22, 0.05, -0.15, 0]],
       };
-      const [W, E] = POSES[kind] || POSES.slash;
+      const [W, E] = mv ? [mv.fp.W, mv.fp.E] : POSES[kind] || POSES.slash;
       const easeOut = (x) => 1 - (1 - x) * (1 - x), easeIn = (x) => x * x, easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
       let P;
       if (t < wEnd) { const x = easeOut(t / wEnd); P = W.map((w) => w * x); }
       else if (t < sEnd) { const x = easeIn((t - wEnd) / (sEnd - wEnd)); P = W.map((w, i) => w + (E[i] - w) * x); }
       else { const x = easeIO((t - sEnd) / (1 - sEnd)); P = E.map((e) => e * (1 - x)); }
-      if (kind === 'punch' && st.punchLeft && this.armL?.userData.free) {
-        // left jab: move the free left fist (mirrored)
-        this.armL.position.set(this.armLBase.x - P[0] * 0.6, this.armLBase.y + P[1], this.armLBase.z + P[2]);
+      if (mv && mv.arm === 'L' && this.armL?.userData.free) {
+        // left-hand punch: move the free left fist; the right fist pulls back into guard
+        this.armL.position.set(this.armLBase.x + P[0], this.armLBase.y + P[1], this.armLBase.z + P[2]);
+        this.armL.rotation.set(this.armLRot.x + P[3], this.armLRot.y + P[4], this.armLRot.z + P[5]);
+        const g = Math.sin(t * Math.PI);
+        p.z += g * 0.04; p.y -= g * 0.015;
       } else {
+        if (mv && this.armL?.userData.free) { const g = Math.sin(t * Math.PI); this.armL.position.z += g * 0.04; this.armL.position.y -= g * 0.015; }
         p.x += P[0]; p.y += P[1]; p.z += P[2];
         r.x += P[3]; r.y += P[4]; r.z += P[5];
       }

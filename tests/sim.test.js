@@ -467,3 +467,43 @@ test('server: input keeps up when the server loop runs behind real time (no comm
     Object.defineProperty(globalThis, 'performance', { value: realPerf, configurable: true, writable: true });
   }
 });
+
+test('server: Sky Hopper launches the soldier (no self damage), ignores enemies; airborne shovel hit is a critical kill', () => {
+  const { g } = makeServer();
+  const s = join(g, 1, 'Sarge', { classId: 'soldier', weapons: { soldier: ['skyhopper', 'breacher', 'shovel'] } });
+  const e = join(g, 2, 'Target', { classId: 'juggernaut' });
+  startPlaying(g);
+  assert.equal(s.weapons[0], 'skyhopper');
+  place(s, 0, 0.01, 18, 0); place(e, 1.2, 0.01, 18);
+  s.ws.slot = 0; s.ws.ready = 0;
+  let seq = s.lastSeq;
+  const cmd = (b, pitch, slot = 0, yaw = 0) => { g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, b, yaw, pitch, slot, g.time]] }); g.tick(); };
+  const hp0 = s.hp, ehp = e.hp, ex = e.ms.x;
+  cmd(BTN.FIRE, -1.5); // straight down at the feet
+  let peak = 0, hop = 0;
+  for (let i = 0; i < 20; i++) { cmd(0, -1.5); peak = Math.max(peak, s.ms.y); hop = Math.max(hop, s.ms.blastJump); }
+  assert.ok(peak > 2, `launched to ${peak.toFixed(2)} m`);
+  assert.equal(hop, 2, 'boosted blast jump state');
+  assert.equal(s.hp, hp0, 'no self damage');
+  assert.equal(e.hp, ehp, 'no damage to others');
+  assert.ok(Math.abs(e.ms.x - ex) < 0.01, 'others are not pushed');
+  // airborne: swing the shovel at the target -> critical instant kill
+  place(e, s.ms.x, s.ms.y - 0.4, s.ms.z - 1.3);
+  s.ws.slot = 2; s.ws.ready = 0; s.ws.w[2].next = 0;
+  const kills0 = s.stats.kills;
+  for (let i = 0; i < 20 && s.stats.kills === kills0; i++) { cmd(i % 2 ? BTN.FIRE : 0, -0.25, 2); place(e, s.ms.x, s.ms.y - 0.4, s.ms.z - 1.3); }
+  assert.equal(s.stats.kills, kills0 + 1, 'airborne shovel hit eliminates a 300 HP target');
+});
+
+test('server: results carry key rewards; bot kills are never recorded', () => {
+  const { g } = makeServer({ botFill: 4 });
+  const a = join(g, 1, 'Alpha', { classId: 'soldier' });
+  startPlaying(g);
+  const bot = [...g.players.values()].find((p) => p.isBot && p.team !== a.team);
+  for (let i = 0; i < 15; i++) { bot.alive = true; bot.hp = 1; g.combat.damage(bot, 50, a, 'blastcaster'); }
+  assert.ok(a.stats.kills >= 15);
+  assert.equal(g.humanKills.length, 0, 'bot kills are not counted for keys');
+  g.endMatch(a.team, 'score');
+  assert.deepEqual(g.results.keys, {});
+  assert.equal(g.results.keyInfo.required, 10);
+});

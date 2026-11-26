@@ -145,7 +145,7 @@ export class NetClient {
     const s = this.ms;
     s.x = m[0]; s.y = m[1]; s.z = m[2]; s.vx = m[3]; s.vy = m[4]; s.vz = m[5];
     s.grounded = !!m[6]; s.crouch = !!m[7]; s.airJumps = m[8]; s.coyote = m[9]; s.jumpBuffer = m[10];
-    s.prevButtons = m[11]; s.landTimer = m[12]; s.airTime = m[13];
+    s.prevButtons = m[11]; s.landTimer = m[12]; s.airTime = m[13]; s.blastJump = m[14] | 0; s.blastLand = m[15] || 0;
     unpackWeaponState(this.ws, me.w);
     void MOVE_SYNC_FIELDS;
   }

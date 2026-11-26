@@ -20,6 +20,7 @@ const WEAPON_SOUNDS = {
   flarelauncher: { kind: 'launcher', f: 600, dur: 0.3, thump: 200, vol: 0.8 },
   blastcaster: { kind: 'launcher', f: 380, dur: 0.45, thump: 80, vol: 1.0 },
   chargelauncher: { kind: 'launcher', f: 500, dur: 0.3, thump: 120, vol: 0.85 },
+  skyhopper: { kind: 'launcher', f: 520, dur: 0.35, thump: 100, vol: 0.85 },
   stickylauncher: { kind: 'launcher', f: 420, dur: 0.28, thump: 140, vol: 0.8 },
   sapper: { kind: 'zap', f: 1400, dur: 0.06, vol: 0.3 },
   // alternates
@@ -429,6 +430,29 @@ export class AudioEngine {
     fs.forEach((f, i) => this.tone(d, t + i * 0.06, 0.12, { type: 'square', f, vol: 0.08 }));
   }
   uiHover() { if (!this.ready()) return; this.tone(this.out(null, 0.15, this.ui), this.ctx.currentTime, 0.04, { type: 'square', f: 1400, vol: 0.06 }); }
+  // Crate show sounds. kind: start | thud | burst | tick | reveal; tier: supply | armored | vault
+  crate(kind, tier = 'supply', rarity = 0) {
+    if (!this.ready()) return;
+    const d = this.out(null, 0.6, this.ui), t = this.ctx.currentTime;
+    const big = tier === 'vault' ? 2 : tier === 'armored' ? 1 : 0;
+    switch (kind) {
+      case 'start': if (big === 2) this.tone(d, t, 1.6, { type: 'sine', f: 110, f2: 330, vol: 0.12 }); else this.noise(d, t, 0.4, { type: 'bandpass', f: 600, f2: 1600, q: 2, vol: 0.15 }); break;
+      case 'thud': this.tone(d, t, 0.25, { type: 'sine', f: 90 - big * 15, f2: 40, vol: 0.5 }); this.noise(d, t, 0.18, { type: 'lowpass', f: 700, vol: 0.4 }); if (big === 1) [0.05, 0.12, 0.2].forEach((o) => this.noise(d, t + o, 0.06, { type: 'bandpass', f: 3200, q: 6, vol: 0.12 })); break;
+      case 'burst':
+        this.noise(d, t, 0.35 + big * 0.2, { type: 'bandpass', f: 900 + big * 500, f2: 3000, q: 1.5, vol: 0.45 });
+        this.tone(d, t, 0.3, { type: 'square', f: 220 + big * 110, f2: 660 + big * 220, vol: 0.08 });
+        if (big === 2) [0, 0.08, 0.16, 0.24].forEach((o, i) => this.tone(d, t + o, 0.3, { type: 'triangle', f: [523, 659, 784, 1047][i], vol: 0.09 }));
+        break;
+      case 'tick': this.tone(d, t, 0.03, { type: 'square', f: 1800 + big * 200, vol: 0.05 }); break;
+      case 'reveal': {
+        const notes = [[392, 523], [440, 554, 659], [523, 659, 784], [523, 659, 784, 1047], [587, 740, 880, 1175], [659, 831, 988, 1319], [523, 659, 784, 1047, 1319, 1568]][rarity] || [523];
+        notes.forEach((f, i) => this.tone(d, t + i * 0.09, 0.5 + rarity * 0.08, { type: rarity >= 4 ? 'triangle' : 'square', f, vol: 0.08 }));
+        if (rarity >= 4) this.noise(d, t, 1.2, { type: 'highpass', f: 5000, vol: 0.12 });
+        break;
+      }
+      default:
+    }
+  }
   uiClick() { if (!this.ready()) return; const d = this.out(null, 0.3, this.ui); const t = this.ctx.currentTime; this.tone(d, t, 0.05, { type: 'square', f: 700, vol: 0.12 }); this.tone(d, t + 0.04, 0.06, { type: 'square', f: 1050, vol: 0.1 }); }
   levelUp() { if (!this.ready()) return; const d = this.out(null, 0.5, this.ui); const t = this.ctx.currentTime; [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(d, t + i * 0.09, 0.3, { type: 'square', f, vol: 0.1 })); }
 

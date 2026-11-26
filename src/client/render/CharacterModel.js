@@ -959,6 +959,38 @@ function emptyWeapon() {
   return g;
 }
 
+// ---------------------------------------------------------------- bare-fist combos (Juggernaut fists)
+// Each punch: arm L/R, duration, timing (windup end, strike end) and key poses for the punching arm and
+// body: rx (arm raise, PI/2 = straight ahead), rz (out/in), ry (arm yaw), torsoY (twist), torsoX (lean),
+// dip (hip drop, m). The off arm tucks into a guard. Shared with the first-person view (fp offsets).
+export const FIST_MOVES = {
+  jabL: { arm: 'L', dur: 0.26, w: 0.25, s: 0.5, W: { rx: 0.85, rz: 0.35, torsoY: 0.1 }, E: { rx: 1.68, rz: 0.04, torsoY: -0.2, torsoX: -0.06 },
+    fp: { W: [0.02, -0.02, 0.05, 0, 0, 0], E: [0.06, 0.04, -0.24, 0.05, 0.12, 0] } },
+  crossR: { arm: 'R', dur: 0.34, w: 0.3, s: 0.55, W: { rx: 0.8, rz: -0.4, torsoY: -0.2 }, E: { rx: 1.7, rz: 0.12, torsoY: 0.5, torsoX: -0.2, dip: 0.04 },
+    fp: { W: [0.04, -0.03, 0.06, 0, 0.1, 0], E: [-0.12, 0.05, -0.26, 0.04, -0.25, -0.1] } },
+  hookL: { arm: 'L', dur: 0.38, w: 0.32, s: 0.58, W: { rx: 1.35, rz: 0.95, ry: 0.4, torsoY: 0.3 }, E: { rx: 1.5, rz: -0.25, ry: -0.6, torsoY: -0.55, torsoX: -0.08, dip: 0.03 },
+    fp: { W: [-0.08, 0.04, 0.02, 0, -0.5, 0.25], E: [0.22, 0.06, -0.14, 0, 0.7, -0.35] } },
+  hookR: { arm: 'R', dur: 0.38, w: 0.32, s: 0.58, W: { rx: 1.35, rz: -0.95, ry: -0.4, torsoY: -0.3 }, E: { rx: 1.5, rz: 0.25, ry: 0.6, torsoY: 0.55, torsoX: -0.08, dip: 0.03 },
+    fp: { W: [0.1, 0.04, 0.02, 0, 0.5, -0.25], E: [-0.22, 0.06, -0.14, 0, -0.7, 0.35] } },
+  upperR: { arm: 'R', dur: 0.42, w: 0.36, s: 0.6, W: { rx: 0.35, rz: -0.2, torsoY: -0.15, torsoX: -0.12, dip: 0.08 }, E: { rx: 2.5, rz: 0.1, torsoY: 0.35, torsoX: 0.12, dip: -0.03 },
+    fp: { W: [0.02, -0.14, 0.04, 0.35, 0, 0], E: [-0.06, 0.14, -0.16, -0.55, -0.1, -0.05] } },
+  overL: { arm: 'L', dur: 0.4, w: 0.34, s: 0.58, W: { rx: 2.6, rz: 0.4, torsoY: 0.25, torsoX: 0.05 }, E: { rx: 1.25, rz: -0.1, torsoY: -0.4, torsoX: -0.22, dip: 0.05 },
+    fp: { W: [-0.04, 0.16, 0.06, -0.4, 0, 0.2], E: [0.12, -0.04, -0.2, 0.45, 0.3, -0.2] } },
+};
+// Combo chains (one is picked when a combo starts; arms alternate apart from the occasional double jab).
+const FIST_CHAINS = [
+  ['jabL', 'crossR', 'hookL', 'upperR'],
+  ['jabL', 'jabL', 'crossR', 'overL'],
+  ['jabL', 'crossR', 'overL', 'hookR'],
+  ['jabL', 'upperR', 'hookL', 'crossR'],
+];
+// Advance a fist-combo state { chain, i, last } and return the next move id. A pause resets the combo.
+export function nextFistMove(st, now) {
+  if (!st.chain || now - (st.last || 0) > 1.1 || st.i >= st.chain.length) { st.chain = FIST_CHAINS[Math.floor(Math.random() * FIST_CHAINS.length)]; st.i = 0; }
+  st.last = now;
+  return st.chain[st.i++];
+}
+
 // ---------------------------------------------------------------- per-class animation styles
 // cadence: stride frequency per m/s; stride: leg swing (rad); lean: [walk, run] forward lean; airLean;
 // bob: hip bounce per step (m); stomp: heavy footfalls; sway: hip roll; twist: torso counter-twist;
@@ -1039,6 +1071,8 @@ export class CharacterRig {
     // torso
     j.torso = new THREE.Group();
     j.hips.add(j.torso);
+    this.torsoBaseY = 0;
+    this.seed = Math.random(); // desynchronises idle motion between characters
     const body = mk('body', prop.body); body.position.y = prop.body[1] * s / 2; j.torso.add(body);
     j.head = new THREE.Group(); j.head.position.y = prop.body[1] * s;
     const head = mk('head', prop.head); head.position.y = prop.head[1] * s / 2; j.head.add(head);
@@ -1074,6 +1108,7 @@ export class CharacterRig {
 
   setWeapon(weaponId, skin) {
     if (this.weaponId === weaponId && this.weaponSkin === skin) return;
+    if (this.weaponId && this.weaponId !== weaponId) this.anim.equip = 0;
     this.weaponId = weaponId;
     this.weaponSkin = skin;
     if (this.weapon) this.j.handR.remove(this.weapon);
@@ -1105,7 +1140,9 @@ export class CharacterRig {
     const moving = sp > 0.4 && st.grounded;
     const running = sp > 6.5;
     const pace = moving ? Math.min(1, sp / 7) : 0;
-    a.phase += dt * (moving ? sp * S.cadence : 0);
+    // walking backwards plays the stride in reverse
+    const back = (st.fwd ?? 1) < -0.35;
+    a.phase += dt * (moving ? sp * S.cadence : 0) * (back ? -1 : 1);
     const amp = pace * S.stride * (running ? 1.1 : 1);
     const sinP = Math.sin(a.phase);
     let legL = sinP * amp, legR = -legL;
@@ -1121,7 +1158,7 @@ export class CharacterRig {
     j.legL.rotation.x = a.legL;
     j.legR.rotation.x = a.legR;
     // hips: height (crouch / landing squash / walk bounce) and side-to-side roll
-    a.land = Math.max(0, a.land - dt * 4);
+    a.land = Math.max(0, a.land - dt * 3.2);
     const now = performance.now() / 1000;
     let bob;
     if (moving) bob = S.stomp ? Math.pow(Math.abs(sinP), 0.6) * S.bob - S.bob * 0.4 : Math.abs(sinP) * S.bob;
@@ -1130,8 +1167,19 @@ export class CharacterRig {
     // keep feet on the ground: rigid legs swung by angle t reach baseHip*cos(t)
     const reach = Math.cos(Math.min(1.2, Math.max(Math.abs(a.legL), Math.abs(a.legR))));
     j.hips.position.y = baseHip * (1 - (a.crouch + a.land * S.land) * (1 - reach)) + bob * (1 - a.crouch);
+    j.hips.position.y -= (a.fistDip || 0) * (1 - a.crouch);
     a.sway = damp(a.sway || 0, sinP * S.sway * pace, 12, dt);
-    j.hips.rotation.z = a.sway;
+    // idle: slow weight shifts from foot to foot (each character on its own rhythm)
+    const idle = !moving && st.grounded && !st.firing && a.swing < 0 && !a.pose;
+    a.idleT = idle ? (a.idleT || 0) + dt : 0;
+    const shift = idle ? Math.sin(now * 0.55 + this.seed * 6) * 0.03 * Math.min(1, a.idleT) : 0;
+    a.shift = damp(a.shift || 0, shift, 4, dt);
+    j.hips.rotation.z = a.sway + a.shift;
+    // strafing: legs turn toward the movement direction (up to ~50 deg), the upper body keeps aiming
+    const side = st.side || 0, fwdC = st.fwd ?? 1;
+    const legYaw = moving ? Math.atan2(-side, Math.max(0.35, Math.abs(fwdC))) * 0.85 * (back ? -1 : 1) : 0;
+    a.legYaw = damp(a.legYaw || 0, legYaw, 8, dt);
+    j.hips.rotation.y = a.legYaw;
     // torso: lean (more when running), counter-twist with the stride, recoil jolt
     const lean = (running ? S.lean[1] : moving ? S.lean[0] : 0) + a.crouch * 0.35 + (a.air > 0.05 ? S.airLean : 0);
     a.torsoX = damp(a.torsoX, -lean, 10, dt);
@@ -1139,13 +1187,24 @@ export class CharacterRig {
     a.kick = Math.max(0, a.kick - dt * fire.decay);
     const twist = -sinP * S.twist * pace * (this.melee ? 1 : 0.4);
     let torsoX = a.torsoX + a.kick * fire.torso;
-    let torsoY = twist, torsoZ = -a.sway * 0.6;
+    let torsoY = twist - a.legYaw, torsoZ = -a.sway * 0.6 - a.shift * 0.8;
+    // lean into strafes and turns; flinch when hurt; breathe
+    torsoZ += -side * 0.07 * pace + Math.max(-0.08, Math.min(0.08, -(st.turn || 0) * 0.015));
+    a.flinch = Math.max(0, (a.flinch || 0) - dt * 5);
+    torsoX += a.flinch * 0.2; torsoZ += a.flinch * (a.flinchSide || 1) * 0.07;
+    j.torso.position.y = this.torsoBaseY + Math.sin(now * 1.7 + this.seed * 3) * 0.006 * this.scale / 0.06;
     if (st.firing && !this.melee) {
       if (fire.shake) { torsoZ += (Math.sin(now * 57) + Math.sin(now * 33)) * 0.5 * fire.shake; torsoX += Math.sin(now * 41) * fire.shake * 0.5; }
       if (fire.sweep) torsoY += Math.sin(now * 4.5) * fire.sweep;
     }
-    j.head.rotation.x = Math.max(-0.7, Math.min(0.7, st.pitch || 0)) * 0.6 - a.torsoX * 0.5;
-    j.head.rotation.y = -torsoY * 0.6;
+    // idle look-around: every few seconds glance somewhere new
+    if (a.idleT > 2.5) {
+      a.lookTimer = (a.lookTimer ?? 0) - dt;
+      if (a.lookTimer <= 0) { a.lookTarget = (Math.random() - 0.5) * 0.9; a.lookTimer = 2 + Math.random() * 3; }
+    } else a.lookTarget = 0;
+    a.look = damp(a.look || 0, a.lookTarget || 0, 3, dt);
+    j.head.rotation.x = Math.max(-0.7, Math.min(0.7, st.pitch || 0)) * 0.6 - a.torsoX * 0.5 - a.flinch * 0.3;
+    j.head.rotation.y = -torsoY * 0.6 + a.look + Math.max(-0.25, Math.min(0.25, (st.turn || 0) * 0.04));
 
     // arms
     a.hurt = Math.max(0, a.hurt - dt * 5);
@@ -1180,8 +1239,11 @@ export class CharacterRig {
         rx -= 0.25;
       } else a.reload = 0;
       if (a.air > 0.05 && !st.firing) { lx += S.jump[2] * a.air; rx += S.jump[2] * 0.5 * a.air; }
+      // weapon switch: arms drop and come back up with the new weapon
+      if (a.equip < 1) { const e = 1 - Math.pow(1 - a.equip, 3); rx -= (1 - e) * 1.0; lx -= (1 - e) * 1.1; }
     }
     j.torso.rotation.set(torsoX, torsoY, torsoZ);
+    a.equip = Math.min(1, (a.equip ?? 1) + dt / 0.35);
     if (a.ability > 0) { a.ability = Math.max(0, a.ability - dt); lx = 2.6; ly = 0.2; lz = -0.2; }
     a.armRx = damp(a.armRx, rx, this.melee && a.swing >= 0 ? 40 : 18, dt);
     a.armLx = damp(a.armLx, lx, this.melee && a.swing >= 0 ? 40 : 18, dt);
@@ -1216,25 +1278,24 @@ export class CharacterRig {
     const a = this.anim;
     const kind = this.meleeKind;
     const out = { rx: 0.9 + pitch * 0.4 + armSwing * 0.3, ry: 0, rz: 0, lx: 0.3 + armSwing, ly: 0, lz: -0.1, torsoY: 0, torsoX: 0 };
-    if (kind === 'punch') { out.rx = 0.95 + pitch * 0.3; out.rz = -0.3; out.lx = 0.95 + pitch * 0.3; out.lz = 0.3; out.ly = 0.1; }
+    if (kind === 'punch') {
+      // boxer's guard: both fists up, a slight bounce on the balls of the feet
+      const bounce = Math.sin(performance.now() / 1000 * 5) * 0.04;
+      out.rx = 0.95 + pitch * 0.3 + bounce; out.rz = -0.3; out.lx = 0.95 + pitch * 0.3 - bounce; out.lz = 0.3; out.ly = 0.1;
+      if (a.swing >= 0) return this.fistCombo(dt, out, pitch);
+      return out;
+    }
     if (kind === 'stab') { out.rx = 1.1 + pitch * 0.4; out.rz = -0.1; }
     if (a.swing < 0) return out;
     a.swing += dt;
-    const dur = kind === 'punch' ? 0.32 : kind === 'stab' ? 0.36 : 0.46;
+    const dur = kind === 'stab' ? 0.36 : 0.46;
     const t = Math.min(1, a.swing / dur);
     if (t >= 1) { a.swing = -1; return out; }
     const easeOut = (x) => 1 - (1 - x) * (1 - x), easeIn = (x) => x * x, easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
     const lerp = (p, q, x) => p + (q - p) * x;
     // key poses: [rx, rz, torsoY, torsoX] for guard -> windup -> strike end
     let G, W, E, wEnd, sEnd;
-    if (kind === 'punch') {
-      // the punching side alternates; the other arm stays up in guard
-      const left = a.punchLeft;
-      G = [0.95 + pitch * 0.3, left ? 0.3 : -0.3, 0, 0];
-      W = [0.75 + pitch * 0.3, left ? 0.4 : -0.4, left ? 0.2 : -0.2, 0.04];
-      E = [Math.PI / 2 + 0.1 + pitch * 0.8, left ? -0.08 : 0.08, left ? -0.42 : 0.42, -0.18];
-      wEnd = 0.25; sEnd = 0.5;
-    } else if (kind === 'stab') {
+    if (kind === 'stab') {
       G = [out.rx, out.rz, 0, 0];
       W = [0.55, 0.2, -0.3, 0.08];
       E = [Math.PI / 2 + pitch * 0.8, -0.2, 0.32, -0.32];
@@ -1249,16 +1310,43 @@ export class CharacterRig {
     if (t < wEnd) { const x = easeOut(t / wEnd); P = G.map((g, i) => lerp(g, W[i], x)); }
     else if (t < sEnd) { const x = easeIn((t - wEnd) / (sEnd - wEnd)); P = W.map((w, i) => lerp(w, E[i], x)); }
     else { const x = easeIO((t - sEnd) / (1 - sEnd)); P = E.map((e, i) => lerp(e, G[i], x)); }
-    if (kind === 'punch' && a.punchLeft) { out.lx = P[0]; out.lz = P[1]; out.ly = 0; }
-    else { out.rx = P[0]; out.rz = P[1]; }
+    out.rx = P[0]; out.rz = P[1];
     out.torsoY = P[2]; out.torsoX = P[3];
     return out;
   }
 
+  // One punch of the current combo: anticipation -> snap -> eased recovery into guard, with torso twist,
+  // lean, shoulder roll (arm yaw) and a weight-shift hip dip. The off arm tucks tighter while punching.
+  fistCombo(dt, out, pitch) {
+    const a = this.anim;
+    const mv = FIST_MOVES[a.fistMove] || FIST_MOVES.jabL;
+    a.swing += dt;
+    const t = Math.min(1, a.swing / mv.dur);
+    if (t >= 1) { a.swing = -1; a.fistDip = 0; return out; }
+    const easeOut = (x) => 1 - (1 - x) * (1 - x), easeIn = (x) => x * x * (2 - x * 0.5), easeIO = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const L = mv.arm === 'L';
+    const G = { rx: L ? out.lx : out.rx, rz: L ? out.lz : out.rz, ry: L ? out.ly : 0, torsoY: 0, torsoX: 0, dip: 0 };
+    const key = (P, k) => (P[k] !== undefined ? P[k] : G[k]);
+    let A, B, x;
+    if (t < mv.w) { A = G; B = mv.W; x = easeOut(t / mv.w); }
+    else if (t < mv.s) { A = mv.W; B = mv.E; x = easeIn((t - mv.w) / (mv.s - mv.w)); }
+    else { A = mv.E; B = G; x = easeIO((t - mv.s) / (1 - mv.s)); }
+    const v = (k) => key(A, k) + (key(B, k) - key(A, k)) * x;
+    const rx = v('rx') + pitch * 0.6, rz = v('rz'), ry = v('ry');
+    if (L) { out.lx = rx; out.lz = rz; out.ly = ry; out.rx -= 0.12; out.rz -= 0.08; }
+    else { out.rx = rx; out.rz = rz; out.ry = ry; out.lx -= 0.12; out.lz += 0.08; }
+    out.torsoY = v('torsoY'); out.torsoX = v('torsoX');
+    a.fistDip = v('dip');
+    return out;
+  }
+
   onFire() { this.anim.kick = 1; }
-  onSwing() { this.anim.swing = 0; this.anim.punchLeft = !this.anim.punchLeft; }
-  onHurt() { this.anim.hurt = 1; }
-  onLand() { this.anim.land = 1; }
+  onSwing() {
+    this.anim.swing = 0;
+    if (this.meleeKind === 'punch') { this.anim.combo ||= {}; this.anim.fistMove = nextFistMove(this.anim.combo, performance.now() / 1000); }
+  }
+  onHurt() { this.anim.hurt = 1; this.anim.flinch = 1; this.anim.flinchSide = Math.random() < 0.5 ? -1 : 1; }
+  onLand(k = 1) { this.anim.land = Math.max(this.anim.land, k); }
   onAbility() { this.anim.ability = 0.6; }
 
   // world-space part meshes (for elimination gibs)

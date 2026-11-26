@@ -16,6 +16,8 @@ export function createMoveState(x = 0, y = 0, z = 0, yaw = 0) {
     grounded: false, crouch: false, airJumps: 0, coyote: 0, jumpBuffer: 0,
     prevButtons: 0, landTimer: 0, airTime: 0, sprinting: false,
     lastImpact: 0, jumped: 0, doubleJumped: 0, groundMat: null, stepUp: 0,
+    blastJump: 0,   // airborne from your own explosion: 1 = rocket jump, 2 = Sky Hopper jump (boosted)
+    blastLand: 0,   // seconds left of the just-landed window after a blast jump
   };
 }
 
@@ -25,7 +27,9 @@ export function copyMoveState(dst, src) {
 }
 
 // Fields a server snapshot carries for reconciliation.
-export const MOVE_SYNC_FIELDS = ['x', 'y', 'z', 'vx', 'vy', 'vz', 'grounded', 'crouch', 'airJumps', 'coyote', 'jumpBuffer', 'prevButtons', 'landTimer', 'airTime'];
+export const MOVE_SYNC_FIELDS = ['x', 'y', 'z', 'vx', 'vy', 'vz', 'grounded', 'crouch', 'airJumps', 'coyote', 'jumpBuffer', 'prevButtons', 'landTimer', 'airTime', 'blastJump', 'blastLand'];
+// Sky Hopper jumps: lighter gravity (more airtime) and much stronger air control/speed
+export const HOP_GRAVITY_MULT = 0.8, HOP_AIR_SPEED_MULT = 1.7, HOP_AIR_ACCEL_MULT = 1.5;
 
 export function eyeHeight(s) {
   return s.crouch ? CROUCH_EYE_HEIGHT : EYE_HEIGHT;
@@ -209,11 +213,12 @@ export function stepMovement(s, cmd, world, p) {
     }
     accelerate(s, wx, wz, maxSpeed, GROUND_ACCEL, dt);
   } else if (wl > 0) {
-    accelerate(s, wx, wz, maxSpeed * AIR_SPEED_CAP, AIR_ACCEL * 4, dt, true);
+    const hop = s.blastJump === 2;
+    accelerate(s, wx, wz, maxSpeed * AIR_SPEED_CAP * (hop ? HOP_AIR_SPEED_MULT : 1), AIR_ACCEL * 4 * (hop ? HOP_AIR_ACCEL_MULT : 1), dt, true);
   }
 
   // --- Gravity ------------------------------------------------------------
-  s.vy = Math.max(s.vy - GRAVITY * dt, -MAX_FALL_SPEED);
+  s.vy = Math.max(s.vy - GRAVITY * (s.blastJump === 2 && !s.grounded ? HOP_GRAVITY_MULT : 1) * dt, -MAX_FALL_SPEED);
 
   // --- Integrate with collision (sub-stepped) ----------------------------
   const wasGrounded = s.grounded;
@@ -255,12 +260,14 @@ export function stepMovement(s, cmd, world, p) {
     s.grounded = true;
     if (s.vy < 0) s.vy = 0;
     s.airTime = 0;
+    if (s.blastJump) { s.blastJump = 0; s.blastLand = 0.35; }
   } else {
     s.grounded = false;
     s.airTime += dt;
   }
   if (landed && !onGround) s.vy = 0;
   s.landTimer = Math.max(0, s.landTimer - dt);
+  if (s.blastLand > 0 && s.grounded) s.blastLand = Math.max(0, s.blastLand - dt);
   return s;
 }
 

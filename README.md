@@ -44,7 +44,7 @@ You can drag and resize the touch buttons under **Settings → Touch → Edit la
 | Class | HP | Speed | Primary / Secondary / Melee | Ability | Passive |
 | --- | --- | --- | --- | --- | --- |
 | Scout | 125 | 115% | Scattergun / Pistol / Bat | Adrenaline Rush: +30% speed, faster reloads for 4s | Double Jump |
-| Soldier | 200 | 80% | Rocket Launcher / Shotgun / Shovel | Rally Cry: you and allies within 9m take 25% less damage and move 15% faster for 6s | Blast Jumper: 40% less self blast damage, stronger rocket jumps, no fall damage |
+| Soldier | 200 | 80% | Rocket Launcher or Sky Hopper / Shotgun / Shovel | Rally Cry: you and allies within 9m take 25% less damage and move 15% faster for 6s | Blast Jumper: 40% less self blast damage, stronger rocket jumps, no fall damage |
 | Spy | 100 | 100% | Revolver / Sapper / Knife | Disguise (attacking or taking 20+ damage reveals you; 8 s cooldown). Right-click: invisibility cloak (drains a meter; no attacking while cloaked; turrets and bots can't see you) | Quiet Movement; back attacks deal 220 |
 | Marksman | 110 | 100% | Sniper Rifle (charged scope) / SMG / Kukri | Recon Sweep: see every enemy through walls for 5s, 35% slower | Recon: hits reveal the target to your team |
 | Mechanic | 125 | 95% | Shotgun / Pistol / Wrench (plus the Construction Device and Rivet Gun as alternates) | Automated Turret (limited HP, ammo and range; one per player) | Repair deployables |
@@ -52,6 +52,14 @@ You can drag and resize the touch buttons under **Settings → Touch → Edit la
 | Juggernaut | 300 | 75% | Minigun / Shotgun / Fists | Suppression Mode | Frontline Presence |
 | Incinerator | 175 | 100% | Flamethrower / Shotgun / Fire Axe | Thermal Burst (also destroys enemy projectiles) | Heat Resistance |
 | Demolitionist | 150 | 95% | Grenade Launcher / Sticky Launcher (right-click detonates, up to 8 bombs) / Bottle | Detonation Charge (sticky; press E again to detonate) | Explosive Expertise |
+
+The **Sky Hopper** is the Soldier's second primary.
+- Fire it at your feet to launch high and fast, with lighter gravity and stronger air control until you land.
+- It deals no damage and pushes nobody but you.
+- A **Shovel** hit while rocket-jumping, or right after landing, is a critical hit that eliminates instantly.
+- Critical hits show a **CRITICAL HIT!!!** popup.
+
+The Juggernaut's Fists throw varied combos: jab, cross, hooks, uppercut and overhand.
 
 The Sapper shorts out enemy turrets: they stop firing and take damage while you hold it on them. It does nothing to players and doesn't break your disguise.
 Every slot also has one or more alternate weapons, chosen in the Armory.
@@ -63,7 +71,32 @@ For a balance patch, edit those files or call `applyBalanceOverrides()`.
 
 About 900 cosmetic items, all visual only, across eight slots: hats, masks, accessories, weapon skins, gloves, victory poses, elimination effects and profile banners. Every class also has items only that class can wear. Items come in seven rarities: common, uncommon, rare, epic, legendary, mythic (glows) and iridescent (animated rainbow).
 
-The inventory and per-class loadouts are in place. How players acquire items isn't decided yet: for now everyone owns a starter set, and every other item can be previewed in the loadout screen. The server checks that each worn item exists, fits its slot and can be worn by that class. Bots wear random items.
+Everyone starts with a starter set; every other item can be previewed in the loadout screen. The server checks that each worn item exists, fits its slot and can be worn by that class. Bots wear random items.
+
+### Keys and crates
+
+**Earning keys:** when a match ends, the game server checks the winning team.
+- The team qualifies with **10 or more kills on real players**. Bot kills never count.
+- Anti-farming:
+  - One killer-and-victim pair counts at most 3 times, and one victim at most 5 times.
+  - The team needs kills on at least 2 different players.
+  - The match must have run at least 90 seconds.
+- Each eligible winner (in the match for 60+ seconds, or with a kill) gets 1 key, +1 if the team reached 20 kills, and +1 for 4+ kills of their own. The maximum is 3 per match.
+- The rules are in `src/shared/rewards.js`.
+
+**Crates:** spend keys in **Crates** on the main menu.
+
+| Crate | Cost | Odds |
+| --- | --- | --- |
+| Supply | 1 key | Common 52%, Uncommon 28%, Rare 13%, Epic 5%, Legendary 1.6%, Mythic 0.4% |
+| Armored | 3 keys | Rare or better guaranteed: Rare 58%, Epic 27%, Legendary 11%, Mythic 3.5%, Iridescent 0.5% |
+| Vault | 6 keys | Epic or better guaranteed: Epic 56%, Legendary 30%, Mythic 11%, Iridescent 3% |
+
+- Per key spent, the chance of Epic or better rises with the tier: 7%, then 14%, then 16.7%.
+- Duplicates are skipped, and a crate gives keys back if you already own everything it could give at that rarity.
+- The result is rolled and saved before the opening animation plays.
+- Each tier has its own 3D opening sequence, followed by a reel and a reveal that scales with rarity.
+- Tiers and odds are in `src/shared/config/crates.js`.
 
 The catalog is defined in `src/shared/config/cosmetics.js`.
 
@@ -170,10 +203,14 @@ docs/ARCHITECTURE.md               technical design notes
 
 - **Browser hosting depends on outside services.** It uses the public PeerJS signalling server and Google/Twilio STUN. Players behind strict (symmetric) NATs may not connect, because no TURN relay is configured. Use a dedicated server, or add TURN servers to `PEER_OPTS` in `src/client/net/transports.js`.
 - **The host must keep their tab open.** If the host leaves, the match ends; there is no host migration. The host also has zero latency.
-- **Progression is stored locally.** Profiles, XP, achievements and inventory live in `localStorage`, with no account server, so a determined player can edit their own inventory. Cosmetics are visual only. The server only checks that each worn item exists, fits its slot, and can be worn by that class.
+- **Progression is stored on the player's side.** Profiles, XP, keys, achievements and inventory live in `localStorage` (and in the player's own Firestore profile when signed in).
+  - The game server decides who earns keys, and clients can't claim them.
+  - But a determined player can still edit their own saved data. Making keys and items tamper-proof needs a backend that owns the inventory.
+  - In matches hosted from the website, the host's browser is the server.
+  - Cosmetics are visual only. The server only checks that each worn item exists, fits its slot, and can be worn by that class.
 - **Recoil is applied on the client.** The server cannot check that it was applied.
 - **Projectiles are not lag-compensated.** Only hitscan and melee rewind.
-- **Animation is procedural,** driven by a state machine on blocky joints. There are no keyframed animation assets.
+- **Animation is procedural.** It is driven by per-class style profiles on blocky joints: walk/run, strafe and backpedal, jump, fire, melee and fist combos, idle shifts and look-arounds, flinch and landing. There are no keyframed animation assets.
 - **Performance on real hardware was not measured.** Testing ran in software-rendered headless Chromium (about 10 fps there). Quality presets (Low to Ultra), resolution scale and per-setting overrides are available.
 - **Mobile was tested only in emulated viewports,** not on physical phones.
 - **The announcer uses the browser's speech synthesis,** so the voice varies by platform, and it is silent where speech synthesis isn't supported.
