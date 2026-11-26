@@ -99,7 +99,7 @@ test('weapons: rotary cannon must spin up; spread pattern is deterministic', () 
 });
 
 test('all six maps: spawns clear, both flags, and every spawn can path to the enemy flag', () => {
-  assert.equal(MAP_IDS.length, 6);
+  assert.equal(MAP_IDS.length, 4);
   for (const id of MAP_IDS) {
     const m = getMap(id);
     const w = new World(m.boxes, m.bounds);

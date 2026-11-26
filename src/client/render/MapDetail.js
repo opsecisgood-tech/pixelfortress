@@ -12,8 +12,6 @@ import { mulberry32 } from '../../shared/math.js';
 const THEMES = {
   dusty_depot: { ceil: 'ceilbeam', trim: 0x4a3a2c, pipe: 0x7a6a58, lamp: 0xffe2a0, scatter: 'desert', posters: [['#c8402f', '#efe6cf', 'CARGO'], ['#e2b12a', '#222', 'DANGER'], ['#3a72c4', '#efe6cf', 'DEPOT 7']], decal: 0x3a3028 },
   frostfall: { ceil: 'ceiltile', trim: 0x3a4a5a, pipe: 0x8a9aa8, lamp: 0xd8f0ff, scatter: 'snow', posters: [['#3d8fd6', '#fff', 'LAB B'], ['#e8f0f6', '#c8402f', 'COLD'], ['#e2b12a', '#222', 'NO ENTRY']], decal: 0x5a6a7a },
-  neon_district: { ceil: 'ceilmetal', trim: 0x221e30, pipe: 0x4a4a5a, lamp: 0xffb0f0, scatter: 'city', posters: [['#ff3fa8', '#16131f', 'PIXEL'], ['#3ff2ff', '#16131f', 'OPEN 24'], ['#ffe03f', '#16131f', 'NOODLE'], ['#58ff6a', '#16131f', 'ARCADE']], decal: 0x1a1824 },
-  overgrown_outpost: { ceil: 'ceilconcrete', trim: 0x4a4a3e, pipe: 0x6a5a4a, lamp: 0xfff0b0, scatter: 'grass', posters: [['#6a7a3a', '#efe6cf', 'OUTPOST'], ['#e2b12a', '#222', 'CAUTION'], ['#8a4a24', '#efe6cf', 'SUPPLY']], decal: 0x3a3a2c },
   pixelworks: { ceil: 'ceilmetal', trim: 0x2e3032, pipe: 0x5e7a68, lamp: 0xfff2c8, scatter: 'factory', posters: [['#e2b12a', '#222', 'HAZARD'], ['#c8402f', '#efe6cf', 'LINE 3'], ['#3a72c4', '#efe6cf', 'WORKS']], decal: 0x2a2620 },
   sandstone_fortress: { ceil: 'ceilbeam', trim: 0x7a5a38, pipe: 0x8a6a48, lamp: 0xffc070, scatter: 'sand', posters: [['#b8562b', '#efe6cf', 'KEEP'], ['#d2a86b', '#5a3a20', 'BAZAAR'], ['#3f7f43', '#efe6cf', 'OASIS']], decal: 0x8a6a40 },
 };

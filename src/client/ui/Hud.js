@@ -1,9 +1,6 @@
 // In-game HUD: scores/timer, health, ammo, ability cooldown, crosshair, hit feedback, damage direction,
 // kill feed, objective status, scope, death/respawn panel, scoreboard, chat and notifications.
 import * as THREE from 'three';
-import { crateProgress, crateForKills, CRATE_TIERS } from '../../shared/config/economy.js';
-import { CRATE_BY_ID } from '../../shared/config/cosmetics.js';
-import { crateSVG } from './Armory.js';
 import { getClass, CLASSES } from '../../shared/config/classes.js';
 import { WEAPONS, ABILITY_SOURCES } from '../../shared/config/weapons.js';
 import { MODES } from '../../shared/config/modes.js';
@@ -37,7 +34,6 @@ export class Hud {
       <div class="flagstrip hidden"></div>
       <div class="flagmarkers"></div>
       <div class="netstat"></div>
-      <div class="hx-crate"></div>
       <div class="killfeed"></div>
       <div class="crosshair"></div>
       <div class="hitmarker"></div>
@@ -110,8 +106,6 @@ export class Hud {
     this.scoreLimit = lim;
     this.el.killfeed.innerHTML = '';
     this.el.death.classList.add('hidden');
-    this.crateKills = -1;
-    this.updateCrateTracker(0);
     if (JSON.stringify(this.app.settings.crosshair) !== this.crossCfg) this.buildCrosshair();
     this.show(true);
   }
@@ -119,28 +113,7 @@ export class Hud {
   setRoster(roster, myId) {
     this.roster = roster;
     this.myId = myId;
-    const me = roster.get(myId);
-    if (me) this.updateCrateTracker(me.k || 0);
     if (this.sbVisible) this.renderScoreboard();
-  }
-
-  // Kill-crate tracker: shows progress toward the next crate tier this match.
-  updateCrateTracker(kills) {
-    const el = this.root.querySelector('.hx-crate');
-    if (!el || kills === this.crateKills) return;
-    const prev = this.crateKills;
-    this.crateKills = kills;
-    const pr = crateProgress(kills);
-    if (prev >= 0 && pr.current && crateForKills(prev) !== pr.current) {
-      this.bigText(`${CRATE_BY_ID[pr.current].name} earned!`, pr.next ? `${pr.next.kills} eliminations for a ${pr.next.name}` : 'Best crate secured');
-      this.app.audio.crateEarned?.();
-    }
-    const cur = pr.current ? CRATE_BY_ID[pr.current] : null;
-    const nextK = pr.next ? pr.next.kills : kills;
-    const prevK = [...CRATE_TIERS].reverse().find((t) => t.kills <= kills)?.kills || 0;
-    const pct = pr.next ? (kills - prevK) / (nextK - prevK) : 1;
-    el.innerHTML = `${crateSVG(pr.current || 'bronze', 26)}<div><b style="color:${cur ? cur.color : '#cfc6b0'}">${cur ? cur.name : 'No crate yet'}</b><span>${pr.next ? `${kills} / ${nextK} → ${pr.next.name}` : `${kills} eliminations`}</span><div class="bar"><i style="width:${Math.max(0, Math.min(1, pct)) * 100}%"></i></div></div>`;
-    el.classList.toggle('dim', !cur);
   }
 
   // ---------------------------------------------------------------- per-frame

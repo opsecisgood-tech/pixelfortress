@@ -1,7 +1,7 @@
 # Pixel Fortress
 
 A class-based, team-versus-team multiplayer FPS with a blocky pixel-art look, playable in the browser.
-Eight classes, two teams (RED and BLUE), two modes (Team Deathmatch and Capture the Flag) and six maps.
+Eight classes, two teams (RED and BLUE), two modes (Team Deathmatch and Capture the Flag) and four maps.
 Every model, texture, sound and map here was made for this project, procedurally at runtime. None is copied from another game.
 
 - **Play solo** against bots that play every class and both objectives.
@@ -55,38 +55,13 @@ You can drag and resize the touch buttons under **Settings → Touch → Edit la
 All class and weapon numbers live in one place each: `src/shared/config/classes.js` and `src/shared/config/weapons.js`.
 For a balance patch, edit those files or call `applyBalanceOverrides()`.
 
-## Cosmetics and rewards
+## Cosmetics and inventory
 
-About 900 cosmetic items, all visual only, across eight slots: hats, masks, accessories, weapon skins, gloves, victory poses, elimination effects and profile banners. Every class also has its own items that only that class can wear. Items come in seven rarities, each rarer than the last:
+About 900 cosmetic items, all visual only, across eight slots: hats, masks, accessories, weapon skins, gloves, victory poses, elimination effects and profile banners. Every class also has items only that class can wear. Items come in seven rarities: common, uncommon, rare, epic, legendary, mythic (glows) and iridescent (animated rainbow).
 
-| Rarity | Colour | Bronze crate odds |
-| --- | --- | --- |
-| Common | grey | 50% |
-| Uncommon | green | 25% |
-| Rare | blue | 13% |
-| Epic | purple | 7% |
-| Legendary | yellow | 3.5% |
-| Mythic | light blue (glows) | 1.2% |
-| Iridescent | rainbow (animated) | 0.3% |
+The inventory and per-class loadouts are in place. How players acquire items isn't decided yet: for now everyone owns a starter set, and every other item can be previewed in the loadout screen. The server checks that each worn item exists, fits its slot and can be worn by that class. Bots wear random items.
 
-**How you earn crates**
-
-- **Kills in one match:** 5+ eliminations earns a Bronze crate, 10+ a Silver, 15+ a Gold and 25+ a Diamond. Each better crate shifts the odds toward rarer items. The HUD tracks your progress toward the next crate tier during the match.
-- **Daily and weekly contracts:** three of each, picked by date. Completing one gives crates, scrap and XP.
-- **Other rewards:** first win of the day, every level up, every new badge, and collection milestones at 25, 50, 100, 200, 400 and 800 unique items.
-
-**Scrap and crafting**
-
-- Duplicate drops turn into scrap.
-- You can salvage items you don't want for scrap.
-- Scrap can be crafted into a crate of your choice.
-
-**Loadouts**
-
-- Loadouts are saved per class. "Apply to all classes" copies one class's look to every class that can wear those items.
-- Bots wear random items, so matches show off the catalog.
-
-Catalog and odds are defined in `src/shared/config/cosmetics.js`; the reward rules are in `src/shared/config/economy.js`.
+The catalog is defined in `src/shared/config/cosmetics.js`.
 
 ## Maps
 
@@ -96,8 +71,6 @@ Catalog and odds are defined in `src/shared/config/cosmetics.js`; the reward rul
 | Frostfall | Snowbound research lab | Two-level lab around an atrium, service tunnels underground, sniper ridges |
 | Pixelworks | Factory | Moving conveyor belts, glass control room, gantry bridges, service corridors |
 | Sandstone Fortress | Desert keeps | Defensive towers, colonnades, raised market plaza, tunnel under the courtyard |
-| Neon District | City at night | Shop and arcade interiors, rooftop sky bridge, subway under the boulevard |
-| Overgrown Outpost | Ruined facility in the jungle | Broken walkway with a gap to jump, stream with bridges, buried bunker, watchtower |
 
 Each map uses 180° rotational symmetry, so both teams get identical routes. Every map supports both modes.
 
@@ -143,7 +116,7 @@ PORT=8080 BOTS=8 npm start
 ```
 
 The server also serves the game, so players just open `http://your-server:8080`.
-It always runs a TDM room and a CTF room, each rotating through all six maps. Players can create more rooms (up to `MAX_ROOMS`, default 12).
+It always runs a TDM room and a CTF room, each rotating through all four maps. Players can create more rooms (up to `MAX_ROOMS`, default 12).
 `GET /api/rooms` lists the rooms as JSON. Put a TLS reverse proxy in front of it so the game works over `https`/`wss`.
 
 ## Testing
@@ -155,11 +128,11 @@ It always runs a TDM room and a CTF room, each rotating through all six maps. Pl
 - Movement physics: speed per class, collision, stepping up, double jump.
 - The weapon state machine: cadence, magazine and per-shell reloads, interrupting a reload, switching, spin-up, deterministic spread.
 - The authoritative server: clients cannot supply damage, each elimination scores once, players respawn, the match ends at the score limit, fire-rate and speed-hack limits hold, ability cooldowns apply, Spy disguise is revealed, and CTF pickup, drop and capture work.
-- All six maps: spawns are clear and every spawn can path to the enemy flag (using the generated nav graph).
+- All four maps: spawns are clear and every spawn can path to the enemy flag (using the generated nav graph).
 - Full bot matches in both modes on every map.
 - Real netcode: two simulated clients over a 40 ms-latency link, with prediction error checked.
 
-The browser game was also tested by hand in headless Chromium: menus, every screen, all six maps, desktop and emulated phone layouts, browser hosting with a second browser joining over WebRTC (against a local signalling server), and two browsers on the dedicated server.
+The browser game was also tested by hand in headless Chromium: menus, every screen, all four maps, desktop and emulated phone layouts, browser hosting with a second browser joining over WebRTC (against a local signalling server), and two browsers on the dedicated server.
 
 ## Project layout
 
@@ -171,7 +144,7 @@ src/shared/                        code used by both client and server (no DOM, 
   physics.js movement.js           AABB world and deterministic movement
   weaponLogic.js damage.js         weapon state machine and damage rules
   teams.js flag.js awards.js nav.js
-src/maps/                          map builder DSL, kits, six maps
+src/maps/                          map builder DSL, kits, four maps
 src/server/                        ServerGame, combat, projectiles, abilities, modes/, bots/, worker.js
 src/client/                        main.js, Game.js, settings.js
   net/                             transports (local, WebRTC, WebSocket) and NetClient (prediction)
@@ -179,7 +152,7 @@ src/client/                        main.js, Game.js, settings.js
   audio/                           procedural WebAudio engine and music
   input/                           keyboard/mouse and touch controls
   ui/                              menus, HUD, scoreboard, results
-  progression/                     local profile: XP, achievements, inventory, crates, contracts
+  progression/                     local profile: XP, achievements, inventory, loadouts
 server/index.js                    Node dedicated server and static host
 tests/                             automated tests
 docs/ARCHITECTURE.md               technical design notes
@@ -189,7 +162,7 @@ docs/ARCHITECTURE.md               technical design notes
 
 - **Browser hosting depends on outside services.** It uses the public PeerJS signalling server and Google/Twilio STUN. Players behind strict (symmetric) NATs may not connect, because no TURN relay is configured. Use a dedicated server, or add TURN servers to `PEER_OPTS` in `src/client/net/transports.js`.
 - **The host must keep their tab open.** If the host leaves, the match ends; there is no host migration. The host also has zero latency.
-- **Progression is stored locally.** Profiles, XP, achievements, inventory and crates live in `localStorage`, with no account server, so a determined player can edit their own inventory. Cosmetics are visual only. The server only checks that each worn item exists, fits its slot, and can be worn by that class.
+- **Progression is stored locally.** Profiles, XP, achievements and inventory live in `localStorage`, with no account server, so a determined player can edit their own inventory. Cosmetics are visual only. The server only checks that each worn item exists, fits its slot, and can be worn by that class.
 - **Recoil is applied on the client.** The server cannot check that it was applied.
 - **Projectiles are not lag-compensated.** Only hitscan and melee rewind.
 - **Animation is procedural,** driven by a state machine on blocky joints. There are no keyframed animation assets.

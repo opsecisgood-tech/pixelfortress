@@ -4,6 +4,18 @@ import * as THREE from 'three';
 import { getItem } from '../../shared/config/cosmetics.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 
+// Soft round pixel scorch mark (instead of a hard square).
+function scorchTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const x = c.getContext('2d');
+  for (let yy = 0; yy < 16; yy++) for (let xx = 0; xx < 16; xx++) {
+    const d = Math.hypot(xx - 7.5, yy - 7.5) / 8 + (Math.random() - 0.5) * 0.18;
+    if (d < 1) { x.fillStyle = `rgba(14,12,10,${Math.min(1, (1 - d) * 1.6)})`; x.fillRect(xx, yy, 1, 1); }
+  }
+  const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+  return t;
+}
+
 const tmpM = new THREE.Matrix4();
 const tmpQ = new THREE.Quaternion();
 const tmpE = new THREE.Euler();
@@ -40,7 +52,7 @@ export class Effects {
     // decals
     this.decals = [];
     this.decalMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-    this.scorchMat = new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    this.scorchTex = scorchTexture();
     this.decalGeo = new THREE.PlaneGeometry(0.14, 0.14);
     // gibs
     this.gibs = [];
@@ -119,15 +131,21 @@ export class Effects {
     if (kind === 'world' && normal && this.quality.decals) this.decal(p, normal, false);
   }
 
+  // Bullet holes and blast scorch marks. Both fade out and are removed (scorch after ~4s, holes ~12s).
   decal(p, n, scorch, size = 1) {
-    const m = new THREE.Mesh(this.decalGeo, scorch ? this.scorchMat : this.decalMat);
+    const mat = scorch
+      ? new THREE.MeshBasicMaterial({ map: this.scorchTex, color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })
+      : this.decalMat.clone();
+    const m = new THREE.Mesh(this.decalGeo, mat);
+    m.userData.life = m.userData.max = scorch ? 4 : 12;
+    m.userData.op = mat.opacity;
     m.position.set(p[0] + n[0] * 0.012, p[1] + n[1] * 0.012, p[2] + n[2] * 0.012);
     m.lookAt(p[0] + n[0], p[1] + n[1], p[2] + n[2]);
     m.scale.setScalar(scorch ? size * 14 : size);
     m.rotation.z = Math.random() * Math.PI;
     this.scene.add(m);
     this.decals.push(m);
-    if (this.decals.length > this.quality.maxDecals) this.scene.remove(this.decals.shift());
+    if (this.decals.length > this.quality.maxDecals) { const d = this.decals.shift(); this.scene.remove(d); d.material.dispose(); }
   }
 
   explosion(x, y, z, radius) {
@@ -231,6 +249,14 @@ export class Effects {
 
   update(dt) {
     this.time += dt;
+    // fading decals
+    for (let i = this.decals.length - 1; i >= 0; i--) {
+      const d = this.decals[i];
+      d.userData.life -= dt;
+      const f = d.userData.life / d.userData.max;
+      if (f <= 0) { this.scene.remove(d); d.material.dispose(); this.decals.splice(i, 1); continue; }
+      if (f < 0.5) d.material.opacity = d.userData.op * (f / 0.5);
+    }
     // particles
     let n = 0;
     const ps = this.parts;
@@ -292,7 +318,7 @@ export class Effects {
     this.parts.length = 0;
     for (const t of this.tracers) this.scene.remove(t);
     this.tracers.length = 0;
-    for (const d of this.decals) this.scene.remove(d);
+    for (const d of this.decals) { this.scene.remove(d); d.material.dispose(); }
     this.decals.length = 0;
     for (const g of this.gibs) this.scene.remove(g.m);
     this.gibs.length = 0;

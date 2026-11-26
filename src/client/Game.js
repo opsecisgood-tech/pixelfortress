@@ -650,6 +650,7 @@ export class Game {
         if (owner === n.myId && this.predicted.has(pkey) && kind !== 'detcharge') {
           const pr = this.predicted.get(pkey);
           pr.server = [x + vx * age, y + vy * age - 0.5 * g * age * age, z + vz * age];
+          pr.seenSnap = snap;
           continue;
         }
         live.add(id);
@@ -684,7 +685,10 @@ export class Game {
       p.mesh.position.set(vx0, vy0, vz0);
       if (p.server) { p.mesh.position.lerp(tmpV.set(...p.server), 0.15); }
       p.mesh.lookAt(p.mesh.position.x + p.vx, p.mesh.position.y + p.vy, p.mesh.position.z + p.vz);
-      if (p.life < -0.5) { this.mapObjects.remove(p.mesh); this.predicted.delete(key); }
+      // the server stopped reporting it (exploded / removed) even if the event was missed: drop it now
+      p.age = (p.age || 0) + dt;
+      const gone = snap && p.seenSnap && p.seenSnap !== snap && !snap.pr.some((q) => q[8] === n.myId && `${q[8]}:${q[9]}` === key);
+      if (gone || (!p.seenSnap && p.age > 0.6 && !p.dead && p.bounce === 0 && p.life < 0) || p.life < -0.5) { this.mapObjects.remove(p.mesh); this.predicted.delete(key); }
     }
   }
 

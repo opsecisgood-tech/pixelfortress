@@ -408,16 +408,6 @@ export class AudioEngine {
   uiHover() { if (!this.ready()) return; this.tone(this.out(null, 0.15, this.ui), this.ctx.currentTime, 0.04, { type: 'square', f: 1400, vol: 0.06 }); }
   uiClick() { if (!this.ready()) return; const d = this.out(null, 0.3, this.ui); const t = this.ctx.currentTime; this.tone(d, t, 0.05, { type: 'square', f: 700, vol: 0.12 }); this.tone(d, t + 0.04, 0.06, { type: 'square', f: 1050, vol: 0.1 }); }
   levelUp() { if (!this.ready()) return; const d = this.out(null, 0.5, this.ui); const t = this.ctx.currentTime; [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(d, t + i * 0.09, 0.3, { type: 'square', f, vol: 0.1 })); }
-  reelTick() { if (!this.ready()) return; this.tone(this.out(null, 0.2, this.ui), this.ctx.currentTime, 0.03, { type: 'square', f: 1800, vol: 0.05 }); }
-  crateReveal(rarity) {
-    if (!this.ready()) return;
-    const d = this.out(null, 0.5, this.ui); const t = this.ctx.currentTime;
-    const base = [392, 440, 494, 523, 587, 659, 784][rarity] || 392;
-    const n = 2 + Math.min(5, rarity);
-    for (let i = 0; i < n; i++) this.tone(d, t + i * 0.07, 0.35, { type: rarity >= 4 ? 'triangle' : 'square', f: base * [1, 1.25, 1.5, 2, 2.5, 3, 4][i], vol: 0.09 });
-    if (rarity >= 5) this.noise(d, t, 0.8, { type: 'highpass', f: 6000, vol: 0.12 });
-  }
-  crateEarned() { if (!this.ready()) return; const d = this.out(null, 0.45, this.ui); const t = this.ctx.currentTime; [659, 880, 1175].forEach((f, i) => this.tone(d, t + i * 0.08, 0.22, { type: 'square', f, vol: 0.1 })); }
 
   jingle(kind) {
     if (!this.ready()) return;

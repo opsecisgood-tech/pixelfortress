@@ -1,16 +1,17 @@
 // Cosmetic item catalog (visual only — no stats). Generated deterministically from shapes × colourways,
-// so client and server agree on every item id. ~800 items across 8 slots and 7 rarities, including
-// class-locked items that only that class can wear.
+// so client and server agree on every item id. ~900 items across 8 slots and 7 rarities, including
+// class-locked items that only that class can wear. How players acquire items is not decided yet:
+// for now everyone owns the starter set (plus anything migrated from older profiles).
 import { CLASS_IDS } from './classes.js';
 
 export const RARITIES = [
-  { id: 'common', name: 'Common', color: '#b4b4b4', weight: 5000, scrap: 1 },
-  { id: 'uncommon', name: 'Uncommon', color: '#5fc45f', weight: 2500, scrap: 2 },
-  { id: 'rare', name: 'Rare', color: '#4c8ff2', weight: 1300, scrap: 4 },
-  { id: 'epic', name: 'Epic', color: '#a65df2', weight: 700, scrap: 8 },
-  { id: 'legendary', name: 'Legendary', color: '#f2c22e', weight: 350, scrap: 16 },
-  { id: 'mythic', name: 'Mythic', color: '#6fe6ff', weight: 120, scrap: 32 },
-  { id: 'iridescent', name: 'Iridescent', color: 'rainbow', weight: 30, scrap: 64 },
+  { id: 'common', name: 'Common', color: '#b4b4b4' },
+  { id: 'uncommon', name: 'Uncommon', color: '#5fc45f' },
+  { id: 'rare', name: 'Rare', color: '#4c8ff2' },
+  { id: 'epic', name: 'Epic', color: '#a65df2' },
+  { id: 'legendary', name: 'Legendary', color: '#f2c22e' },
+  { id: 'mythic', name: 'Mythic', color: '#6fe6ff' },
+  { id: 'iridescent', name: 'Iridescent', color: 'rainbow' },
 ];
 
 export const SLOTS = ['hat', 'mask', 'accessory', 'weaponSkin', 'gloves', 'victoryPose', 'elimEffect', 'banner'];
@@ -237,41 +238,6 @@ export function canWear(item, classId) {
 }
 
 export function getItem(id) { return ITEM_BY_ID.get(id) || null; }
-
-// ------------------------------------------------------------------ crates
-export const CRATES = [
-  { id: 'bronze', name: 'Bronze Crate', color: '#c08a52', mult: [1, 1, 1, 1, 1, 1, 1], craft: 12 },
-  { id: 'silver', name: 'Silver Crate', color: '#c8ced4', mult: [0.55, 1, 1.5, 1.7, 1.9, 2, 2], craft: 30 },
-  { id: 'gold', name: 'Gold Crate', color: '#e6b53a', mult: [0.25, 0.75, 1.6, 2.3, 3, 3.4, 3.8], craft: 70 },
-  { id: 'diamond', name: 'Diamond Crate', color: '#7ae0ff', mult: [0, 0.4, 1.4, 3, 4.5, 5.5, 7], craft: 160 },
-];
-export const CRATE_BY_ID = Object.fromEntries(CRATES.map((c) => [c.id, c]));
-
-// Kills in one match -> crate earned (5+ kills required).
-export function crateForKills(kills) {
-  if (kills >= 25) return 'diamond';
-  if (kills >= 15) return 'gold';
-  if (kills >= 10) return 'silver';
-  if (kills >= 5) return 'bronze';
-  return null;
-}
-
-export function rarityOdds(crateId) {
-  const c = CRATE_BY_ID[crateId] || CRATES[0];
-  const w = RARITIES.map((r, i) => r.weight * c.mult[i]);
-  const total = w.reduce((a, b) => a + b, 0);
-  return w.map((x) => x / total);
-}
-
-// Roll one item from a crate. rnd: () => [0,1).
-export function rollCrate(crateId, rnd = Math.random) {
-  const odds = rarityOdds(crateId);
-  let r = rnd(), rarity = 0;
-  for (let i = 0; i < odds.length; i++) { if (r < odds[i]) { rarity = i; break; } r -= odds[i]; rarity = i; }
-  while (rarity > 0 && !ITEMS_BY_RARITY[rarity].length) rarity--;
-  const pool = ITEMS_BY_RARITY[rarity];
-  return pool[Math.floor(rnd() * pool.length) % pool.length];
-}
 
 // ------------------------------------------------------------------ server-side validation
 // Client sends { classId: { slot: itemId } , banner }. Keep only known items wearable by that class.

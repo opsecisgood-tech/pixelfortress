@@ -65,4 +65,4 @@ export const ACHIEVEMENTS = [
   { id: 'mvp', name: 'Most Valuable', desc: 'Earn 10 end-of-match awards.', stat: 'awards', goal: 10, icon: 'trophy' },
 ];
 
-// Cosmetics live in ./cosmetics.js (catalog, crates) and ./economy.js (reward loop).
+// Cosmetics live in ./cosmetics.js (item catalog and loadout validation).

@@ -32,7 +32,6 @@ const SVG = (() => {
     antenna: w('<path d="M16 14v14M11 28h10"/><circle cx="16" cy="11" r="2.5"/><path d="M10.5 5.5a8 8 0 0 0 0 11M21.5 5.5a8 8 0 0 1 0 11M7 2.5a13 13 0 0 0 0 17M25 2.5a13 13 0 0 1 0 17"/>'),
     key: w('<circle cx="10" cy="16" r="5.5"/><path d="M15.5 16H28M23 16v4.5M27 16v3"/>'),
     globe: w('<circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c4 4 4 20 0 24M16 4c-4 4-4 20 0 24"/>'),
-    crate: w('<path d="M4 10l12-6 12 6v12l-12 6-12-6z"/><path d="M4 10l12 6 12-6M16 16v12"/>'),
     helmet: w('<path d="M5 20a11 11 0 0 1 22 0z"/><path d="M3 20h26v4H3zM16 9v11"/>'),
   };
 })();
@@ -82,69 +81,57 @@ export class UI {
   }
 
   // ================================================================ MAIN MENU
+  // Layout after the TF2-style reference: top bar (fullscreen, settings, class slots, Find Game), profile
+  // panel, recent-match list, two large buttons and a featured-map banner on the left; class card top right.
+  // Flat square panels, no borders and no text effects.
   showMainMenu() {
     this.closeSheet();
     this.hud.show(false);
     if (this.menuEl) this.menuEl.remove();
     const p = this.app.profile;
-    const m = h('div', 'mm');
+    const m = h('div', 'tm');
     const maps = mapList();
     const featured = maps[Math.floor(Date.now() / 86400000) % maps.length];
     m.innerHTML = `
-      <div class="mm-top">
-        <div class="mm-classbar" role="toolbar" aria-label="Quick class select"></div>
-        <div class="mm-top-right">
-          <button class="mm-find" data-go="play">${SVG.find}<span>Find a game</span></button>
-          <button class="mm-power" aria-label="Toggle fullscreen" title="Toggle fullscreen">${SVG.power}</button>
-        </div>
+      <div class="tm-top">
+        <button class="tm-quit" aria-label="Toggle fullscreen" title="Toggle fullscreen">${SVG.power}</button>
+        <button class="tm-gear" data-go="settings" aria-label="Settings" title="Settings">${SVG.gear}</button>
+        <div class="tm-slots" role="toolbar" aria-label="Class select"></div>
+        <span class="tm-grow"></span>
+        <button class="tm-icon" data-go="stats" aria-label="Statistics" title="Statistics & badges">${SVG.trophy}</button>
+        <button class="tm-find" data-go="play">${SVG.find}<span>Find game</span></button>
       </div>
-      <div class="mm-body">
-        <div class="mm-left">
-          <div class="mm-logo">Pixel Fortress<small>Eight classes · two teams · one fortress each</small></div>
-          <div class="mm-card mm-profile"></div>
-          <div class="mm-card mm-contracts"></div>
-          <div class="mm-card mm-featured"><h3>Featured</h3><div class="inner"><div><b>${esc(featured.name)}</b><p>${esc(featured.description)}</p></div><div class="art">${featured.preview.map((c) => `<i style="background:${c}"></i>`).join('')}<button class="btn primary feat-go">Play</button></div></div></div>
-          <div class="mm-card mm-recent"><h3>Recent matches</h3><div class="grid"></div></div>
+      <div class="tm-left">
+        <div class="tm-logo">Pixel Fortress</div>
+        <div class="tm-panel tm-profile" role="button" tabindex="0" title="Profile"></div>
+        <div class="tm-panel tm-recent"></div>
+        <div class="tm-bigbtns">
+          <button class="tm-big" data-go="loadout">Loadout</button>
+          <button class="tm-big" data-go="stats">Achievements</button>
         </div>
-        <div class="mm-right">
-          <div class="mm-showcase-name"></div>
-        </div>
+        <button class="tm-news" title="Play ${esc(featured.name)} against bots">
+          <span class="art">${featured.preview.map((c) => `<i style="background:${c}"></i>`).join('')}</span>
+          <span class="txt"><small>Featured map</small><b>${esc(featured.name)}</b></span>
+        </button>
       </div>
-      <div class="mm-bottom">
-        <div class="mm-status">v${GAME_VERSION} · ${navigator.onLine ? 'Online' : 'Offline — practice only'}</div>
-        <button class="btn" data-go="loadout">${SVG.helmet}Loadout</button>
-        <button class="btn" data-go="crates">${SVG.crate}Crates<i class="badge"></i></button>
-        <div class="mm-icons">
-          <button data-go="settings" data-tip="Settings" aria-label="Settings">${SVG.gear}</button>
-          <button data-go="stats" data-tip="Statistics & badges" aria-label="Statistics">${SVG.trophy}</button>
-          <button data-go="profile" data-tip="Profile" aria-label="Profile">${SVG.user}</button>
-        </div>
-      </div>`;
+      <div class="tm-panel tm-classcard" role="button" tabindex="0" title="Class details"></div>
+      <div class="tm-status">v${GAME_VERSION} · ${navigator.onLine ? 'Online' : 'Offline, practice only'}</div>`;
     this.root.appendChild(m);
     this.menuEl = m;
     m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => this.openSheet(b.dataset.go)));
-    m.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { this.playSel = { ...(this.playSel || { mode: this.app.settings.lastMode || 'tdm', map: this.app.settings.lastMap || 'dusty_depot' }), tab: b.dataset.tab }; this.openSheet('play'); }));
-    m.querySelector('.mm-showcase-name').addEventListener('click', () => this.openSheet('class'));
-    m.querySelector('.feat-go').addEventListener('click', () => this.app.startHost({ mode: featured.modes[0], mapId: featured.id, online: false }));
-    m.querySelector('.mm-power').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); });
+    m.querySelector('.tm-classcard').addEventListener('click', () => this.openSheet('class'));
+    m.querySelector('.tm-profile').addEventListener('click', () => this.openSheet('profile'));
+    m.querySelector('.tm-news').addEventListener('click', () => this.app.startHost({ mode: featured.modes[0], mapId: featured.id, online: false }));
+    m.querySelector('.tm-quit').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); });
     this.renderClassBar();
     this.renderProfileCard();
     this.renderRecent();
     this.renderShowcaseLabel();
-    this.armory.renderContracts(m.querySelector('.mm-contracts'));
-    this.renderMenuBadges();
     this.wireSounds(m);
     this.updateShowcase();
     this.screen = 'menu';
     this.app.audio.startMusic('menu');
     if (!p.name) setTimeout(() => this.promptName(), 300);
-  }
-
-  renderMenuBadges() {
-    if (!this.menuEl) return;
-    const n = this.app.profile.data.crates.length;
-    this.menuEl.querySelectorAll('.badge').forEach((b) => { b.textContent = n ? String(n) : ''; b.style.display = n ? '' : 'none'; });
-    this.menuEl.querySelector('.mm-bottom [data-go="crates"]')?.classList.toggle('glow', n > 0);
   }
 
   hideMainMenu() { if (this.menuEl) { this.menuEl.remove(); this.menuEl = null; } }
@@ -162,7 +149,7 @@ export class UI {
 
   renderClassBar() {
     if (!this.menuEl) return;
-    const bar = this.menuEl.querySelector('.mm-classbar');
+    const bar = this.menuEl.querySelector('.tm-slots');
     const cur = this.app.profile.data.selectedClass;
     bar.innerHTML = CLASS_IDS.map((id) => `<button class="${id === cur ? 'on' : ''}" data-c="${id}" title="${esc(CLASSES[id].displayName)}" aria-label="${esc(CLASSES[id].displayName)}"><img src="${this.app.icons.portraits[`${id}_${this.previewTeam}`]}" alt=""></button>`).join('');
     bar.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => {
@@ -175,10 +162,13 @@ export class UI {
 
   renderShowcaseLabel() {
     if (!this.menuEl) return;
-    const cls = getClass(this.app.profile.data.selectedClass);
-    const el = this.menuEl.querySelector('.mm-showcase-name');
-    el.innerHTML = `<b>${esc(cls.displayName)}</b><span>${esc(cls.role)}</span><em>Class details ›</em>`;
-    el.setAttribute('role', 'button'); el.tabIndex = 0;
+    const p = this.app.profile;
+    const cls = getClass(p.data.selectedClass);
+    const cs = p.data.stats.classStats[cls.id] || { matches: 0, kills: 0, deaths: 0 };
+    const kd = cs.deaths ? (cs.kills / cs.deaths).toFixed(2) : cs.kills ? cs.kills.toFixed(2) : '0.00';
+    const el = this.menuEl.querySelector('.tm-classcard');
+    el.innerHTML = `<b>${esc(cls.displayName)}</b><div class="role">${esc(cls.role)}</div>
+      <div class="st"><span>Matches played: <em>${cs.matches}</em></span><span>Eliminations: <em>${cs.kills}</em></span><span>K/D: <em>${kd}</em></span></div>`;
   }
 
   renderProfileCard() {
@@ -186,24 +176,27 @@ export class UI {
     const p = this.app.profile;
     const L = p.levelInfo();
     const cls = getClass(p.data.selectedClass);
-    const icons = this.app.icons;
+    const s = p.data.stats;
     const segs = 10, on = Math.floor((L.into / L.need) * segs);
     const rank = L.level < 5 ? 'Recruit' : L.level < 10 ? 'Private' : L.level < 20 ? 'Corporal' : L.level < 35 ? 'Sergeant' : 'Veteran';
-    const stars = '★'.repeat(Math.min(5, 1 + Math.floor(L.level / 5)));
-    const card = this.menuEl.querySelector('.mm-profile');
+    const card = this.menuEl.querySelector('.tm-profile');
     card.innerHTML = `
-      <div class="mm-medal"><span class="stars">${stars}</span><div class="disc" style="background:radial-gradient(circle at 40% 35%, ${this.previewTeam ? '#6a9cc8, #3c6c96 60%, #23435f' : '#d4685c, #a8423a 60%, #6a221c'})"><img src="${icons.portraits[`${cls.id}_${this.previewTeam}`]}" alt=""></div></div>
-      <div class="who"><b>${esc(p.name || 'Recruit')}</b><span>${rank}</span><span>Level ${L.level}</span></div>
-      <div class="mm-xp"><div class="seg">${Array.from({ length: segs }, (_, i) => `<i class="${i < on ? 'on' : ''}"></i>`).join('')}</div><div class="nums"><span>${p.data.xp.toLocaleString()} xp</span><span>${(p.data.xp - L.into + L.need).toLocaleString()} xp</span></div></div>`;
-    card.onclick = () => this.openSheet('profile');
+      <img class="av" src="${this.app.icons.portraits[`${cls.id}_${this.previewTeam}`]}" alt="">
+      <div class="who">
+        <small>${rank}</small>
+        <b>${esc(p.name || 'Recruit')}</b>
+        <div class="xp">${Array.from({ length: segs }, (_, i) => `<i class="${i < on ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="row"><span>${s.wins} wins</span><span>Level ${L.level}</span></div>
+      </div>
+      <div class="nums"><span>Matches <em>${s.matches}</em></span><span>Kills <em>${s.kills}</em></span><span>Damage <em>${s.damage.toLocaleString()}</em></span><span>Healing <em>${s.healing.toLocaleString()}</em></span></div>`;
   }
 
   renderRecent() {
     if (!this.menuEl) return;
-    const grid = this.menuEl.querySelector('.mm-recent .grid');
-    const rec = this.app.profile.data.recent.slice(0, 4);
-    if (!rec.length) { grid.innerHTML = '<div class="empty">No matches yet. Press <b>Find a game</b> to host, join or practise against bots — your last six results show up here.</div>'; return; }
-    grid.innerHTML = rec.map((r) => `<div class="row"><img src="${this.app.icons.portraits[`${r.cls}_0`]}" alt=""><div><b>${esc(getMap(r.map).name)}</b><span class="${r.won ? 'w' : r.draw ? 'd' : 'l'}">${r.won ? 'Victory' : r.draw ? 'Stalemate' : 'Defeat'}</span> <span class="d">· ${r.k}/${r.d}/${r.a} · +${r.xp} xp</span></div></div>`).join('');
+    const el = this.menuEl.querySelector('.tm-recent');
+    const rec = this.app.profile.data.recent.slice(0, 6);
+    if (!rec.length) { el.innerHTML = '<div class="empty">No matches yet. Press <b>Find game</b> to host, join or practise against bots. Your last six results show up here.</div>'; return; }
+    el.innerHTML = rec.map((r) => `<div class="row"><img src="${this.app.icons.portraits[`${r.cls}_0`]}" alt=""><div><b>${esc(getMap(r.map).name)}</b><span class="${r.won ? 'w' : r.draw ? 'd' : 'l'}">${r.won ? 'Victory' : r.draw ? 'Stalemate' : 'Defeat'} · ${r.k}/${r.d}/${r.a} · +${r.xp} xp</span></div></div>`).join('');
   }
 
   promptName() {
@@ -226,19 +219,18 @@ export class UI {
     if (kind === 'loadout') { wrap.style.placeItems = 'center end'; wrap.style.background = 'linear-gradient(90deg, transparent 25%, rgba(10,12,15,.75) 45%)'; }
     const sheet = h('div', 'sheet plate stripe-edge');
     if (kind === 'loadout') sheet.style.width = 'min(780px, 100%)';
-    if (kind === 'crates') sheet.style.width = 'min(980px, 100%)';
     wrap.appendChild(sheet);
     this.root.appendChild(wrap);
     this.sheet = wrap;
     this.sheetKind = kind;
     this.menuOpen = true;
     this.app.touch?.setActive(false);
-    const titles = { crates: 'Crates & crafting', play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
+    const titles = { play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
     sheet.innerHTML = `<div class="sheet-head"><h2>${titles[kind] || ''}</h2><button class="btn ghost close-x" aria-label="Close">✕</button></div><div class="sheet-body"></div>`;
     const body = sheet.querySelector('.sheet-body');
     sheet.querySelector('.close-x').addEventListener('click', () => this.closeSheet(true));
     wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) this.closeSheet(true); });
-    const fn = { play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), crates: () => this.armory.renderCrates(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
+    const fn = { play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
     if (fn) fn();
     this.wireSounds(sheet);
     if (kind === 'loadout') this.updateShowcase(-1.6);
@@ -259,8 +251,6 @@ export class UI {
       this.menuEl.classList.remove('ar-open');
       this.menuEl.querySelectorAll('.nav .btn').forEach((b) => b.classList.remove('active'));
       if (wasKind === 'loadout' || wasKind === 'class') { this.previewWeapon = null; this.previewCos = null; this.updateShowcase(); this.renderClassBar(); }
-      this.renderMenuBadges();
-      const ct = this.menuEl.querySelector('.mm-contracts'); if (ct) this.armory.renderContracts(ct);
     }
     if (this.app.state === 'game' && !this.resultsEl) this.app.updateTouchMode?.();
     if (user && this.app.game && this.app.state === 'game' && !this.resultsEl) {
@@ -635,14 +625,13 @@ export class UI {
       <div class="res-mid">
         <div class="awards">${r.awards.map((a) => `<div class="award plate thin"><img src="${icons.portraits[`${a.classId}_${a.team}`]}" alt=""><div><div class="t">${esc(a.title)}</div><div class="n" style="color:${a.team ? '#8fb8ff' : '#ff8f80'}">${esc(a.name)}${a.playerId === myId ? ' (you)' : ''}</div><div class="v">${a.value.toLocaleString()} ${esc(a.unit)}</div></div></div>`).join('')}</div>
         <div class="podium-names">${mvps.map((p, i) => `<div><span>${['MVP', '2nd', '3rd'][i]}</span>${esc(p.name)}</div>`).join('')}</div>
-        <div class="xp-panel plate">${summary ? `${this.armory.rewardsHTML(summary)}<h3>${summary.won ? 'Victory' : summary.draw ? 'Draw' : 'Defeat'} · XP earned</h3>${summary.xp.lines.map((l) => `<div class="xp-line"><span>${esc(l.label)}${l.count > 1 ? ` ×${l.count}` : ''}</span><b>+${l.xp}</b></div>`).join('')}<div class="xp-total"><span>Total</span><span>+${summary.xp.total}</span></div>${summary.levelAfter > summary.levelBefore ? `<div class="levelup">Level up! You are now level ${summary.levelAfter}</div>` : ''}${summary.newAchievements.map((a) => `<div class="levelup" style="font-family:var(--ui);font-weight:700">Badge unlocked: ${esc(a.name)}</div>`).join('')}<div class="xpbar" style="margin-top:12px"><i style="width:${levelFromXp(this.app.profile.data.xp).into / levelFromXp(this.app.profile.data.xp).need * 100}%"></i></div>` : '<p class="note">Spectated match</p>'}</div>
+        <div class="xp-panel plate">${summary ? `<h3>${summary.won ? 'Victory' : summary.draw ? 'Draw' : 'Defeat'} · XP earned</h3>${summary.xp.lines.map((l) => `<div class="xp-line"><span>${esc(l.label)}${l.count > 1 ? ` ×${l.count}` : ''}</span><b>+${l.xp}</b></div>`).join('')}<div class="xp-total"><span>Total</span><span>+${summary.xp.total}</span></div>${summary.levelAfter > summary.levelBefore ? `<div class="levelup">Level up! You are now level ${summary.levelAfter}</div>` : ''}${summary.newAchievements.map((a) => `<div class="levelup" style="font-family:var(--ui);font-weight:700">Badge unlocked: ${esc(a.name)}</div>`).join('')}<div class="xpbar" style="margin-top:12px"><i style="width:${levelFromXp(this.app.profile.data.xp).into / levelFromXp(this.app.profile.data.xp).need * 100}%"></i></div>` : '<p class="note">Spectated match</p>'}</div>
       </div>
       <div class="res-table"><table class="tbl"><thead><tr><th>Player</th><th>Team</th><th>Class</th><th class="num">Score</th><th class="num">K</th><th class="num">A</th><th class="num">D</th><th class="num">Damage</th><th class="num">Healing</th>${r.mode === 'ctf' ? '<th class="num">Caps</th><th class="num">Returns</th>' : ''}</tr></thead><tbody>${players.map((p) => `<tr style="${p.id === myId ? 'background:rgba(240,180,41,.15)' : ''}"><td>${esc(p.name)}${p.isBot ? ' <span class="muted small">bot</span>' : ''}</td><td style="color:${p.team ? '#8fb8ff' : '#ff8f80'}">${TEAM_NAMES[p.team]}</td><td>${esc(getClass(p.classId).displayName)}</td><td class="num">${p.stats.score}</td><td class="num">${p.stats.kills}</td><td class="num">${p.stats.assists}</td><td class="num">${p.stats.deaths}</td><td class="num">${Math.round(p.stats.damage)}</td><td class="num">${Math.round(p.stats.healing)}</td>${r.mode === 'ctf' ? `<td class="num">${p.stats.captures}</td><td class="num">${p.stats.returns}</td>` : ''}</tr>`).join('')}</tbody><tfoot>${r.teamStats.map((t, i) => `<tr class="muted"><td>${TEAM_NAMES[i]} total</td><td></td><td></td><td></td><td class="num">${t.kills}</td><td class="num">${t.assists}</td><td class="num">${t.deaths}</td><td class="num">${Math.round(t.damage)}</td><td class="num">${Math.round(t.healing)}</td>${r.mode === 'ctf' ? `<td class="num">${t.captures}</td><td></td>` : ''}</tr>`).join('')}</tfoot></table></div>
       <div class="res-foot"><span class="note next" style="align-self:center">Next match starting soon…</span><button class="btn primary stay">Stay for next match</button><button class="btn leave">Return to menu</button></div>`;
     this.root.appendChild(el);
     this.resultsEl = el;
     el.querySelector('.leave').addEventListener('click', () => this.app.leaveMatch());
-    el.querySelector('.open-crates')?.addEventListener('click', () => this.openSheet('crates'));
     el.querySelector('.stay').addEventListener('click', () => { el.querySelector('.stay').disabled = true; el.querySelector('.next').textContent = 'Waiting for the server to start the next match…'; });
     this.wireSounds(el);
     // podium: MVP characters with their victory poses
