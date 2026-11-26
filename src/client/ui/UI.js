@@ -89,7 +89,7 @@ export class UI {
     this.hud.show(false);
     if (this.menuEl) this.menuEl.remove();
     const p = this.app.profile;
-    const m = h('div', 'tm');
+    const m = h('div', 'tmenu');
     const maps = mapList();
     const featured = maps[Math.floor(Date.now() / 86400000) % maps.length];
     m.innerHTML = `

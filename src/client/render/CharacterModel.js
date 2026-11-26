@@ -856,6 +856,51 @@ function accessories(classId, team, j, s, prop) {
   return hat;
 }
 
+// ---------------------------------------------------------------- volume details
+// Extra geometry that breaks up the pure-box silhouette: neck, nose, ears, hands and boot toes.
+const NECK = 1;
+const HAND = {
+  scout: (st) => 0xeeebe2, spy: () => 0x161616, marksman: () => 0x5a3e28, mechanic: (st) => st.skin,
+  doctor: (st) => st.glove, juggernaut: () => 0x1e1e1e, incinerator: () => 0x1e1e20, demolitionist: (st) => st.skin,
+};
+const NECK_COL = { spy: (st) => st.mask, incinerator: (st) => st.mask, doctor: () => 0xe6e2d8 };
+function detailVolumes(classId, team, j, s, prop, cos) {
+  const st = styleFor(classId, team);
+  const A = (parent, x, y, z, w, h, d, col) => {
+    const m = new THREE.Mesh(boxGeo(w * s, h * s, d * s), colorMat(col));
+    m.position.set(x * s, y * s, z * s);
+    m.castShadow = true;
+    parent.add(m);
+    return m;
+  };
+  const [bw, bh] = prop.body;
+  const [hw, , hd] = prop.head;
+  // neck (the head sits NECK px above the torso)
+  const neck = NECK_COL[classId] ? NECK_COL[classId](st) : st.skin;
+  A(j.torso, 0, bh + NECK / 2, 0, 3.6, NECK + 0.2, 3.4, shadeNum(neck, 0.82));
+  // nose and ears (masked faces skip what the mask would hide)
+  const skin = classId === 'spy' ? st.skin : st.skin;
+  if (classId !== 'incinerator') {
+    A(j.head, 0, 4.1, -hd / 2 - 0.3, 1.2, 1.3, 0.6, shadeNum(skin, 0.95));
+  }
+  if (classId !== 'incinerator' && classId !== 'scout') {
+    const ear = classId === 'spy' ? st.mask : st.skin;
+    for (const sx of [-1, 1]) A(j.head, sx * (hw / 2 + 0.25), 3.6, 0.4, 0.5, 1.8, 1.4, shadeNum(ear, 0.88));
+  }
+  if (classId === 'juggernaut') A(j.head, 0, 0.5, -hd / 2 - 0.25, 4.4, 1, 0.5, shadeNum(st.skin, 0.95));
+  // hands: a slightly larger block at the end of each arm
+  const gs = gloveSpec(cos?.gloves, team);
+  const handCol = gs ? gs.main : HAND[classId](st);
+  const [aw, al, ad] = prop.arm;
+  for (const arm of [j.armL, j.armR]) A(arm, 0, -(al - aw / 2 - 1.3), 0, aw + 0.6, 2.4, ad + 0.6, handCol);
+  // boot toes poking out in front
+  const [lw, ll, ld] = prop.leg;
+  for (const leg of [j.legL, j.legR]) A(leg, 0, -ll + 0.8, -ld / 2 - 0.55, lw + 0.3, 1.6, 1.2, shadeNum(st.boots, 1.05));
+  // belly for the big guy
+  if (classId === 'juggernaut') A(j.torso, 0, 3.2, -prop.body[2] / 2 - 0.4, bw - 2, 4.4, 0.8, st.shirt);
+  void bh;
+}
+
 // ---------------------------------------------------------------- rig
 const _qx = new THREE.Quaternion(), _qy = new THREE.Quaternion();
 const _X = new THREE.Vector3(1, 0, 0), _Y = new THREE.Vector3(0, 1, 0);
@@ -910,7 +955,7 @@ export class CharacterRig {
     j.torso = new THREE.Group();
     j.hips.add(j.torso);
     const body = mk('body', prop.body); body.position.y = prop.body[1] * s / 2; j.torso.add(body);
-    j.head = new THREE.Group(); j.head.position.y = prop.body[1] * s;
+    j.head = new THREE.Group(); j.head.position.y = (prop.body[1] + NECK) * s;
     const head = mk('head', prop.head); head.position.y = prop.head[1] * s / 2; j.head.add(head);
     j.torso.add(j.head);
     const armY = (prop.body[1] - prop.arm[0] / 2) * s;
@@ -923,6 +968,7 @@ export class CharacterRig {
     j.bodyH = prop.body[1]; j.bodyW = prop.body[0]; j.bodyD = prop.body[2];
     this.j = j;
     this.classHat = accessories(this.classId, this.team, j, s, prop);
+    detailVolumes(this.classId, this.team, j, s, prop, this.opts.cosmetics);
     const hatOn = !!getItem(this.opts.cosmetics?.hat);
     const hairGeo = hairVoxels(this.classId, this.team, s, hatOn);
     if (hairGeo) {
@@ -1142,6 +1188,14 @@ export function buildArmMesh(classId, team, gloves, len) {
   }
   m.rotation.x = Math.PI / 2;
   m.position.z = len / 2 - dims[0] * s * 0.3;
+  // hand block at the end of the sleeve, matching the third-person model
+  {
+    const st = styleFor(classId, team);
+    const gs = gloveSpec(gloves, team);
+    const hm = new THREE.Mesh(boxGeo((dims[0] + 0.6) * s, (dims[2] + 0.6) * s, 2.4 * s), colorMat(gs ? gs.main : HAND[classId](st)));
+    hm.position.z = 1.0 * s - dims[0] * s * 0.3;
+    g.add(hm);
+  }
   // slimmer cross-section in first person so the arm frames the weapon instead of covering it
   g.scale.set(0.5, 0.5, 1);
   g.add(m);

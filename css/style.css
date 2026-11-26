@@ -730,7 +730,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 /* ============================================================================
    MAIN MENU (TF2-style reference layout)
    ========================================================================== */
-.tm { position: fixed; inset: 0; color: var(--bone); }
+.tmenu { position: fixed; inset: 0; color: var(--bone); }
 .tm-top { position: absolute; left: 0; right: 0; top: 0; height: 58px; display: flex; align-items: stretch; background: #1f1c19; }
 .tm-top button { border: 0; cursor: pointer; color: var(--bone); display: grid; place-items: center; }
 .tm-top svg { width: 30px; height: 30px; }
@@ -786,7 +786,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .tm-classcard .st { display: grid; gap: 2px; font: 400 17px var(--display); text-transform: uppercase; }
 .tm-classcard .st em { font-style: normal; color: #f0c040; }
 .tm-status { position: absolute; right: 20px; bottom: 14px; font: 700 12px var(--ui); color: rgba(239,230,207,.7); }
-.tm.ar-open .tm-left, .tm.ar-open .tm-classcard, .tm.ar-open .tm-status { visibility: hidden; }
+.tmenu.ar-open .tm-left, .tmenu.ar-open .tm-classcard, .tmenu.ar-open .tm-status { visibility: hidden; }
 @media (max-width: 1100px) {
   .tm-left { left: 16px; width: min(560px, 52vw); }
   .tm-find { font-size: 22px; padding: 0 18px; }
