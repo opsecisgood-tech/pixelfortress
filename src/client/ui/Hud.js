@@ -6,8 +6,10 @@ import { WEAPONS, ABILITY_SOURCES } from '../../shared/config/weapons.js';
 import { MODES } from '../../shared/config/modes.js';
 import { MAP_IDS } from '../../maps/index.js';
 import { getMap } from '../../maps/index.js';
+import { PROJECTILE_KINDS } from '../../server/projectiles.js';
 import { PF, MATCH_STATE, FLAG_STATE, FLAG_STATE_NAMES, TEAM_NAMES } from '../../shared/constants.js';
 
+const STICKY_KIND = PROJECTILE_KINDS.indexOf('sticky');
 const BRIEFCASE = '<svg viewBox="0 0 30 26" aria-hidden="true"><rect x="2" y="7" width="26" height="17" rx="2" fill="#ece3cb" stroke="#2a2420" stroke-width="2"/><path d="M10 7V4h10v3" fill="none" stroke="#ece3cb" stroke-width="3"/><rect x="12" y="13" width="6" height="4" fill="#2a2420"/></svg>';
 const CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="#ece3cb" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -27,7 +29,7 @@ export class Hud {
   build() {
     const r = this.root;
     r.innerHTML = `
-      <div class="vignette"></div><div class="heal-vignette"></div><div class="focus-tint"></div>
+      <div class="vignette"></div><div class="heal-vignette"></div><div class="focus-tint"></div><div class="cloak-tint"></div>
       <div class="scope hidden"><div class="charge"><i></i></div></div>
       <div class="hx-timer timer-box">${CLOCK}<b class="tm">8:00</b><span class="md"></span></div>
       <div class="hx-obj"></div>
@@ -68,7 +70,7 @@ export class Hud {
       chat: q('.chatbox'), clsIc: q('.cls-ic'), hp: q('.hp-num'), hpBar: q('.hx-cross .lvl'), cross: q('.hx-cross'), fx: q('.status-fx'), ab: q('.ability-plate'), obj: q('.hx-obj'), res: q('.hx-ammo .res'),
       abArc: q('.ability-plate .arc'), abKey: q('.ability-plate .key'), abNm: q('.ability-plate .nm'), abCd: q('.ability-plate .cd'),
       ammo: q('.ammo-num'), wn: q('.wn'), wimg: q('.wimg'), rel: q('.reload-tag'), slots: q('.slots'), meterWrap: q('.meter-wrap'), meter: q('.meter-fill'), mlabel: q('.mlabel'),
-      scope: q('.scope'), scopeCharge: q('.scope .charge i'), vig: q('.vignette'), healVig: q('.heal-vignette'), focus: q('.focus-tint'), turret: q('.turret-status'), mobile: q('.mobile-top'),
+      scope: q('.scope'), scopeCharge: q('.scope .charge i'), vig: q('.vignette'), healVig: q('.heal-vignette'), focus: q('.focus-tint'), cloakTint: q('.cloak-tint'), turret: q('.turret-status'), mobile: q('.mobile-top'),
     };
     this.el.mobile.querySelector('.m-score').addEventListener('click', () => this.showScoreboard(!this.sbVisible));
     this.el.mobile.querySelector('.m-class').addEventListener('click', () => this.app.ui.openClassMenu(true));
@@ -199,9 +201,12 @@ export class Hud {
     if (flags & PF.SPAWN_PROTECT) fx.push('<span class="prot">Protected</span>');
     if (flags & PF.DISGUISED) fx.push('<span class="rev">Disguised</span>');
     if (flags & PF.CARRIER) fx.push('<span class="oc">Carrying flag</span>');
+    if (flags & PF.CLOAKED) fx.push('<span class="rev">Cloaked</span>');
+    if (me.ry > 0) fx.push(`<span class="heal">Rallied ${Math.ceil(me.ry)}s</span>`);
     const fxs = fx.join('');
     if (fxs !== this.lastFx) { this.lastFx = fxs; el.fx.innerHTML = fxs; }
     el.healVig.style.opacity = flags & PF.HEALED ? 1 : 0;
+    el.cloakTint.style.opacity = flags & PF.CLOAKED ? 1 : 0;
     // ability
     const [cd, active, charge, isActive] = me.ab;
     const ab = cls.ability;
@@ -249,8 +254,10 @@ export class Hud {
       if (w.def.spinUp) meter = ['Spin', w.spin];
       if (w.def.scope && w.scoped) meter = ['Charge', w.charge];
       if (ab.id === 'overcharge') meter = [isActive ? 'Overcharge active' : charge >= 1 ? 'Overcharge ready · E' : 'Overcharge', charge];
+      if (me.ck) meter = [me.ck[1] ? 'Cloaked · right-click to decloak' : me.ck[0] >= cls.cloak.minToCloak ? 'Cloak · right-click' : 'Cloak recharging', me.ck[0]];
+      if (w.id === 'stickylauncher') { const n = snap.pr.filter((p) => p[8] === s.myId && p[1] === STICKY_KIND).length; meter = [`Stickies ${n}/8 · right-click detonates`, n / 8, true]; }
       el.meterWrap.classList.toggle('hidden', !meter);
-      if (meter) { el.mlabel.textContent = `${meter[0]} ${Math.floor(meter[1] * 100)}%`; el.meter.style.width = `${meter[1] * 100}%`; el.meterWrap.classList.toggle('full', meter[1] >= 1); }
+      if (meter) { el.mlabel.textContent = meter[2] ? meter[0] : `${meter[0]} ${Math.floor(meter[1] * 100)}%`; el.meter.style.width = `${meter[1] * 100}%`; el.meterWrap.classList.toggle('full', meter[1] >= 1); }
       el.scopeCharge.style.width = `${w.charge * 100}%`;
       // dynamic crosshair spread
       if (this.app.settings.crosshair.dynamic) {

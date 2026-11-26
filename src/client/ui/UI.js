@@ -460,7 +460,7 @@ export class UI {
       });
     };
     render();
-    this.classKeys = (e) => { const n = parseInt(e.key, 10); if (n >= 1 && n <= 8 && this.sheetKind === 'class') { cur = CLASS_IDS[n - 1]; render(); } };
+    this.classKeys = (e) => { const n = parseInt(e.key, 10); if (n >= 1 && n <= CLASS_IDS.length && this.sheetKind === 'class') { cur = CLASS_IDS[n - 1]; render(); } };
     window.addEventListener('keydown', this.classKeys, { once: false });
     const prevClose = this.closeSheet.bind(this);
     void prevClose;

@@ -63,6 +63,19 @@ export class Abilities {
         p.ability.activeUntil = t + ab.duration;
         this.g.event(['ab', p.id, ab.id, 1], p.ms);
         return;
+      case 'rally': {
+        if (t < p.ability.cdUntil || p.ability.active) return;
+        p.ability.active = true;
+        p.ability.activeUntil = t + ab.duration;
+        p.ability.cdUntil = t + ab.duration + ab.cooldown;
+        for (const q of this.g.players.values()) {
+          if (!q.alive || q.team !== p.team) continue;
+          if (Math.hypot(q.ms.x - p.ms.x, q.ms.y - p.ms.y, q.ms.z - p.ms.z) > ab.radius) continue;
+          q.rallyUntil = Math.max(q.rallyUntil || 0, t + ab.duration);
+        }
+        this.g.event(['ab', p.id, ab.id, 1], p.ms);
+        return;
+      }
       case 'thermalburst':
         if (t < p.ability.cdUntil) return;
         p.ability.cdUntil = t + ab.cooldown;
@@ -92,7 +105,7 @@ export class Abilities {
     const enemyTeam = otherTeam(p.team);
     const enemies = [...this.g.players.values()].filter((q) => q.team === enemyTeam);
     const pick = enemies.length ? enemies[Math.floor(Math.random() * enemies.length)] : null;
-    const classId = pick ? pick.classId : CLASS_IDS[Math.floor(Math.random() * 8)];
+    const classId = pick ? pick.classId : CLASS_IDS[Math.floor(Math.random() * CLASS_IDS.length)];
     p.disguise = { team: enemyTeam, classId: classId === 'spy' ? 'scout' : classId, fakeId: pick ? pick.id : 0, until: this.g.time + getClass('spy').ability.duration };
     p.ability.active = true;
     p.ability.activeUntil = p.disguise.until;
@@ -163,9 +176,10 @@ export class Abilities {
         tu.hp = Math.min(tu.maxHp, tu.hp + (TURRET.maxHp * 0.5 / TURRET.buildTime) * dt);
         continue;
       }
+      if (tu.sappedUntil > g.time) { tu.target = -1; continue; } // shorted out by a sapper
       const head = [tu.x, tu.y + 0.95, tu.z];
       let target = tu.target >= 0 ? g.players.get(tu.target) : null;
-      const validT = (q) => q && q.alive && q.team !== tu.team && !q.disguise &&
+      const validT = (q) => q && q.alive && q.team !== tu.team && !q.disguise && !q.cloak?.on &&
         Math.hypot(q.ms.x - tu.x, q.ms.y - tu.y, q.ms.z - tu.z) <= TURRET.range && g.world.los(head, [q.ms.x, q.ms.y + 1.1, q.ms.z]);
       if (!validT(target)) {
         target = null;
@@ -243,8 +257,28 @@ export class Abilities {
 
   removeOwned(pid) {
     for (const tu of [...this.turrets.values()]) if (tu.owner === pid) this.destroyTurret(tu, null, true);
+    for (const pr of [...this.g.projectiles.list.values()]) if (pr.kind === 'sticky' && pr.owner === pid) this.g.projectiles.remove(pr);
     const ch = this.charges.get(pid);
     if (ch !== undefined) { this.g.projectiles.list.delete(ch); this.charges.delete(pid); }
+  }
+
+  // Spy invisibility watch (alt-fire toggles).
+  toggleCloak(p) {
+    const cfg = getClass('spy').cloak;
+    const c = p.cloak;
+    if (!p.alive) return;
+    if (c.on) { this.uncloak(p); return; }
+    if (c.meter < cfg.minToCloak) { this.notice(p, 'Cloak recharging'); return; }
+    if (p.carrying >= 0) { this.notice(p, "Can't cloak while carrying the flag"); return; }
+    c.on = true;
+    this.g.event(['ck', p.id, 1], p.ms);
+  }
+
+  uncloak(p) {
+    if (!p.cloak.on) return;
+    p.cloak.on = false;
+    p.cloak.attackAt = this.g.time + getClass('spy').cloak.attackDelay;
+    this.g.event(['ck', p.id, 0], p.ms);
   }
 
   onOwnerDeath(p) {
@@ -253,8 +287,14 @@ export class Abilities {
 
   update(dt) {
     const g = this.g;
+    const cloakCfg = getClass('spy').cloak;
     for (const p of g.players.values()) {
       const ab = getClass(p.classId).ability;
+      if (p.classId === 'spy' && p.alive) {
+        const c = p.cloak;
+        if (c.on) { c.meter -= dt / cloakCfg.duration; if (c.meter <= 0) { c.meter = 0; this.uncloak(p); } }
+        else c.meter = Math.min(1, c.meter + dt / cloakCfg.recharge);
+      }
       if (p.ability.active && g.time >= p.ability.activeUntil) {
         p.ability.active = false;
         if (ab.id === 'disguise' && p.disguise) this.reveal(p);
@@ -275,7 +315,7 @@ export class Abilities {
   snapshotTurrets() {
     const out = [];
     for (const tu of this.turrets.values()) {
-      out.push([tu.id, tu.team, round2(tu.x), round2(tu.y), round2(tu.z), round2(tu.yaw), Math.ceil(tu.hp), tu.maxHp, tu.owner, tu.ammo, tu.building > 0 ? 1 : 0, tu.target]);
+      out.push([tu.id, tu.team, round2(tu.x), round2(tu.y), round2(tu.z), round2(tu.yaw), Math.ceil(tu.hp), tu.maxHp, tu.owner, tu.ammo, tu.building > 0 ? 1 : 0, tu.target, tu.sappedUntil > this.g.time ? 1 : 0]);
     }
     return out;
   }

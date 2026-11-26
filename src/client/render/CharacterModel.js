@@ -24,6 +24,7 @@ const PROPORTIONS = {
   juggernaut: { head: [8, 8, 8], body: [12, 13, 7], arm: [6, 13, 6], leg: [5, 12, 5], height: 2.05 },
   incinerator: { head: [8, 8, 8], body: [9, 12, 5], arm: [4, 12, 4], leg: [4, 12, 4], height: 1.86 },
   demolitionist: { head: [8, 8, 8], body: [9, 12, 5], arm: [4, 12, 4], leg: [4, 12, 4], height: 1.86 },
+  soldier: { head: [8, 8, 8], body: [10, 12, 6], arm: [4, 12, 4], leg: [4, 12, 4], height: 1.92 },
 };
 
 // ---------------------------------------------------------------- painting helpers
@@ -79,6 +80,7 @@ function styleFor(classId, team) {
     juggernaut: { skin: 0xd29a74, hair: 0xd29a74, shirt: team ? 0x4a72a8 : 0xb2443a, pants: 0x56554a, boots: 0x2a2622, sleeve: team ? 0x4a72a8 : 0xb2443a, vest: 0x33352f },
     incinerator: { skin: 0x26262a, hair: 0x26262a, shirt: team ? 0x4a6e9e : 0xa8443a, pants: team ? 0x4a6e9e : 0xa8443a, boots: 0x1e1e20, sleeve: team ? 0x4a6e9e : 0xa8443a, vest: 0x232323, mask: 0x222224 },
     demolitionist: { skin: 0x6e4630, hair: 0x1c1c1e, shirt: team ? 0x41679a : 0xa23a32, pants: team ? 0x41679a : 0xa23a32, boots: 0x2a2420, sleeve: team ? 0x41679a : 0xa23a32, vest: 0x3a3c3e },
+    soldier: { skin: 0xd8a27c, hair: 0x3a2a1e, shirt: team ? 0x3f6aa0 : 0xa8382e, pants: 0x34332e, boots: 0x1e1a16, sleeve: team ? 0x3f6aa0 : 0xa8382e, vest: 0x5a5c40, helmet: 0x4c5236 },
   }[classId];
   return { ...S, tc, td };
 }
@@ -248,7 +250,7 @@ function paintPart(classId, team, part, dims, gloves) {
 // Hand-tuned looks for the Scout (cap, headset, tee, satchel, wraps, socks), Spy (pinstripe suit, balaclava),
 // Marksman (slouch hat, amber shades, open vest over a rolled-sleeve shirt, jeans) and Demolitionist
 // (knit cap, eye patch, armoured vest with grenade pods, rolled undershirt, gaiters).
-const SIGNATURE = new Set(['scout', 'spy', 'marksman', 'demolitionist', 'incinerator', 'juggernaut', 'mechanic', 'doctor']);
+const SIGNATURE = new Set(['scout', 'spy', 'marksman', 'demolitionist', 'incinerator', 'juggernaut', 'mechanic', 'doctor', 'soldier']);
 function signaturePaint(classId, part, c, L, st, rnd, dims, glove) {
   const [w, h] = dims;
   const sides = ['right', 'front', 'left', 'back'];
@@ -367,6 +369,42 @@ function signaturePaint(classId, part, c, L, st, rnd, dims, glove) {
       rows(h - 4, 1, shadeNum(st.pants, 0.78));
       rows(h - 3, 3, st.boots); rows(h - 1, 1, shadeNum(st.boots, 0.6));
       const [ox, oy, ow, oh] = L.bottom; noise(c, ox, oy, ow, oh, shadeNum(st.boots, 0.6), 0.05, rnd);
+    }
+  } else if (classId === 'soldier') {
+    const coat = st.shirt, coatD = shadeNum(st.shirt, 0.72);
+    if (part === 'head') {
+      fill(st.skin, 0.05);
+      // helmet sits low over the eyes (voxel helmet on top); square jaw, gritted teeth, stubble
+      const helm = st.helmet;
+      for (const f of sides) { const [x, y, ww] = L[f]; noise(c, x, y, ww, 4, helm, 0.1, rnd); }
+      const [tx, ty, tw, th] = L.top; noise(c, tx, ty, tw, th, helm, 0.1, rnd);
+      P(c, fx, fy + 4, fw, 1, hex(shadeNum(st.skin, 0.62)));
+      P(c, fx + 3, fy + 4, 2, 2, hex(shadeNum(st.skin, 0.86))); P(c, fx + 3, fy + 5, 2, 1, hex(shadeNum(st.skin, 0.74)));
+      noise(c, fx + 1, fy + 6, 6, 2, shadeNum(st.skin, 0.8), 0.15, rnd);
+      P(c, fx + 2, fy + 6, 4, 1, '#3a1a12'); P(c, fx + 2, fy + 6, 4, 1, '#efe8d8'); P(c, fx + 3, fy + 6, 1, 1, '#c8c0b0'); P(c, fx + 5, fy + 6, 1, 1, '#c8c0b0');
+      P(c, fx + 1, fy + 6, 1, 1, hex(shadeNum(st.skin, 0.7))); P(c, fx + 6, fy + 6, 1, 1, hex(shadeNum(st.skin, 0.7)));
+      for (const f of ['right', 'left']) { const [x, y, ww] = L[f]; noise(c, x, y + 5, ww, 3, shadeNum(st.skin, 0.84), 0.12, rnd); }
+    } else if (part === 'body') {
+      fill(coat, 0.06);
+      // double-breasted field coat: front opening, two rows of brass buttons, dark belt
+      P(c, fx + Math.floor(fw / 2), fy + 1, 1, h - 3, hex(coatD));
+      for (let i = 0; i < 3; i++) { P(c, fx + 2, fy + 3 + i * 3, 1, 1, '#d8b040'); P(c, fx + fw - 3, fy + 3 + i * 3, 1, 1, '#d8b040'); }
+      rows(h - 3, 2, 0x3a2a1c); P(c, fx + Math.floor(fw / 2) - 1, fy + h - 3, 2, 2, '#c8a040');
+      rows(h - 1, 1, coat);
+    } else if (part === 'arm') {
+      fill(coat, 0.06);
+      // full-length coat sleeves with a darker turned-back cuff and team piping
+      rows(h - 5, 2, coatD); rows(h - 5, 1, shadeNum(coatD, 1.2));
+      const hand = glove ?? st.skin;
+      rows(h - 3, 3, hand); const [ox, oy, ow, oh] = L.bottom; noise(c, ox, oy, ow, oh, hand, 0.05, rnd);
+      rows(0, 1, coatD);
+    } else if (part === 'leg') {
+      fill(st.pants, 0.07);
+      // dark trousers tucked into tall laced boots
+      rows(h - 6, 1, shadeNum(st.pants, 0.75));
+      rows(h - 5, 5, st.boots); rows(h - 5, 1, 0x3a3028); rows(h - 1, 1, shadeNum(st.boots, 0.7));
+      for (let y = h - 4; y < h - 1; y += 2) P(c, fx + 1, fy + y, fw - 2, 1, '#4a3a2c');
+      const [ox, oy, ow, oh] = L.bottom; noise(c, ox, oy, ow, oh, st.boots, 0.05, rnd);
     }
   } else if (classId === 'demolitionist') {
     if (part === 'head') {
@@ -582,7 +620,7 @@ function paintOverlay(classId, team, part, dims) {
   const cap = (col, face = 'top') => { painted = true; const [x, y, fw, fh] = L[face]; noise(c, x, y, fw, fh, col, 0.1, rnd); };
   const sleeve = {
     scout: [3, st.shirt], spy: [h - 3, st.sleeve], marksman: [6, st.sleeve], mechanic: [6, st.sleeve], doctor: [h - 4, st.shirt],
-    juggernaut: [4, st.sleeve], incinerator: [5, st.sleeve], demolitionist: [5, st.sleeve],
+    juggernaut: [4, st.sleeve], incinerator: [5, st.sleeve], demolitionist: [5, st.sleeve], soldier: [h - 3, st.sleeve],
   }[classId];
   if (part === 'arm') {
     const [n, col] = sleeve;
@@ -628,6 +666,18 @@ function paintOverlay(classId, team, part, dims) {
       P(c, fx, fy + 6, pw - 1, 2, shadeNum(col, 0.8)); P(c, fx + fw - pw + 1, fy + 6, pw - 1, 2, shadeNum(col, 0.8));
       for (let i = 0; i < pw - 1; i++) { P(c, fx + i, fy + 2, 1, 2, 0xd8b04a); P(c, fx + i, fy + 2, 1, 1, 0xa8742a); }
       for (let i = 0; i < fh - 3; i++) { const x = Math.round(fw - 1 - (i * (fw - 1)) / (fh - 4)); P(c, fx + x, fy + i, 1, 1, 0x7a5636); P(c, bx + (bw - 1 - x), by + i, 1, 1, 0x7a5636); }
+    } else if (classId === 'soldier') {
+      // coat outer layer: wraps the torso, high collar, darker front placket and a heavy belt
+      const col = st.shirt, colD = shadeNum(col, 0.72);
+      noise(c, fx, fy, fw, fh - 1, col, 0.06, rnd); noise(c, bx, by, bw, bh - 1, col, 0.06, rnd);
+      for (const f of ['right', 'left']) { const [x, y, ww] = L[f]; noise(c, x, y, ww, fh - 1, col, 0.06, rnd); }
+      cap(col);
+      rows(0, 1, colD);
+      const mid = Math.floor(fw / 2);
+      P(c, fx + mid - 1, fy + 1, 1, fh - 4, colD); P(c, fx + mid, fy, 1, 2, 0xd8d0b8);
+      for (let i = 0; i < 3; i++) { P(c, fx + 2, fy + 3 + i * 3, 1, 1, 0xd8b040); P(c, fx + fw - 3, fy + 3 + i * 3, 1, 1, 0xd8b040); }
+      rows(h - 3, 2, 0x3a2a1c); P(c, fx + mid - 1, fy + h - 3, 2, 2, 0xc8a040);
+      P(c, bx + 1, by + 3, bw - 2, 1, colD);
     } else if (classId === 'demolitionist') {
       // dark armoured vest: high collar, chest plate seams, heavy belt with buckle
       const col = st.vest;
@@ -671,6 +721,7 @@ function paintOverlay(classId, team, part, dims) {
     else rows(h - 3, 1, st.pants);
     if (classId === 'mechanic') { const [fx, fy, fw] = L.front; P(c, fx, fy + 5, fw, 2, 0x2e2e2e); }
     if (classId === 'demolitionist') rows(h - 5, 3, 0x55585c);
+    if (classId === 'soldier') { rows(h - 5, 1, 0x4a3c30); rows(h - 4, 1, shadeNum(st.boots, 1.3)); }
     if (classId === 'marksman') rows(h - 4, 1, shadeNum(st.pants, 0.78));
   } else if (part === 'head') {
     if (classId === 'doctor') {
@@ -828,6 +879,44 @@ function accessories(classId, team, j, s, prop, cos) {
       for (const sx of [-1, 1]) A(j.torso, sx * (bw / 2 - 1.5), bh + 0.1, 0, 1.2, 0.5, bd + 0.8, 0x232323);
       break;
     }
+    case 'soldier': {
+      // steel helmet worn low over the eyes, with a chin strap
+      const helm = 0x4c5236, helmD = 0x3a3f28, helmL = 0x5e6544;
+      hat.push(A(j.head, 0, 7.9, 0.2, 9.8, 3.4, 9.8, helm), A(j.head, 0, 9.8, 0.2, 8.2, 1, 8.2, helmL), A(j.head, 0, 10.4, 0.2, 5.6, 0.5, 5.6, helmL));
+      hat.push(A(j.head, 0, 5.3, -4.75, 9.8, 2.6, 1.3, helm), A(j.head, 0, 4.1, -5.1, 10, 0.5, 0.9, helmD));
+      hat.push(A(j.head, 4.75, 5.6, 0.4, 1.2, 3.4, 9, helm), A(j.head, -4.75, 5.6, 0.4, 1.2, 3.4, 9, helm), A(j.head, 0, 5.6, 4.85, 9.8, 3.4, 1.2, helm));
+      hat.push(A(j.head, 0, 6.2, 0.2, 10.6, 0.5, 10.6, helmD));
+      A(j.head, 4.35, 2.8, -1.4, 0.3, 3.6, 0.5, 0x2a2018); A(j.head, -4.35, 2.8, -1.4, 0.3, 3.6, 0.5, 0x2a2018);
+      A(j.head, 0, 0.9, -1.4, 8.9, 0.3, 0.5, 0x2a2018);
+      // coat collar
+      const coat = team ? 0x3f6aa0 : 0xa8382e, coatD = team ? 0x2e4e78 : 0x7a2820;
+      A(j.torso, 0, bh - 0.1, 0.2, bw + 1.2, 1.4, bd + 1.2, coatD);
+      // grenade bandolier across the chest (shoulder to hip), mirrored on the back
+      const strap = 0x5a5c40, nade = 0x55603a;
+      const n = 7;
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1);
+        const x = (bw / 2 - 1.1) - t * (bw - 2.2), y = bh - 1.3 - t * (bh - 4.2);
+        A(j.torso, x, y, -(bd / 2 + 0.55), 1.4, 1.5, 0.8, strap);
+        A(j.torso, -x, y, bd / 2 + 0.55, 1.4, 1.5, 0.8, strap);
+        if (i > 0 && i < n - 1 && i % 2 === 1) {
+          A(j.torso, x, y - 0.9, -(bd / 2 + 1.4), 1.7, 2, 1.7, nade);
+          A(j.torso, x, y - 0.9, -(bd / 2 + 2.3), 1.2, 0.4, 0.1, 0x6a7448);
+          A(j.torso, x + 0.5, y + 0.4, -(bd / 2 + 1.4), 0.5, 0.8, 0.5, 0x9a9a8a);
+          A(j.torso, x - 0.4, y + 0.3, -(bd / 2 + 1.4), 0.3, 0.3, 1.3, 0xc0c0b0);
+        }
+      }
+      // belt with pouches and a buckle
+      A(j.torso, 0, 0.9, 0, bw + 1.3, 1.5, bd + 1.3, 0x3a2a1c);
+      A(j.torso, 0, 0.9, -(bd / 2 + 0.75), 1.6, 1.2, 0.2, 0xc8a040);
+      for (const x of [-3.2, -1.6, 2.2, 3.8]) { A(j.torso, x, 0.4, -(bd / 2 + 1.2), 1.4, 2, 1.2, 0x5a5c40); A(j.torso, x, 1.2, -(bd / 2 + 1.85), 1.4, 0.5, 0.15, 0x4a4c34); }
+      A(j.torso, bw / 2 + 0.8, 0.3, 0.6, 1.2, 2.4, 2.6, 0x5a5c40);
+      // long coat skirt down to the knees, split at the front and back
+      const skirt = A(j.hips, 0, -3.1, 0, bw + 1, 6.2, bd + 1, coat); skirt.material = colorMat(coat, { flat: true });
+      A(j.hips, 0, -3.1, -(bd / 2 + 0.55), 0.4, 6.2, 0.1, coatD); A(j.hips, 0, -4.2, bd / 2 + 0.55, 0.4, 4, 0.1, coatD);
+      A(j.hips, 0, -6, 0, bw + 1.05, 0.5, bd + 1.05, coatD);
+      break;
+    }
     case 'demolitionist': {
       // snug knit cap with a rolled edge
       hat.push(A(j.head, 0, 8.5, 0, 8.7, 1.4, 8.7, 0x242426), A(j.head, 0, 7.4, 0, 8.9, 1, 8.9, 0x1c1c1e), A(j.head, 0, 9.3, 0, 7, 0.5, 7, 0x2a2a2c));
@@ -973,7 +1062,7 @@ export class CharacterRig {
     const def = WEAPON_MODELS[weaponId];
     // boxing gloves are worn on both hands instead of held
     this.setBoxing(!!def?.boxing);
-    const w = def?.boxing ? emptyWeapon() : buildWeapon(weaponId, { team: this.team, skin });
+    const w = def?.boxing || def?.fists ? emptyWeapon() : buildWeapon(weaponId, { team: this.team, skin });
     this.melee = !!def?.melee;
     this.twoHand = !!(def && !def.melee && Math.abs(def.muzzle3[2]) > 0.35);
     if (this.melee) { w.rotation.x = -Math.PI / 2; w.position.set(0, 0, 0); }
@@ -1160,6 +1249,7 @@ function poseAngles(id, t) {
     case 'diagnose': return pose(1.6, 1.05, -0.1, 0.35, { headX: 0.3, headY: -0.25 });
     case 'beast': { const p = hopAbs(5, 1); return pose(1.2 + p * 0.4, 1.2 + (1 - p) * 0.4, 1.15, -1.15, { torso: 0.3 }); }
     case 'warm': { const r = sn(t * 10) * 0.12; return pose(1.3 + r, 1.3 - r, -0.35, 0.35, { torso: 0.12, headX: 0.25 }); }
+    case 'attention': return pose(2.6, 0.02, 0.95, 0.05, { headX: -0.12 });
     case 'detonate': { const d = (sn(t * 3) * 0.5 + 0.5); return pose(0.6 + d * 0.6, 0.6 + d * 0.6, -0.2, 0.2, { torso: 0.2 + d * 0.3, hop: (1 - d) * 0.8 }); }
     default: return pose(0.2, 0.2, 0, 0);
   }

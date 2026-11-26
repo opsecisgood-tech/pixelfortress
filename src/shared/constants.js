@@ -78,6 +78,8 @@ export const PF = {
   SCOPED: 256 * 32,
   SPUN: 256 * 64,
   HEALED: 256 * 128,
+  RALLIED: 65536,       // boosted by a Soldier's Rally Cry
+  CLOAKED: 131072,      // Spy invisibility watch active
 };
 
 export const MATCH_STATE = {

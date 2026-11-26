@@ -3,7 +3,8 @@ import { getClass } from '../shared/config/classes.js';
 import { shotDirections } from '../shared/weaponLogic.js';
 import { rayAabb, round2 } from '../shared/math.js';
 
-export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt'];
+export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt', 'sticky'];
+export const MAX_STICKIES = 8;
 
 // Shared muzzle offset so client-predicted projectiles line up with server ones.
 export function projectileOrigin(eye, yaw, pitch) {
@@ -33,8 +34,37 @@ export class Projectiles {
         gravity: pr.gravity, radius: pr.radius, life: pr.lifetime, bounce: pr.bounce || 0,
         explode: pr.explode || null, damage: def.damage, ignite: !!pr.ignite, fuseExplode: !!pr.fuseExplode,
         crit: def.crit, critMult: def.critMult, key: ev.shot,
+        stick: !!pr.stick, noAutoExplode: !!pr.noAutoExplode, armTime: pr.armTime || 0,
       });
     }
+    if (pr.kind === 'sticky') this.capStickies(p.id);
+  }
+
+  // Keep at most MAX_STICKIES per owner: the oldest ones fizzle out.
+  capStickies(ownerId) {
+    const mine = [...this.list.values()].filter((q) => q.kind === 'sticky' && q.owner === ownerId).sort((a, b) => a.born - b.born);
+    while (mine.length > MAX_STICKIES) this.fizzle(mine.shift());
+  }
+
+  // Owner pressed alt-fire: detonate every armed sticky bomb. Returns how many went off.
+  detonateStickies(ownerId) {
+    let n = 0;
+    for (const pr of this.list.values()) {
+      if (pr.kind !== 'sticky' || pr.owner !== ownerId || this.g.time - pr.born < pr.armTime) continue;
+      pr.detonate = true; n++;
+    }
+    return n;
+  }
+
+  countStickies(ownerId) {
+    let n = 0;
+    for (const pr of this.list.values()) if (pr.kind === 'sticky' && pr.owner === ownerId) n++;
+    return n;
+  }
+
+  fizzle(pr) {
+    this.g.event(['i', pr.kind, round2(pr.x), round2(pr.y), round2(pr.z), 0, 1, 0, `${pr.owner}:${pr.key}`, 1], [pr.x, pr.y, pr.z]);
+    this.remove(pr);
   }
 
   spawn(o) {
@@ -45,7 +75,7 @@ export class Projectiles {
       gravity: o.gravity || 0, radius: o.radius || 0.1, born: this.g.time, die: this.g.time + (o.life || 3),
       bounce: o.bounce || 0, explode: o.explode, damage: o.damage, ignite: o.ignite, fuseExplode: o.fuseExplode,
       stick: !!o.stick, stuck: false, crit: o.crit || {}, critMult: o.critMult || 1, key: o.key || 0, detonate: false,
-      noAutoExplode: !!o.noAutoExplode,
+      noAutoExplode: !!o.noAutoExplode, armTime: o.armTime || 0,
     };
     this.list.set(id, pr);
     return pr;
@@ -82,7 +112,8 @@ export class Projectiles {
     for (const pr of [...this.list.values()]) {
       if (pr.detonate) { this.detonate(pr); continue; }
       if (g.time >= pr.die) {
-        if (pr.explode && (pr.fuseExplode || pr.kind === 'shell' || pr.kind === 'detcharge')) this.detonate(pr);
+        if (pr.explode && !pr.noAutoExplode && (pr.fuseExplode || pr.kind === 'shell' || pr.kind === 'detcharge')) this.detonate(pr);
+        else if (pr.kind === 'sticky') this.fizzle(pr);
         else this.remove(pr);
         continue;
       }
@@ -110,6 +141,7 @@ export class Projectiles {
           for (const q of g.players.values()) {
             if (!q.alive || q.team === pr.team) continue;
             if (g.time - pr.born < 0.03 && q.id === pr.owner) continue;
+            if (q.id === pr.ignore) continue;
             const hb = getClass(q.classId).hitbox;
             const r = pr.radius + 0.05;
             const hh = q.ms.crouch ? hb.height * 0.68 : hb.height;
@@ -117,7 +149,7 @@ export class Projectiles {
             if (t >= 0 && t < bestT) { bestT = t; hitPlayer = q; hitTurret = null; }
           }
           for (const tu of g.abilities.turrets.values()) {
-            if (tu.team === pr.team) continue;
+            if (tu.team === pr.team || tu.id === pr.ignoreTurret) continue;
             const t = rayAabb(pr.x, pr.y, pr.z, nx, ny, nz, tu.x - 0.55, tu.y, tu.z - 0.55, tu.x + 0.55, tu.y + 1.25, tu.z + 0.55, bestT);
             if (t >= 0 && t < bestT) { bestT = t; hitTurret = tu; hitPlayer = null; }
           }
@@ -132,6 +164,7 @@ export class Projectiles {
 
   onHitPlayer(pr, q) {
     const owner = this.g.players.get(pr.owner) || null;
+    if (pr.kind === 'sticky') { pr.vx *= -0.15; pr.vz *= -0.15; pr.vy = Math.min(pr.vy, 0); pr.ignore = q.id; return; } // bombs bounce off players
     if (pr.explode) { pr.directTarget = q; this.detonate(pr); return; }
     let dmg = pr.damage, crit = false;
     if (pr.crit.vsBurning && q.burn) { dmg *= pr.critMult; crit = true; }
@@ -143,6 +176,7 @@ export class Projectiles {
 
   onHitTurret(pr, tu) {
     const owner = this.g.players.get(pr.owner) || null;
+    if (pr.kind === 'sticky') { pr.vx *= -0.15; pr.vz *= -0.15; pr.vy = Math.min(pr.vy, 0); pr.ignoreTurret = tu.id; return; }
     if (pr.explode) { this.detonate(pr); return; }
     this.g.abilities.damageTurret(tu, pr.damage, owner);
     this.g.event(['i', pr.kind, round2(pr.x), round2(pr.y), round2(pr.z), 0, 0, 0, `${pr.owner}:${pr.key}`, 0], [pr.x, pr.y, pr.z]);

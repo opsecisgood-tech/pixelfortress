@@ -85,7 +85,7 @@ export class CaptureTheFlag {
       }
       // pickup by an enemy (disguise is dropped)
       if (live && flag.available && attackers.length) {
-        const p = attackers.find((a) => a.carrying < 0);
+        const p = attackers.find((a) => a.carrying < 0 && !a.cloak?.on);
         if (p) {
           const ev = flag.tryPickup({ id: p.id, alive: p.alive, team: p.team, carrying: p.carrying });
           if (ev) {

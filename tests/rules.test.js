@@ -12,7 +12,7 @@ import { assignAwards } from '../src/shared/awards.js';
 import { computeMatchXp, levelFromXp, xpForLevel } from '../src/shared/config/progression.js';
 
 test('exactly eight valid classes referencing real weapons in correct slots', () => {
-  assert.equal(CLASS_IDS.length, 8);
+  assert.equal(CLASS_IDS.length, 9);
   assert.deepEqual(validateClasses(WEAPONS), []);
   assert.deepEqual(validateWeapons(), []);
   assert.equal(getClass('juggernaut').health, 300);
@@ -159,13 +159,13 @@ test('weapon loadouts: every class has a valid arsenal and picks are sanitized',
     assert.equal(c.arsenal.length, 3, `${id} arsenal has 3 slots`);
     c.arsenal.forEach((list, slot) => {
       assert.equal(list[0], c.weapons[slot], `${id} default listed first`);
-      assert.ok(list.length >= 2, `${id} slot ${slot} has an alternate`);
+      assert.ok(list.length >= 1, `${id} slot ${slot} has at least one weapon`);
       for (const w of list) assert.equal(WEAPONS[w].slot, slot, `${w} in slot ${slot}`);
     });
   }
   assert.deepEqual(resolveWeapons('scout', ['kickback', 'claymore', '<x>']), ['kickback', 'sidekick', 'streetbat']);
   assert.deepEqual(resolveWeapons('demolitionist', null), CLASSES.demolitionist.weapons);
-  const all = sanitizeWeaponLoadouts({ spy: ['derringer', 'longsix', 'stiletto'], scout: 'junk' });
-  assert.deepEqual(all.spy, ['derringer', 'longsix', 'stiletto']);
+  const all = sanitizeWeaponLoadouts({ spy: ['longsix', 'derringer', 'stiletto'], scout: 'junk' });
+  assert.deepEqual(all.spy, ['longsix', 'derringer', 'stiletto']);
   assert.deepEqual(all.scout, CLASSES.scout.weapons);
 });

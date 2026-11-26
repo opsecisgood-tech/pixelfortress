@@ -99,6 +99,10 @@ const CLASS_ITEMS = [
   ['demolitionist', 'hat', 'blastcap', 'Blasting Cap', 1, [0xb02a2a, 0x701818, 0xe8b030]],
   ['demolitionist', 'mask', 'blastgoggles', 'Blast Goggles', 1, [0x2a2a2a, 0xffb040, 0x000000]],
   ['demolitionist', 'accessory', 'dynamitebelt', 'Dynamite Sash', 1, [0xc8402f, 0xe8e8e8, 0x3a2a1a]],
+  ['soldier', 'hat', 'officercap', "Officer's Cap", 2, [0x3e4434, 0x22261c, 0xe8b830]],
+  ['soldier', 'hat', 'garrison', 'Garrison Cap', 1, [0x5a5e44, 0x3a3e2a, 0xb02a2a]],
+  ['soldier', 'mask', 'cigar', 'Field Cigar', 1, [0x6a4a2a, 0xff7a30, 0xb8b0a0]],
+  ['soldier', 'accessory', 'warmedals', 'Service Medals', 1, [0xe8b830, 0xb02a2a, 0x2a4a8a]],
 ];
 
 // Weapon skins: pattern × palette. tier sums to rarity.
@@ -122,6 +126,7 @@ const CLASS_SKINS = [
   ['juggernaut', 'foundry', 'Foundry', 2, 'damascus', [0x4a4a4a, 0xe8892c, 0x222222]], ['juggernaut', 'bear', 'Bear Hide', 3, 'camo', [0x5a4a3a, 0x3a2e24, 0xb08a54]],
   ['incinerator', 'ember', 'Ember', 2, 'lava', [0x2a0e08, 0xff6a1a, 0xffd040]], ['incinerator', 'ashen', 'Ashen', 3, 'digital', [0x3a3a3a, 0x7a7a7a, 0xff8a2a]],
   ['demolitionist', 'tnt', 'TNT', 2, 'stripes', [0xc8402f, 0xefe6cf, 0x3a2a1a]], ['demolitionist', 'shrapnel', 'Shrapnel', 3, 'galaxy', [0x2a2e24, 0xb8c0a8, 0xffb040]],
+  ['soldier', 'drab', 'Olive Drab', 2, 'camo', [0x4a5034, 0x2e3222, 0x8a8a5a]], ['soldier', 'liberty', 'Liberty', 3, 'chevron', [0x1c2a5a, 0xefefef, 0xb02a2a]],
 ];
 const GLOVE_COLORS = [
   ['black', 'Tactical Black', 0, 0x222222], ['tan', 'Work Tan', 0, 0xb08a54], ['white', 'Clean White', 0, 0xf2f2ee],
@@ -139,6 +144,7 @@ const POSES = [
 const CLASS_POSES = [
   ['scout', 'bunt', 'Bunt Stance', 2], ['spy', 'tiptoe', 'Gentleman', 2], ['marksman', 'scan', 'Scan the Horizon', 2], ['mechanic', 'wrenchtwirl', 'Spanner Spin', 2],
   ['doctor', 'diagnose', 'Diagnosis', 2], ['juggernaut', 'beast', 'Unstoppable', 2], ['incinerator', 'warm', 'Warm Hands', 2], ['demolitionist', 'detonate', 'Plunger Push', 2],
+  ['soldier', 'attention', 'At Attention', 2],
 ];
 const EFFECTS = [
   ['pixels', 'Pixel Burst', 0, [0xc8402f, 0x8a2a1f, 0xffffff], 9, 5], ['confetti', 'Confetti', 0, [0xff3f6a, 0x3ff2ff, 0xffe03f, 0x58ff6a], 5, 6],

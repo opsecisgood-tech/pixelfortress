@@ -142,7 +142,7 @@ export function stepWeapons(ws, cmd, ctx) {
   const ready = t >= ws.ready;
   const fireHeld = !!(b & BTN.FIRE) && !ctx.disarmed;
   const altHeld = !!(b & BTN.ALT) && !ctx.disarmed;
-  const firePressed = !!(pressed & BTN.FIRE);
+  const firePressed = !!(pressed & BTN.FIRE) && !ctx.disarmed;
   const reloadMult = (ctx.reloadMult || 1) * (def.explosive ? (ctx.explosiveReloadMult || 1) : 1);
 
   // ---- Rotary spin ---------------------------------------------------------

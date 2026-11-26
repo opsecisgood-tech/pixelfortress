@@ -134,6 +134,20 @@ export class Combat {
 
   fireRepair(p, def, ev, eye, lt) {
     const dir = dirFromAngles(ev.y, ev.p);
+    if (def.sapper) {
+      // Sapper: only works on enemy turrets (shorts them out and drains their health)
+      let best = null, bt = Infinity;
+      for (const tu of this.g.abilities.turrets.values()) {
+        if (tu.team === p.team) continue;
+        const t = rayAabb(eye[0], eye[1], eye[2], dir[0], dir[1], dir[2], tu.x - 0.6, tu.y, tu.z - 0.6, tu.x + 0.6, tu.y + 1.3, tu.z + 0.6, def.repair.range);
+        if (t >= 0 && t < bt && this.g.world.los(eye, [tu.x, tu.y + 0.7, tu.z])) { bt = t; best = tu; }
+      }
+      if (!best) return;
+      best.sappedUntil = this.g.time + 0.45;
+      this.g.abilities.damageTurret(best, def.damage, p);
+      this.g.event(['f', p.id, def.id, ev.shot, round2(eye[0]), round2(eye[1]), round2(eye[2]), [[round2(best.x), round2(best.y + 0.7), round2(best.z), 3]]], p.ms, p.id);
+      return;
+    }
     // allied turret?
     let repaired = false;
     for (const tu of this.g.abilities.turrets.values()) {
@@ -301,7 +315,8 @@ export class Combat {
       if (kb) {
         let kx = center[0] - pt[0], ky = center[1] - pt[1] + 0.6, kz = center[2] - pt[2];
         const kl = Math.hypot(kx, ky, kz) || 1;
-        const k = kb * (1 - 0.6 * dist / o.radius) * (getClass(q.classId).id === 'juggernaut' ? 0.5 : 1);
+        const qc = getClass(q.classId);
+        const k = kb * (1 - 0.6 * dist / o.radius) * (qc.id === 'juggernaut' ? 0.5 : 1) * (self ? qc.passive.selfKnockbackMult || 1 : 1);
         applyImpulse(q.ms, (kx / kl) * k, (ky / kl) * k + (self ? 2 : 1), (kz / kl) * k);
       }
       this.damage(q, dmg, owner, o.weaponId, { crit, self, point: [cx, cy, cz], explosive: true });
@@ -340,6 +355,8 @@ export class Combat {
         suppressionReduction: cls.ability.damageReduction,
         frontline,
         frontlineReduction: cls.passive.damageReduction,
+        rallied: victim.rallyUntil > g.time,
+        rallyReduction: CLASSES.soldier.ability.rallyReduction,
         isFire: opts.isFire,
         fireDamageMult: cls.passive.fireDamageMult,
       });
@@ -384,6 +401,9 @@ export class Combat {
     victim.healTarget = -1;
     victim.disguise = null;
     victim.burn = null;
+    if (victim.cloak) victim.cloak.on = false;
+    victim.rallyUntil = 0;
+    for (const pr of [...g.projectiles.list.values()]) if (pr.kind === 'sticky' && pr.owner === victim.id) g.projectiles.fizzle(pr);
     victim.ability.active = false;
     victim.ability.activeUntil = 0;
     const respawn = g.state === MATCH_STATE.PREROUND ? 0.5 : g.modeCfg.respawnDelay;

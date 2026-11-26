@@ -61,6 +61,7 @@ export function applyDefense(dmg, mods) {
   if (mods.overcharged) m *= 1 - (mods.overchargeReduction ?? 0.5);
   if (mods.suppression) m *= 1 - (mods.suppressionReduction ?? 0.35);
   if (mods.frontline) m *= 1 - (mods.frontlineReduction ?? 0.1);
+  if (mods.rallied) m *= 1 - (mods.rallyReduction ?? 0.25);
   if (mods.isFire && mods.fireDamageMult) m *= mods.fireDamageMult;
   if (mods.isSelf && mods.selfDamageMult) m *= mods.selfDamageMult;
   return Math.max(0, Math.round(dmg * m));

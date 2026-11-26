@@ -3,7 +3,7 @@
 // Balance patches: edit numbers here, or apply an override object via applyBalanceOverrides().
 
 export const CLASS_IDS = [
-  'scout', 'spy', 'marksman', 'mechanic', 'doctor', 'juggernaut', 'incinerator', 'demolitionist',
+  'scout', 'soldier', 'spy', 'marksman', 'mechanic', 'doctor', 'juggernaut', 'incinerator', 'demolitionist',
 ];
 
 const BASE_CLASSES = {
@@ -39,6 +39,37 @@ const BASE_CLASSES = {
     botWeight: 1.2,
     limit: 0,                        // 0 = unlimited (per team)
   },
+  soldier: {
+    id: 'soldier',
+    index: 8,                        // network index (appended so older indices stay stable)
+    displayName: 'Soldier',
+    role: 'Frontline Assault / Explosive Damage',
+    shortRole: 'SOLDIER',
+    description:
+      'A hardened trooper in a long field coat. Tough, steady and armed with a rocket launcher; rocket-jump onto high ground and rally the squad forward.',
+    health: 200,
+    speed: 0.8,                      // second slowest (only the Juggernaut is slower)
+    jumpPower: 1.0,
+    reloadSpeed: 1.0,
+    difficulty: 2,
+    difficultyLabel: 'Medium',
+    weapons: ['blastcaster', 'breacher', 'shovel'],
+    arsenal: [['blastcaster', 'pinpoint'], ['breacher', 'slugthrower'], ['shovel', 'claymore']], // weapon choices per slot (first = default)
+    signature: 'blastcaster',
+    ability: {
+      id: 'rally', name: 'Rally Cry', key: 'E',
+      cooldown: 22, duration: 6, radius: 9, rallyReduction: 0.25, rallyMoveMult: 1.15,
+      description: 'Shout the squad forward: you and allies within 9m take 25% less damage and move 15% faster for 6s.',
+    },
+    passive: { id: 'blastjumper', name: 'Blast Jumper', selfDamageMult: 0.6, selfKnockbackMult: 1.15, noFallDamage: true, description: 'Self blast damage reduced 40% and rocket jumps carry further. No fall damage.' },
+    hitbox: { width: 0.86, height: 1.9, head: 0.45 },
+    model: 'soldier', animSet: 'medium', audioSet: 'soldier',
+    portrait: 'soldier',
+    palette: { skin: 0xd8a27c, primary: 0x4a4a3a, secondary: 0x2e2e2a, accentLevel: 'mid' },
+    teamVariants: { red: 'soldier_red', blue: 'soldier_blue' },
+    botWeight: 1.1,
+    limit: 3,
+  },
   spy: {
     id: 'spy',
     index: 1,
@@ -53,8 +84,8 @@ const BASE_CLASSES = {
     reloadSpeed: 1.0,
     difficulty: 4,
     difficultyLabel: 'High',
-    weapons: ['silencedpistol', 'revolver', 'shadowblade'],
-    arsenal: [['silencedpistol', 'derringer'], ['revolver', 'longsix'], ['shadowblade', 'stiletto']], // weapon choices per slot (first = default)
+    weapons: ['revolver', 'sapper', 'shadowblade'],
+    arsenal: [['revolver', 'longsix', 'silencedpistol'], ['sapper', 'derringer'], ['shadowblade', 'stiletto']], // weapon choices per slot (first = default)
     signature: 'shadowblade',
     ability: {
       id: 'disguise', name: 'Disguise', key: 'E',
@@ -63,6 +94,8 @@ const BASE_CLASSES = {
     },
     passive: { id: 'quietmovement', name: 'Quiet Movement', footstepVolume: 0.35, description: 'Footsteps are 65% quieter.' },
     backstab: { damage: 220, angle: 0.0 },
+    // Invisibility watch (right-click): near-invisible to enemies, can't attack while cloaked.
+    cloak: { duration: 9, recharge: 16, minToCloak: 0.25, attackDelay: 0.5 },
     hitbox: { width: 0.7, height: 1.82, head: 0.42 },
     model: 'spy', animSet: 'light', audioSet: 'spy',
     portrait: 'spy',
@@ -85,8 +118,8 @@ const BASE_CLASSES = {
     reloadSpeed: 1.0,
     difficulty: 3,
     difficultyLabel: 'Medium-High',
-    weapons: ['longshot', 'compactsmg', 'utilityknife'],
-    arsenal: [['longshot', 'longbow'], ['compactsmg', 'scrubcarbine'], ['utilityknife', 'machete']], // weapon choices per slot (first = default)
+    weapons: ['longshot', 'compactsmg', 'kukri'],
+    arsenal: [['longshot', 'longbow'], ['compactsmg', 'scrubcarbine'], ['kukri', 'machete']], // weapon choices per slot (first = default)
     signature: 'longshot',
     ability: {
       id: 'esp', name: 'Recon Sweep', key: 'E',
@@ -116,9 +149,9 @@ const BASE_CLASSES = {
     reloadSpeed: 1.0,
     difficulty: 2,
     difficultyLabel: 'Medium',
-    weapons: ['rivetgun', 'constructor', 'wrench'],
-    arsenal: [['rivetgun', 'pumpgun'], ['constructor', 'servicepistol'], ['wrench', 'pipewrench']], // weapon choices per slot (first = default)
-    signature: 'rivetgun',
+    weapons: ['pumpgun', 'sidekick', 'wrench'],
+    arsenal: [['pumpgun', 'rivetgun'], ['sidekick', 'constructor'], ['wrench', 'pipewrench']], // weapon choices per slot (first = default)
+    signature: 'wrench',
     ability: {
       id: 'turret', name: 'Automated Turret', key: 'E',
       cooldown: 16, duration: 0, maxActive: 1,
@@ -178,8 +211,8 @@ const BASE_CLASSES = {
     reloadSpeed: 1.0,
     difficulty: 2,
     difficultyLabel: 'Medium',
-    weapons: ['cyclone', 'breacher', 'foundryhammer'],
-    arsenal: [['cyclone', 'brassthunder'], ['breacher', 'slugthrower'], ['foundryhammer', 'ironknuckles']], // weapon choices per slot (first = default)
+    weapons: ['cyclone', 'breacher', 'fists'],
+    arsenal: [['cyclone', 'brassthunder'], ['breacher', 'slugthrower'], ['fists', 'ironknuckles', 'foundryhammer']], // weapon choices per slot (first = default)
     signature: 'cyclone',
     ability: {
       id: 'suppression', name: 'Suppression Mode', key: 'E',
@@ -209,8 +242,8 @@ const BASE_CLASSES = {
     reloadSpeed: 1.0,
     difficulty: 2,
     difficultyLabel: 'Medium',
-    weapons: ['thermal', 'flarelauncher', 'furnaceaxe'],
-    arsenal: [['thermal', 'backdraft'], ['flarelauncher', 'signalshotgun'], ['furnaceaxe', 'hydranthook']], // weapon choices per slot (first = default)
+    weapons: ['thermal', 'breacher', 'furnaceaxe'],
+    arsenal: [['thermal', 'backdraft'], ['breacher', 'flarelauncher'], ['furnaceaxe', 'hydranthook']], // weapon choices per slot (first = default)
     signature: 'thermal',
     ability: {
       id: 'thermalburst', name: 'Thermal Burst', key: 'E',
@@ -240,9 +273,9 @@ const BASE_CLASSES = {
     reloadSpeed: 1.0,
     difficulty: 3,
     difficultyLabel: 'Medium-High',
-    weapons: ['blastcaster', 'chargelauncher', 'demohammer'],
-    arsenal: [['blastcaster', 'pinpoint'], ['chargelauncher', 'trenchmortar'], ['demohammer', 'claymore']], // weapon choices per slot (first = default)
-    signature: 'blastcaster',
+    weapons: ['chargelauncher', 'stickylauncher', 'bottle'],
+    arsenal: [['chargelauncher', 'trenchmortar'], ['stickylauncher'], ['bottle', 'claymore', 'demohammer']], // weapon choices per slot (first = default)
+    signature: 'stickylauncher',
     ability: {
       id: 'detcharge', name: 'Detonation Charge', key: 'E',
       cooldown: 14, duration: 20, damage: 110, radius: 5,
@@ -305,7 +338,7 @@ function deepMerge(target, patch) {
 // Validation used by tests and by the server on boot.
 export function validateClasses(weaponTable) {
   const errors = [];
-  if (CLASS_IDS.length !== 8) errors.push('Exactly eight classes required');
+  if (CLASS_IDS.length !== 9) errors.push('Exactly nine classes required');
   for (const id of CLASS_IDS) {
     const c = CLASSES[id];
     if (!c) { errors.push(`missing class ${id}`); continue; }

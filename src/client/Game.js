@@ -21,6 +21,35 @@ const tmpV = new THREE.Vector3();
 const shadeHex = (c, f) => (Math.min(255, ((c >> 16) & 255) * f) << 16) | (Math.min(255, ((c >> 8) & 255) * f) << 8) | Math.min(255, (c & 255) * f);
 const tmpV2 = new THREE.Vector3();
 
+// Cloak: swap a rig's materials for see-through copies (per mode), and restore them afterwards.
+const GHOST_OPACITY = { mate: 0.3, enemy: 0.07, self: 0.28 };
+const ghostCache = { mate: new Map(), enemy: new Map(), self: new Map() };
+function ghostOf(mat, mode) {
+  if (Array.isArray(mat)) return mat.map((m) => ghostOf(m, mode));
+  const cache = ghostCache[mode];
+  let g = cache.get(mat);
+  if (!g) {
+    g = mat.clone();
+    g.transparent = true; g.opacity = GHOST_OPACITY[mode]; g.depthWrite = false;
+    if (g.color && mode !== 'enemy') g.color = g.color.clone().lerp(new THREE.Color(0x9ab8e0), 0.35);
+    cache.set(mat, g);
+  }
+  return g;
+}
+export function applyCloak(root, mode) {
+  root.traverse((o) => {
+    if (!o.isMesh && !o.isSprite) return;
+    if (mode) {
+      if (!o.userData.mat0) { o.userData.mat0 = o.material; o.userData.cast0 = o.castShadow; }
+      o.material = ghostOf(o.userData.mat0, mode);
+      o.castShadow = false;
+    } else if (o.userData.mat0) {
+      o.material = o.userData.mat0; o.castShadow = o.userData.cast0;
+      delete o.userData.mat0; delete o.userData.cast0;
+    }
+  });
+}
+
 export class Game {
   constructor(app, transport, hello, meta = {}) {
     this.app = app;
@@ -253,6 +282,8 @@ export class Game {
       const w = ws.w[ws.slot];
       const def = WEAPONS[w.id];
       this.r.vm.visible = !ui.thirdPerson;
+      const selfCloak = !!me.ck?.[1];
+      if (selfCloak || this.vmCloaked) { this.vmCloaked = selfCloak; applyCloak(this.r.vm.rig, selfCloak ? 'self' : null); }
       this.r.vm.update(dt, {
         speed: Math.hypot(n.ms.vx, n.ms.vz), grounded: n.ms.grounded, sprint: n.ms.sprinting, crouch: n.ms.crouch,
         scoped, spun: def.spinUp ? w.spin > 0 : false, firing: !!(buttons & 128), lookDX: inp.lookDX, lookDY: inp.lookDY,
@@ -363,6 +394,7 @@ export class Game {
       case 'shell': bx(g, 0, -0.1, 0, 0.2, 0.2, 0.5, 0x5e6a3a); bx(g, 0, -0.06, -0.27, 0.12, 0.12, 0.08, col); bx(g, 0, -0.07, 0.27, 0.14, 0.14, 0.06, 0xffa030, { basic: true }); break;
       case 'charge': bx(g, 0, -0.13, 0, 0.26, 0.26, 0.26, 0x3a3a3a); bx(g, 0, -0.05, 0, 0.28, 0.08, 0.28, col); break;
       case 'detcharge': bx(g, 0, -0.1, 0, 0.36, 0.2, 0.36, 0x545c3c); bx(g, 0, 0.1, 0, 0.12, 0.06, 0.12, 0xff3030, { basic: true, name: 'blink' }); break;
+      case 'sticky': bx(g, 0, -0.11, 0, 0.22, 0.22, 0.22, 0x2e3034); bx(g, 0, -0.05, 0, 0.24, 0.07, 0.24, col); for (const [x, z] of [[0.13, 0], [-0.13, 0], [0, 0.13], [0, -0.13]]) bx(g, x, -0.13, z, 0.06, 0.06, 0.06, 0x8a9098); bx(g, 0, 0.11, 0, 0.07, 0.05, 0.07, team ? 0x7ac8ff : 0xff6a50, { basic: true, name: 'blink' }); break;
       default: bx(g, 0, -0.05, 0, 0.1, 0.1, 0.1, 0xffffff, { basic: true });
     }
     g.userData.kind = kind;
@@ -547,8 +579,19 @@ export class Game {
       });
       // x-ray: revealed enemies (recon), carriers, and teammates behind walls
       const isMate = entry.team === myTeam;
+      const cloaked = !!(a[7] & PF.CLOAKED);
+      if (cloaked || R.cloaked) {
+        R.cloaked = cloaked;
+        applyCloak(R.root, cloaked ? (isMate ? 'mate' : 'enemy') : null);
+        // enemies are invisible beyond a few metres; up close a faint shimmer gives them away
+        if (cloaked && !isMate) {
+          const d = cam.position.distanceTo(R.root.position);
+          R.root.visible = d < 6;
+          if (d < 10 && R.speed > 1 && Math.random() < dt * 6) this.effects.spawn({ x: s.x + (Math.random() - 0.5) * 0.6, y: s.y + 0.3 + Math.random() * 1.4, z: s.z + (Math.random() - 0.5) * 0.6, life: 0.3, size: 0.05, end: 0.1, color: 0xbcd4ee, g: 0, drag: 4 });
+        }
+      }
       const revealed = !isMate && (a[7] & PF.REVEALED);
-      R.xray.visible = !!revealed || (isMate && this.settings.showNames && cam.position.distanceTo(R.root.position) > 25);
+      R.xray.visible = !!revealed || (isMate && !cloaked && this.settings.showNames && cam.position.distanceTo(R.root.position) > 25);
       if (R.xray.visible) R.xray.material.color.setHex(revealed ? 0xffd04a : TEAM_COLORS_HEX[entry.team]);
       // spawn protection shimmer / overcharge glow
       const oc = !!(a[7] & PF.OVERCHARGED);
@@ -557,6 +600,7 @@ export class Game {
       let showName = false;
       if (this.settings.showNames) {
         if (isMate) showName = true;
+        else if (cloaked) showName = false;
         else {
           tmpV.set(s.x - cam.position.x, s.y + 1.2 - cam.position.y, s.z - cam.position.z);
           const d = tmpV.length();
@@ -654,6 +698,9 @@ export class Game {
       case 'adrenaline':
         if (chance(30)) fx.spawn({ x: p.x + (Math.random() - 0.5) * 0.6, y: p.y + 0.3 + Math.random() * 1.4, z: p.z + (Math.random() - 0.5) * 0.6, life: 0.35, size: 0.06, end: 0.2, color: 0xffffff, g: 0, drag: 4 });
         break;
+      case 'rally':
+        if (chance(14)) fx.spawn({ x: p.x + (Math.random() - 0.5) * 0.7, y: p.y + 2.1, z: p.z + (Math.random() - 0.5) * 0.7, vy: 0.9, life: 0.5, size: 0.07, end: 0.2, color: team, g: 0, drag: 1 });
+        break;
       case 'esp': {
         // amber glint at the eyes
         if (chance(12)) { const fwd = dirFromAngles(R.root.rotation.y, 0); fx.spawn({ x: p.x + fwd[0] * 0.3, y: p.y + 1.62, z: p.z + fwd[2] * 0.3, life: 0.25, size: 0.07, end: 0.1, color: 0xffb030, g: 0, drag: 6 }); }
@@ -703,6 +750,7 @@ export class Game {
         if (!stuck) m.lookAt(m.position.x + vx, m.position.y + vy - g * age, m.position.z + vz);
         if (kind === 'flare' || kind === 'shell') { if (Math.random() < 0.6) this.effects.spawn({ x: m.position.x, y: m.position.y, z: m.position.z, life: 0.5, size: 0.12, end: 0.6, color: kind === 'flare' ? 0xffa030 : 0x888888, g: -0.5, drag: 2 }); }
         if (kind === 'detcharge') { const b = m.getObjectByName('blink'); if (b) b.visible = Math.sin(this.time * 10) > 0; }
+        if (kind === 'sticky') { const b = m.getObjectByName('blink'); if (b) b.visible = stuck && Math.sin(this.time * 6 + id) > -0.2; }
       }
     }
     for (const [id, m] of this.projMeshes) if (!live.has(id)) { this.mapObjects.remove(m); this.projMeshes.delete(id); }
@@ -818,7 +866,7 @@ export class Game {
     const snap = this.net.latest;
     const live = new Set();
     if (snap) for (const t of snap.tu) {
-      const [id, team, x, y, z, yaw, hp, maxHp, owner, ammo, building, target] = t;
+      const [id, team, x, y, z, yaw, hp, maxHp, owner, ammo, building, target, sapped] = t;
       live.add(id);
       let T = this.turrets.get(id);
       if (!T) { const g = this.turretModel(team); this.mapObjects.add(g); T = { g, yaw, pitch: 0, sweep: Math.random() * 6 }; this.turrets.set(id, T); }
@@ -847,7 +895,13 @@ export class Game {
       // siren: slow pulse when idle, spinning fast flash when it has a target
       if (tgt) { U.siren.rotation.y += dt * 14; U.sirenMat.color.setHex(Math.sin(this.time * 18) > 0 ? 0xffffff : U.col); }
       else { U.sirenMat.color.setHex(U.col).multiplyScalar(0.55 + 0.45 * (0.5 + 0.5 * Math.sin(this.time * 2.5))); }
-      U.eye.visible = !building && (tgt ? true : Math.sin(this.time * 3) > -0.6);
+      U.eye.visible = !building && !sapped && (tgt ? true : Math.sin(this.time * 3) > -0.6);
+      if (sapped) {
+        // shorted out by a sapper: head droops, blue sparks crackle
+        T.pitch = damp(T.pitch, 0.45, 6, dt); U.head.rotation.x = T.pitch;
+        if (Math.random() < dt * 30) { const hpw = U.head.getWorldPosition(tmpV); this.effects.spawn({ x: hpw.x + (Math.random() - 0.5) * 0.5, y: hpw.y + (Math.random() - 0.3) * 0.5, z: hpw.z + (Math.random() - 0.5) * 0.5, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 2, vz: (Math.random() - 0.5) * 3, life: 0.2, size: 0.05, end: 0.1, color: Math.random() < 0.5 ? 0x8ef6ff : 0xffffff, g: 4, drag: 2 }); }
+        if (Math.random() < dt * 4) this.audio.ability('sapzap', [x, y + 0.8, z], false);
+      }
       // damaged: smoke
       if (hp < maxHp * 0.35 && Math.random() < dt * 8) {
         const hpw = U.head.getWorldPosition(tmpV);
@@ -991,6 +1045,8 @@ export class Game {
         }
         case 'dj': { if (e[1] !== me) { const p = this.rigPos(e[1]); if (p) { this.audio.jump(false, p, true); this.effects.burst(p[0], p[1] - 1.1, p[2], 8, { color: [0xffffff], speed: 2, life: 0.35, size: 0.07, g: 2 }); } } break; }
         case 'ab': this.onAbilityEvent(e); break;
+        case 'ck': this.onCloakEvent(e); break;
+        case 'sd': { if (e[1] === me) this.audio.ability('stickydet', null, true); else { const p = this.rigPos(e[1]); if (p) this.audio.ability('stickydet', p, false); } break; }
         case 'tf': {
           const [, tid, x, y, z, hit] = e;
           const T = this.turrets.get(tid);
@@ -1077,6 +1133,20 @@ export class Game {
     } else if (assister === me) this.ui.hud.notify(`Assist on ${vEntry?.name || '?'}`, 'short');
   }
 
+  onCloakEvent(e) {
+    const [, pid, on] = e;
+    const me = this.net.myId;
+    if (pid === me) {
+      this.audio.ability(on ? 'cloak' : 'decloak', null, true);
+      if (on) this.ui.hud.notify('Cloaked: invisible to enemies, can\'t attack. Right-click to decloak', 'short');
+      return;
+    }
+    const pos = this.rigPos(pid);
+    if (!pos) return;
+    this.audio.ability(on ? 'cloak' : 'decloak', pos, false);
+    this.effects.burst(pos[0], pos[1] - 0.2, pos[2], 14, { color: [0xbcd4ee, 0x7a8aa0], speed: 1.6, life: 0.6, size: 0.09, g: -1 });
+  }
+
   onAbilityEvent(e) {
     const [, pid, id, on, extra] = e;
     const me = this.net.myId;
@@ -1085,6 +1155,7 @@ export class Game {
       if (on) { this.r.vm.onAbility(id); this.audio.ability(id, null, true); this.ui.hud.abilityFlash(id); }
       if (id === 'thermalburst') { this.heatRing(this.net.ms.x, this.net.ms.y + 0.9, this.net.ms.z); this.shake = Math.max(this.shake, 0.4); }
       if (id === 'esp' && on) this.ui.hud.notify('Recon Sweep: all enemies marked for 5s', 'short');
+      if (id === 'rally' && on) { this.rallyRing(this.net.ms.x, this.net.ms.y, this.net.ms.z, this.net.me?.team ?? 0, true); this.ui.hud.notify('Rally Cry: nearby allies take less damage and move faster', 'short'); }
       if (id === 'disguise') this.ui.hud.notify(on ? 'Disguised — attack or heavy damage reveals you' : 'Disguise removed', 'short');
       return;
     }
@@ -1099,7 +1170,18 @@ export class Game {
       case 'suppression': if (on) this.effects.burst(pos[0], pos[1] - 1, pos[2], 16, { color: [0x8a8070, 0x5a5040], speed: 3, life: 0.5, size: 0.12, g: 6 }); break;
       case 'adrenaline': if (on) this.effects.burst(pos[0], pos[1] - 0.8, pos[2], 14, { color: [0xffffff, 0xd8f0ff], speed: 4, life: 0.4, size: 0.08, g: 2 }); break;
       case 'esp': if (on) this.effects.burst(pos[0], pos[1] + 0.5, pos[2], 10, { color: [0xffb030, 0xffe070], speed: 1.5, life: 0.5, size: 0.06, g: -1 }); break;
+      case 'rally': if (on) this.rallyRing(pos[0], pos[1] - 1, pos[2], this.rigs.get(pid)?.realTeam ?? 0); break;
       default:
+    }
+  }
+
+  // Rally Cry: a team-coloured shock ring that shows the boost radius.
+  rallyRing(x, y, z, team, local = false) {
+    const col = team ? 0x6ab8ff : 0xff7a6a;
+    const r = getClass('soldier').ability.radius;
+    for (let i = 0; i < 40; i++) {
+      const a = (i / 40) * Math.PI * 2;
+      this.effects.spawn({ x: x + Math.cos(a) * (local ? 1.2 : 0), y: y + 0.08, z: z + Math.sin(a) * (local ? 1.2 : 0), vx: Math.cos(a) * r * 1.6, vy: local ? 0.1 : 0.6, vz: Math.sin(a) * r * 1.6, life: 0.6, size: local ? 0.07 : 0.14, end: 0.3, color: i % 4 ? col : 0xffffff, g: 0, drag: 2.2 });
     }
   }
 

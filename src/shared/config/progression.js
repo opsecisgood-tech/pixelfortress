@@ -61,7 +61,7 @@ export const ACHIEVEMENTS = [
   { id: 'backstabber', name: 'Silent Partner', desc: 'Land 10 back attacks.', stat: 'backstabs', goal: 10, icon: 'knife' },
   { id: 'veteran', name: 'Veteran', desc: 'Complete 25 matches.', stat: 'matches', goal: 25, icon: 'medal' },
   { id: 'winner', name: 'Decorated', desc: 'Win 10 matches.', stat: 'wins', goal: 10, icon: 'trophy' },
-  { id: 'allrounder', name: 'All-Rounder', desc: 'Get an elimination with all 8 classes.', stat: 'classesWithKill', goal: 8, icon: 'star' },
+  { id: 'allrounder', name: 'All-Rounder', desc: 'Get an elimination with all 9 classes.', stat: 'classesWithKill', goal: 9, icon: 'star' },
   { id: 'mvp', name: 'Most Valuable', desc: 'Earn 10 end-of-match awards.', stat: 'awards', goal: 10, icon: 'trophy' },
 ];
 

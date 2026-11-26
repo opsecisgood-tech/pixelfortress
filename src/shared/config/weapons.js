@@ -38,7 +38,7 @@ const def = (id, o) => {
 
 // ---------------- SCOUT ----------------
 def('scattershot', {
-  name: 'Scattershot', slot: 0, type: 'hitscan', category: 'Shotgun',
+  name: 'Scattergun', slot: 0, type: 'hitscan', category: 'Scattergun',
   description: 'Compact 10-pellet shotgun. Devastating up close, weak at distance.',
   damage: 6, pellets: 10, fireInterval: 0.625, clip: 6, reserve: 32,
   reloadMode: 'single', reloadStart: 0.25, reloadTime: 0.45, reloadInterrupt: 'fire',
@@ -48,7 +48,7 @@ def('scattershot', {
   deployTime: 0.3,
 });
 def('sidekick', {
-  name: 'Sidekick', slot: 1, type: 'hitscan', category: 'Pistol',
+  name: 'Pistol', slot: 1, type: 'hitscan', category: 'Pistol',
   description: 'Light semi-automatic pistol for finishing fleeing targets.',
   damage: 15, fireInterval: 0.15, clip: 12, reserve: 36, reloadTime: 1.05,
   headshotMult: 1.25, spread: 0.012, spreadMove: 0.018, spreadAir: 0.03,
@@ -56,7 +56,7 @@ def('sidekick', {
   recoil: { pitch: 0.018, yaw: 0.006 }, kick: 0.6, botRange: 14, deployTime: 0.25,
 });
 def('streetbat', {
-  name: 'Street Bat', slot: 2, type: 'melee', category: 'Melee',
+  name: 'Bat', slot: 2, type: 'melee', category: 'Melee',
   description: 'A taped-up bat. Fast swings, solid knock.',
   damage: 35, fireInterval: 0.5, auto: true,
   melee: { range: 2.3, angle: 0.55, windup: 0.1 },
@@ -73,7 +73,7 @@ def('silencedpistol', {
   recoil: { pitch: 0.014, yaw: 0.005 }, kick: 0.45, botRange: 14,
 });
 def('revolver', {
-  name: 'Precision Revolver', slot: 1, type: 'hitscan', category: 'Revolver',
+  name: 'Revolver', slot: 0, type: 'hitscan', category: 'Revolver',
   description: 'Six heavy rounds. First-shot accurate; punishes careless aim.',
   damage: 42, fireInterval: 0.55, clip: 6, reserve: 24, reloadTime: 1.35,
   headshotMult: 1.5, spread: 0.004, spreadMove: 0.02, spreadAir: 0.04,
@@ -81,7 +81,7 @@ def('revolver', {
   recoil: { pitch: 0.06, yaw: 0.012 }, kick: 1.3, botRange: 18,
 });
 def('shadowblade', {
-  name: 'Shadow Blade', slot: 2, type: 'melee', category: 'Melee',
+  name: 'Knife', slot: 2, type: 'melee', category: 'Melee',
   description: 'Balanced blade. Strikes to the back are lethal to most classes.',
   damage: 40, fireInterval: 0.8, auto: true,
   melee: { range: 2.1, angle: 0.5, windup: 0.08, backstab: true },
@@ -90,7 +90,7 @@ def('shadowblade', {
 
 // ---------------- MARKSMAN ----------------
 def('longshot', {
-  name: 'Longshot Rifle', slot: 0, type: 'hitscan', category: 'Sniper Rifle',
+  name: 'Sniper Rifle', slot: 0, type: 'hitscan', category: 'Sniper Rifle',
   description: 'Bolt-action precision rifle. Scope (RMB) to charge damage; scoped headshots double damage.',
   damage: 50, fireInterval: 1.4, clip: 5, reserve: 25, reloadTime: 2.0,
   headshotMult: 2.0, headshotRequiresScope: true,
@@ -101,19 +101,12 @@ def('longshot', {
   deployTime: 0.45,
 });
 def('compactsmg', {
-  name: 'Compact SMG', slot: 1, type: 'hitscan', category: 'SMG',
+  name: 'SMG', slot: 1, type: 'hitscan', category: 'SMG',
   description: 'Bullet hose for when someone gets too close.',
   damage: 8, fireInterval: 0.09, auto: true, clip: 25, reserve: 75, reloadTime: 1.25,
   headshotMult: 1.2, spread: 0.028, spreadMove: 0.012, spreadAir: 0.03,
   range: 55, effectiveRange: 12, minFalloff: 0.4,
   recoil: { pitch: 0.008, yaw: 0.006 }, kick: 0.35, botRange: 10,
-});
-def('utilityknife', {
-  name: 'Utility Knife', slot: 2, type: 'melee', category: 'Melee',
-  description: 'Box cutter. Critical damage when striking from behind.',
-  damage: 40, fireInterval: 0.6, auto: true,
-  melee: { range: 2.0, angle: 0.5, windup: 0.08 },
-  crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.25,
 });
 
 // ---------------- MECHANIC ----------------
@@ -133,7 +126,7 @@ def('constructor', {
   range: 7, effectiveRange: 7, crosshair: 'beam', tracer: 0x8ef6ff, botRange: 5,
 });
 def('wrench', {
-  name: 'Reinforced Wrench', slot: 2, type: 'melee', category: 'Melee',
+  name: 'Wrench', slot: 2, type: 'melee', category: 'Melee',
   description: 'Heavy wrench. Each hit on an allied turret repairs 40 HP and adds 40 rounds.',
   damage: 32, fireInterval: 0.65, auto: true,
   melee: { range: 2.2, angle: 0.55, windup: 0.12, repair: { hp: 40, ammo: 40 } },
@@ -142,7 +135,7 @@ def('wrench', {
 
 // ---------------- DOCTOR ----------------
 def('syringelauncher', {
-  name: 'Syringe Launcher', slot: 0, type: 'projectile', category: 'Needle Gun',
+  name: 'Syringe Gun', slot: 0, type: 'projectile', category: 'Syringe Gun',
   description: 'Lobs a stream of medical darts. Leads targets at range.',
   damage: 10, fireInterval: 0.105, auto: true, clip: 40, reserve: 150, reloadTime: 1.5,
   spread: 0.015,
@@ -150,14 +143,14 @@ def('syringelauncher', {
   recoil: { pitch: 0.006, yaw: 0.004 }, kick: 0.35, botRange: 12,
 });
 def('medbeam', {
-  name: 'Medical Beam', slot: 1, type: 'beam', category: 'Healing Beam',
+  name: 'Healing Gun', slot: 1, type: 'beam', category: 'Healing Beam',
   description: 'Hold to lock onto an ally and heal them, overhealing up to 150%. Builds Overcharge.',
   damage: 0, fireInterval: 0.1, auto: true, clip: -1,
   beam: { range: 15, breakRange: 19, healRate: 27, overhealMax: 1.5, overhealRate: 0.4, lockAngle: 0.35 },
   crosshair: 'beam', tracer: 0x7fffb0, botRange: 6, deployTime: 0.3,
 });
 def('surgicalsaw', {
-  name: 'Surgical Saw', slot: 2, type: 'melee', category: 'Melee',
+  name: 'Bonesaw', slot: 2, type: 'melee', category: 'Melee',
   description: 'Bone saw. Each hit on an enemy adds 10% Overcharge.',
   damage: 40, fireInterval: 0.8, auto: true,
   melee: { range: 2.1, angle: 0.5, windup: 0.12, overchargeOnHit: 0.1 },
@@ -166,7 +159,7 @@ def('surgicalsaw', {
 
 // ---------------- JUGGERNAUT ----------------
 def('cyclone', {
-  name: 'Cyclone Rotary Cannon', slot: 0, type: 'hitscan', category: 'Rotary Cannon',
+  name: 'Minigun', slot: 0, type: 'hitscan', category: 'Minigun',
   description: 'Six barrels of sustained fire. Spin up with RMB or fire; slows you while spinning.',
   damage: 9, fireInterval: 0.085, auto: true, clip: 200, reserve: 200, reloadTime: 3.0,
   spread: 0.045, spreadMove: 0.015, spreadAir: 0.03,
@@ -175,8 +168,8 @@ def('cyclone', {
   recoil: { pitch: 0.004, yaw: 0.006 }, kick: 0.3, botRange: 12, deployTime: 0.6,
 });
 def('breacher', {
-  name: 'Breacher Shotgun', slot: 1, type: 'hitscan', category: 'Shotgun',
-  description: 'Pump shotgun for when the cannon is too slow.',
+  name: 'Shotgun', slot: 1, type: 'hitscan', category: 'Shotgun',
+  description: 'Standard pump shotgun. Reliable at close to mid range.',
   damage: 7, pellets: 8, fireInterval: 0.7, clip: 6, reserve: 32,
   reloadMode: 'single', reloadStart: 0.3, reloadTime: 0.5, reloadInterrupt: 'fire',
   spread: 0.07, spreadMove: 0.01, spreadAir: 0.015,
@@ -193,7 +186,7 @@ def('foundryhammer', {
 
 // ---------------- INCINERATOR ----------------
 def('thermal', {
-  name: 'Thermal Projector', slot: 0, type: 'flame', category: 'Flamethrower',
+  name: 'Flamethrower', slot: 0, type: 'flame', category: 'Flamethrower',
   description: 'Short-range jet of thermal plasma. Ignites targets for lingering burn damage.',
   damage: 7, fireInterval: 0.08, auto: true, clip: 200, reserve: 200, reloadTime: 2.2,
   flame: { range: 7.5, angle: 0.36, afterburnDps: 6, afterburnTime: 4, farMult: 0.5 },
@@ -208,7 +201,7 @@ def('flarelauncher', {
   recoil: { pitch: 0.05, yaw: 0.01 }, kick: 1.0, botRange: 18,
 });
 def('furnaceaxe', {
-  name: 'Furnace Axe', slot: 2, type: 'melee', category: 'Melee',
+  name: 'Fire Axe', slot: 2, type: 'melee', category: 'Melee',
   description: 'Fire axe. Critical damage on burning targets.',
   damage: 50, fireInterval: 0.8, auto: true,
   melee: { range: 2.3, angle: 0.55, windup: 0.15 },
@@ -217,7 +210,7 @@ def('furnaceaxe', {
 
 // ---------------- DEMOLITIONIST ----------------
 def('blastcaster', {
-  name: 'Blastcaster', slot: 0, type: 'projectile', category: 'Shell Launcher',
+  name: 'Rocket Launcher', slot: 0, type: 'projectile', category: 'Rocket Launcher',
   description: 'Straight-flying blast shells. Splash damage; direct hits are critical. Rocket-jump capable.',
   damage: 90, fireInterval: 0.8, clip: 4, reserve: 20,
   reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.8, reloadInterrupt: 'fire',
@@ -227,7 +220,7 @@ def('blastcaster', {
   recoil: { pitch: 0.06, yaw: 0.01 }, kick: 1.5, crosshair: 'circle', botRange: 14,
 });
 def('chargelauncher', {
-  name: 'Charge Launcher', slot: 1, type: 'projectile', category: 'Grenade Launcher',
+  name: 'Grenade Launcher', slot: 0, type: 'projectile', category: 'Grenade Launcher',
   description: 'Bouncing charges that burst on enemy contact or after a 2s fuse.',
   damage: 80, fireInterval: 0.6, clip: 4, reserve: 16,
   reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.6, reloadInterrupt: 'fire',
@@ -275,14 +268,14 @@ def('slugger', {
 
 // ---------------- SPY ----------------
 def('derringer', {
-  name: 'Twin Derringer', slot: 0, type: 'hitscan', category: 'Derringer',
+  name: 'Twin Derringer', slot: 1, type: 'hitscan', category: 'Derringer',
   description: 'Two heavy rounds for point-blank surprises. Long reload.',
   damage: 38, fireInterval: 0.35, clip: 2, reserve: 18, reloadTime: 1.5,
   headshotMult: 1.3, spread: 0.02, spreadMove: 0.02, spreadAir: 0.04, range: 50, effectiveRange: 6, minFalloff: 0.4,
   recoil: { pitch: 0.05, yaw: 0.01 }, kick: 1.0, botRange: 6, deployTime: 0.25,
 });
 def('longsix', {
-  name: "Gentleman's Long Six", slot: 1, type: 'hitscan', category: 'Revolver',
+  name: "Gentleman's Long Six", slot: 0, type: 'hitscan', category: 'Revolver',
   description: 'Long-barrel revolver. Slow but pinpoint; headshots double damage.',
   damage: 34, fireInterval: 0.75, clip: 6, reserve: 24, reloadTime: 1.2,
   headshotMult: 2, spread: 0.004, spreadMove: 0.02, spreadAir: 0.04, range: 120, effectiveRange: 28, minFalloff: 0.55,
@@ -319,16 +312,9 @@ def('machete', {
 
 // ---------------- MECHANIC ----------------
 def('pumpgun', {
-  name: 'Frontier Pump Gun', slot: 0, type: 'hitscan', category: 'Shotgun',
-  description: 'Hard-hitting pump shotgun with a small tube.',
-  damage: 7, pellets: 9, fireInterval: 0.65, clip: 4, reserve: 32, ...SHOTGUN,
-});
-def('servicepistol', {
-  name: 'Service Pistol', slot: 1, type: 'hitscan', category: 'Pistol',
-  description: 'Reliable sidearm. Trades the repair beam for steady ranged damage.',
-  damage: 14, fireInterval: 0.16, clip: 12, reserve: 60, reloadTime: 1.1,
-  headshotMult: 1.25, spread: 0.012, spreadMove: 0.018, spreadAir: 0.03, range: 70, effectiveRange: 15, minFalloff: 0.5,
-  recoil: { pitch: 0.018, yaw: 0.006 }, kick: 0.6, botRange: 14, deployTime: 0.25,
+  name: 'Shotgun', slot: 0, type: 'hitscan', category: 'Shotgun',
+  description: 'Standard pump shotgun. Reliable at close to mid range.',
+  damage: 7, pellets: 8, fireInterval: 0.65, clip: 6, reserve: 32, ...SHOTGUN,
 });
 def('pipewrench', {
   name: 'Pipe Wrench', slot: 2, type: 'melee', category: 'Melee',
@@ -390,11 +376,6 @@ def('backdraft', {
   crit: { fromBehind: true }, critMult: 1.8,
   range: 7, effectiveRange: 4, crosshair: 'flame', tracer: 0xff6a2a, botRange: 5,
 });
-def('signalshotgun', {
-  name: 'Signal Shotgun', slot: 1, type: 'hitscan', category: 'Shotgun',
-  description: 'Standard pump shotgun for finishing off fleeing targets.',
-  damage: 6.5, pellets: 8, fireInterval: 0.65, clip: 6, reserve: 32, ...SHOTGUN,
-});
 def('hydranthook', {
   name: 'Hydrant Hook', slot: 2, type: 'melee', category: 'Melee',
   description: 'Fire hook. Doubles damage on burning targets, weaker otherwise.',
@@ -414,7 +395,7 @@ def('pinpoint', {
   recoil: { pitch: 0.06, yaw: 0.01 }, kick: 1.5, crosshair: 'circle', botRange: 16,
 });
 def('trenchmortar', {
-  name: 'Trench Mortar', slot: 1, type: 'projectile', category: 'Mortar',
+  name: 'Trench Mortar', slot: 0, type: 'projectile', category: 'Mortar',
   description: 'Slow lobbed bombs with a big blast and a longer fuse.',
   damage: 92, fireInterval: 0.85, clip: 3, reserve: 15,
   reloadMode: 'single', reloadStart: 0.35, reloadTime: 0.75, reloadInterrupt: 'fire',
@@ -428,6 +409,51 @@ def('claymore', {
   description: 'Two-handed sword. The longest reach of any melee weapon.',
   damage: 62, fireInterval: 0.85, auto: true,
   melee: { range: 3.0, angle: 0.5, windup: 0.2 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 3, deployTime: 0.45,
+});
+
+// ============================================================================
+// STOCK ADDITIONS
+// ============================================================================
+def('shovel', {
+  name: 'Shovel', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Entrenching shovel. A solid all-round swing.',
+  damage: 55, fireInterval: 0.8, auto: true,
+  melee: { range: 2.2, angle: 0.55, windup: 0.14 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+});
+def('stickylauncher', {
+  name: 'Sticky Launcher', slot: 1, type: 'projectile', category: 'Sticky Launcher',
+  description: 'Lays sticky bombs that cling to surfaces. Right-click detonates every armed bomb (up to 8 out at once).',
+  damage: 95, fireInterval: 0.6, clip: 8, reserve: 24, reloadTime: 0.67,
+  reloadMode: 'single', reloadStart: 0.4, reloadInterrupt: 'fire',
+  explosive: true,
+  projectile: { kind: 'sticky', speed: 24, gravity: 14, radius: 0.14, lifetime: 90, stick: true, noAutoExplode: true, armTime: 0.7,
+    explode: { radius: 3.4, minMult: 0.4, knockback: 9, selfKnockback: 12, selfMult: 0.5 } },
+  recoil: { pitch: 0.04, yaw: 0.01 }, kick: 1.0, crosshair: 'circle', botRange: 12,
+});
+def('bottle', {
+  name: 'Bottle', slot: 2, type: 'melee', category: 'Melee',
+  description: 'A sturdy glass bottle.',
+  damage: 55, fireInterval: 0.8, auto: true,
+  melee: { range: 2.0, angle: 0.55, windup: 0.13 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2,
+});
+def('fists', {
+  name: 'Fists', slot: 2, type: 'melee', category: 'Fists',
+  description: 'Bare-knuckle punches with both hands.',
+  damage: 55, fireInterval: 0.8, auto: true,
+  melee: { range: 1.9, angle: 0.6, windup: 0.12 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.3,
+});
+def('kukri', {
+  name: 'Kukri', slot: 2, type: 'melee', category: 'Melee',
+  description: 'Curved forward-weighted blade.',
+  damage: 50, fireInterval: 0.8, auto: true,
+  melee: { range: 2.1, angle: 0.5, windup: 0.11 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.3,
+});
+def('sapper', {
+  name: 'Sapper', slot: 1, type: 'repair', category: 'Sapper',
+  description: 'Hold on an enemy turret to short it out: it stops firing and takes heavy damage. Harmless to players.',
+  damage: 9, fireInterval: 0.1, auto: true, clip: -1,
+  repair: { range: 2.6, hpPerTick: 0, ammoPerTick: 0 }, sapper: true,
+  range: 2.6, effectiveRange: 2.6, crosshair: 'beam', tracer: 0x9adfff, botRange: 2, deployTime: 0.3,
 });
 
 export const ABILITY_SOURCES = {

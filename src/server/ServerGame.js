@@ -303,6 +303,7 @@ export class ServerGame {
       ms: createMoveState(), ws: createWeaponState(cls), weapons: [...cls.weapons], cmdQueue: [], cmdBudget: 0, lastSeq: 0,
       history: [], spawnProtectUntil: 0, prevAbilityBtn: false,
       ability: { cdUntil: 0, activeUntil: 0, charge: 0, active: false },
+      cloak: { on: false, meter: 1, attackAt: 0 }, rallyUntil: 0, prevAltBtn: false,
       disguise: null, burn: null, revealedUntil: 0, healTarget: -1, lastBeam: 0, healedBy: new Map(),
       damageLog: [], stats: emptyStats(), carrying: -1, ping: 0, pingN: 0, pingSent: 0,
       firingUntil: 0, lastResupply: 0, lastCmdTime: this.time, bot: null, lagTime: 0,
@@ -446,6 +447,7 @@ export class ServerGame {
     if (def.spinUp && wst.spin > 0) moveMult *= def.spinMoveMult;
     if (def.scope && p.ws.scoped) moveMult *= def.scope.moveMult;
     if (cls.ability.moveMult && this.abilities.isActive(p, cls.ability.id)) moveMult *= cls.ability.moveMult;
+    if (p.rallyUntil > this.time) moveMult *= CLASSES.soldier.ability.rallyMoveMult;
     const frozen = this.state === MATCH_STATE.PREROUND;
     return moveParamsFor(cls, { moveMult, frozen, canSprint: !(def.spinUp && wst.spin > 0) });
   }
@@ -458,7 +460,7 @@ export class ServerGame {
       explosiveReloadMult: cls.passive.explosiveReloadMult || 1,
       spreadMult: this.abilities.isActive(p, 'suppression') ? cls.ability.spreadMult : 1,
       hspeed: Math.hypot(p.ms.vx, p.ms.vz), grounded: p.ms.grounded, crouch: p.ms.crouch, sprinting: p.ms.sprinting,
-      disarmed: this.state === MATCH_STATE.PREROUND || this.state === MATCH_STATE.ENDED,
+      disarmed: this.state === MATCH_STATE.PREROUND || this.state === MATCH_STATE.ENDED || p.cloak.on || this.time < p.cloak.attackAt,
     };
   }
 
@@ -481,7 +483,7 @@ export class ServerGame {
     const params = this.moveParams(p);
     stepMovement(p.ms, cmd, this.world, params);
     p.lagTime = cmd.lt;
-    if (p.ms.lastImpact > FALL_DAMAGE_SPEED) {
+    if (p.ms.lastImpact > FALL_DAMAGE_SPEED && !getClass(p.classId).passive.noFallDamage) {
       const dmg = fallDamage(p.ms.lastImpact, FALL_DAMAGE_SPEED, FALL_DAMAGE_PER_MS);
       if (dmg > 0) this.combat.damage(p, dmg, null, 'fall', { noReveal: true });
     }
@@ -491,6 +493,13 @@ export class ServerGame {
     const abilityBtn = !!(cmd.b & BTN.ABILITY);
     if (abilityBtn && !p.prevAbilityBtn && this.state !== MATCH_STATE.PREROUND && this.state !== MATCH_STATE.ENDED) this.abilities.use(p);
     p.prevAbilityBtn = abilityBtn;
+    // alt-fire edge: detonate sticky bombs / toggle the spy's cloak
+    const altBtn = !!(cmd.b & BTN.ALT);
+    if (altBtn && !p.prevAltBtn && this.state !== MATCH_STATE.ENDED) {
+      if (p.weapons.includes('stickylauncher') && this.projectiles.detonateStickies(p.id) > 0) this.event(['sd', p.id], p.ms);
+      if (p.classId === 'spy') this.abilities.toggleCloak(p);
+    }
+    p.prevAltBtn = altBtn;
 
     const evs = stepWeapons(p.ws, cmd, this.weaponCtx(p));
     for (const ev of evs) this.handleWeaponEvent(p, ev, cmd);
@@ -501,7 +510,7 @@ export class ServerGame {
     switch (ev.type) {
       case 'fire':
         p.firingUntil = this.time + 0.2;
-        if (p.disguise) this.abilities.reveal(p);
+        if (p.disguise && !WEAPONS[p.ws.w[p.ws.slot].id].sapper) this.abilities.reveal(p);
         if (p.spawnProtectUntil > this.time) p.spawnProtectUntil = 0;
         this.combat.fire(p, ev, lt);
         break;
@@ -581,6 +590,8 @@ export class ServerGame {
     p.burn = null;
     p.healTarget = -1;
     p.revealedUntil = 0;
+    p.rallyUntil = 0;
+    p.cloak.on = false; p.cloak.meter = 1; p.cloak.attackAt = 0;
     p.ability.activeUntil = 0;
     p.ability.active = false;
     if (p.classId !== 'doctor') p.ability.charge = 0;
@@ -817,6 +828,8 @@ export class ServerGame {
     if (this.abilities.isOvercharged(q)) f |= PF.OVERCHARGED;
     if (q.revealedUntil > this.time) f |= PF.REVEALED;
     if (q.ws.scoped) f |= PF.SCOPED;
+    if (q.rallyUntil > this.time) f |= PF.RALLIED;
+    if (q.cloak.on) f |= PF.CLOAKED;
     if (w && w.spin > 0) f |= PF.SPUN;
     if (q.healedBy.size && [...q.healedBy.values()].some((t) => this.time - t < 0.3)) f |= PF.HEALED;
     return f;
@@ -861,6 +874,8 @@ export class ServerGame {
         w: packWeaponState(p.ws),
         ab: [Math.max(0, round2(p.ability.cdUntil - this.time)), Math.max(0, round2(p.ability.activeUntil - this.time)), round3(p.ability.charge), p.ability.active ? 1 : 0],
         ra: p.alive ? 0 : Math.max(0, round2(p.respawnAt - this.time)),
+        ry: p.rallyUntil > this.time ? round2(p.rallyUntil - this.time) : 0,
+        ck: p.classId === 'spy' ? [round2(p.cloak.meter), p.cloak.on ? 1 : 0, Math.max(0, round2(p.cloak.attackAt - this.time))] : null,
         cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying, wp: p.weapons,
       };
       this.send(p.connId, { ...common, p: plist, me });

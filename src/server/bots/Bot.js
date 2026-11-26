@@ -80,6 +80,8 @@ export class BotController {
       if (d > 70) continue;
       // disguised spies fool bots unless very close or revealed / recently attacked us
       if (q.disguise && d > 2.5 && this.lastDamagedBy !== q && q.revealedUntil < this.g.time) continue;
+      // cloaked spies are invisible unless bumped into
+      if (q.cloak?.on && d > 1.6) continue;
       if (!this.visible(q)) continue;
       // field of view check (bots can't see behind them unless close or hurt by)
       const ang = Math.abs(wrapAngle(Math.atan2(-(q.ms.x - p.ms.x), -(q.ms.z - p.ms.z)) - this.yaw));
@@ -242,7 +244,8 @@ export class BotController {
       // weapon selection
       const prim = WEAPONS[p.ws.w[0].id], sec = WEAPONS[p.ws.w[1].id];
       const pw = p.ws.w[0], sw = p.ws.w[1];
-      if (p.classId === 'spy') this.slotWanted = dist < 3 ? 2 : 1;
+      if (p.classId === 'spy') this.slotWanted = dist < 3 ? 2 : 0;
+      else if (p.classId === 'demolitionist' && sec.id === 'stickylauncher' && dist > 5 && (t.id + Math.floor(g.time / 4)) % 3 === 0 && (sw.clip > 0 || sw.reserve > 0)) this.slotWanted = 1;
       else if (dist < 2.2 && p.classId !== 'incinerator' && p.classId !== 'juggernaut') this.slotWanted = 2;
       else if (pw.clip === 0 && pw.reserve === 0 && prim.clip >= 0) this.slotWanted = sec.type === 'beam' || sec.type === 'repair' ? 2 : 1;
       else if (p.classId === 'marksman' && dist < 9) this.slotWanted = 1;
@@ -298,14 +301,42 @@ export class BotController {
         case 'esp': if (dist > 25 || Math.random() < 0.004) this.pulseAbility(); break;
         case 'adrenaline': if (p.carrying >= 0 || p.hp < p.maxHp * 0.4 || Math.random() < 0.003) this.pulseAbility(); break;
         case 'detcharge': if (dist < 16 && Math.random() < 0.02) this.pulseAbility(); break;
+        case 'rally': if (dist < 20 && (p.hp < p.maxHp * 0.7 || Math.random() < 0.01)) this.pulseAbility(); break;
         default:
       }
       if (cls.ability.id === 'detcharge' && this.g.abilities.charges.has(p.id)) {
         const pr = this.g.projectiles.list.get(this.g.abilities.charges.get(p.id));
         if (pr && Math.hypot(pr.x - t.ms.x, pr.z - t.ms.z) < 3) this.pulseAbility();
       }
+      // spies cloak on the approach and decloak right behind their mark
+      if (p.classId === 'spy') {
+        if (!p.cloak.on && dist > 9 && dist < 30 && p.cloak.meter > 0.6 && Math.random() < 0.05) this.altPulse = true;
+        if (p.cloak.on && dist < 3.2) this.altPulse = true;
+      }
+      // detonate stickies that are close to the target
+      if (p.weapons.includes('stickylauncher')) {
+        for (const pr of g.projectiles.list.values()) {
+          if (pr.kind === 'sticky' && pr.owner === p.id && g.time - pr.born > pr.armTime && Math.hypot(pr.x - t.ms.x, pr.y - t.ms.y - 0.6, pr.z - t.ms.z) < 2.4) { this.altPulse = true; break; }
+        }
+      }
     } else if (!t) {
       // Out of combat behaviour
+      if (p.classId === 'spy' && p.cloak.on && p.cloak.meter < 0.3) this.altPulse = true;
+      if (p.classId === 'spy') {
+        // sap enemy turrets
+        for (const tu of g.abilities.turrets.values()) {
+          if (tu.team === p.team) continue;
+          const td = Math.hypot(tu.x - pos[0], tu.z - pos[2]);
+          if (td > 16) continue;
+          this.slotWanted = 1;
+          moveDir = td > 1.6 ? [tu.x - pos[0], tu.z - pos[2]] : null;
+          const a = anglesFromDir(tu.x - pos[0], tu.y + 0.6 - (pos[1] + 1.6), tu.z - pos[2]);
+          wantYaw = a.yaw; wantPitch = a.pitch;
+          if (td < 2.4) fire = true;
+          if (p.cloak.on && td < 3) this.altPulse = true;
+          break;
+        }
+      }
       if (cls.ability.id === 'disguise' && !p.disguise && p.ability.cdUntil < g.time) this.pulseAbility();
       if (cls.ability.id === 'turret' && !this.hasTurret() && p.ability.cdUntil < g.time) {
         const near = this.goal && Math.hypot(this.goal[0] - pos[0], this.goal[2] - pos[2]) < 4;
@@ -321,8 +352,9 @@ export class BotController {
           if (Math.hypot(tu.x - pos[0], tu.z - pos[2]) < 2) { moveDir = null; fire = true; }
         }
       }
-      if (p.classId !== 'doctor' && this.slotWanted !== 2) this.slotWanted = 0;
-      if (p.classId !== 'doctor' && p.classId !== 'mechanic') this.slotWanted = 0;
+      const sapping = p.classId === 'spy' && this.slotWanted === 1;
+      if (p.classId !== 'doctor' && this.slotWanted !== 2 && !sapping) this.slotWanted = 0;
+      if (p.classId !== 'doctor' && p.classId !== 'mechanic' && !sapping) this.slotWanted = 0;
       // reload when idle
       const w = p.ws.w[p.ws.slot];
       const d = WEAPONS[w.id];
@@ -357,6 +389,7 @@ export class BotController {
     if (t && this.reaction <= 0 && p.classId !== 'spy' && p.classId !== 'doctor') buttons |= this.strafe > 0 ? BTN.RIGHT : BTN.LEFT;
     if (fire) buttons |= BTN.FIRE;
     if (alt) buttons |= BTN.ALT;
+    if (this.altPulse) { buttons |= BTN.ALT; this.altPulse = false; }
     if (this.abilityPulse) { buttons |= BTN.ABILITY; this.abilityPulse = false; }
     if (g.state === MATCH_STATE.PREROUND) buttons &= ~(BTN.FIRE | BTN.ABILITY);
 

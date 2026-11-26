@@ -7,6 +7,7 @@ import { PixelSprite, voxelizeSprite, VOXEL_MATERIAL, VOXEL_GLOW_MATERIAL } from
 import { colorMat, boxGeo } from './blocks.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 import { getItem } from '../../shared/config/cosmetics.js';
+import { STOCK_MODELS } from './StockWeaponModels.js';
 
 const BASE = {
   metal: 0x7c838c, dark: 0x34373d, light: 0xd7dbe0, wood: 0x9a6232, woodDark: 0x6e4220, grip: 0x3d2b20, tape: 0xe6e2d6,
@@ -162,14 +163,6 @@ export const WEAPON_MODELS = {
       S.rect(9, 4, 4, 1, 'team', 3);
     },
     fp: { pos: [0.19, -0.2, -0.36], scale: 1 },
-  },
-  utilityknife: {
-    w: 22, h: 7, px: 0.013, grip: [5, 3], melee: true,
-    draw(S) {
-      S.rect(0, 1, 13, 5, 'yellow', 3); S.rect(3, 2, 7, 3, 'dark', 3); S.px(11, 3, 'gunmetal');
-      S.poly([[13, 2], [19, 2], [22, 4], [13, 5]], 'steel', 1); S.line(14, 4, 19, 4, 'hl');
-    },
-    fp: { pos: [0.22, -0.22, -0.34], scale: 1.25, rot: [-0.9, 0.1, -0.2] },
   },
   // ---------------- MECHANIC
   rivetgun: {
@@ -429,16 +422,6 @@ Object.assign(WEAPON_MODELS, {
       S.line(12, 8, 12, 10, 'dark', 1); S.line(12, 10, 15, 10, 'dark', 1);
     },
   },
-  servicepistol: {
-    w: 22, h: 15, px: 0.0145, grip: [6, 10], muzzle: [21, 3],
-    draw(S) {
-      S.rect(4, 2, 17, 4, 'gunmetal', 3); for (const x of [5, 7, 9]) S.line(x, 3, x, 4, 'dark');
-      S.px(19, 1, 'dark', 1); S.px(5, 1, 'dark', 1);
-      S.rect(4, 6, 12, 2, 'black', 3);
-      S.poly([[3, 8], [9, 8], [8, 15], [2, 15]], 'khaki', 3); S.rect(4, 9, 3, 4, 'grip', 3);
-      S.line(9, 8, 9, 10, 'dark', 1); S.line(9, 10, 12, 10, 'dark', 1); S.px(10, 9, 'team', 1);
-    },
-  },
   pipewrench: {
     w: 44, h: 12, px: 0.0165, grip: [4, 5], melee: true,
     draw(S) {
@@ -517,16 +500,6 @@ Object.assign(WEAPON_MODELS, {
       S.line(4, 9, 0, 13, 'black', 3);
     },
   },
-  signalshotgun: {
-    w: 42, h: 13, px: 0.0175, grip: [12, 10], muzzle: [41, 4],
-    draw(S) {
-      S.poly([[0, 5], [9, 4], [11, 8], [3, 12], [0, 11]], 'grip', 5);
-      S.rect(9, 3, 9, 5, 'dark', 5); S.rect(10, 4, 7, 1, 'gunmetal', 5);
-      S.rect(18, 3, 23, 2, 'metal', 3); S.rect(18, 5, 18, 2, 'dark', 3);
-      S.rect(22, 5, 8, 3, 'orange', 5); S.line(23, 6, 29, 6, 'yellow');
-      S.px(15, 6, 'team', 5); S.line(11, 8, 11, 10, 'dark', 1); S.line(11, 10, 14, 10, 'dark', 1);
-    },
-  },
   hydranthook: {
     w: 44, h: 14, px: 0.0165, grip: [4, 6], melee: true,
     draw(S) {
@@ -568,12 +541,16 @@ Object.assign(WEAPON_MODELS, {
     },
   },
 });
+// Stock items: new art for the default weapons (keeps the earlier first-person placement unless given).
+for (const [id, m] of Object.entries(STOCK_MODELS)) WEAPON_MODELS[id] = { ...m, fp: m.fp || WEAPON_MODELS[id]?.fp };
+WEAPON_MODELS.pumpgun.fp = WEAPON_MODELS.breacher.fp;
+WEAPON_MODELS.fists.fp = WEAPON_MODELS.foundryhammer.fp;
 // Alternates inherit first-person placement from the default weapon in the same class slot.
 const ALT_FP_FROM = {
   kickback: 'scattershot', peashooter: 'sidekick', slugger: 'streetbat', derringer: 'silencedpistol', longsix: 'revolver', stiletto: 'shadowblade',
-  longbow: 'longshot', scrubcarbine: 'compactsmg', machete: 'utilityknife', pumpgun: 'rivetgun', servicepistol: 'sidekick', pipewrench: 'wrench',
+  longbow: 'longshot', scrubcarbine: 'compactsmg', machete: 'kukri', pipewrench: 'wrench',
   crossbow: 'syringelauncher', rapidmender: 'medbeam', wardcleaver: 'surgicalsaw', brassthunder: 'cyclone', slugthrower: 'breacher', ironknuckles: 'foundryhammer',
-  backdraft: 'thermal', signalshotgun: 'breacher', hydranthook: 'furnaceaxe', pinpoint: 'blastcaster', trenchmortar: 'chargelauncher', claymore: 'demohammer',
+  backdraft: 'thermal', hydranthook: 'furnaceaxe', pinpoint: 'blastcaster', trenchmortar: 'chargelauncher', claymore: 'demohammer',
 };
 for (const [id, from] of Object.entries(ALT_FP_FROM)) if (WEAPON_MODELS[id] && !WEAPON_MODELS[id].fp) WEAPON_MODELS[id].fp = WEAPON_MODELS[from]?.fp;
 

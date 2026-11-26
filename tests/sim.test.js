@@ -152,13 +152,13 @@ test('server: validated hitscan damage, single score per elimination, respawn, m
   const b = join(g, 2, 'Bravo', { classId: 'scout' });
   startPlaying(g);
   place(a, 0, 0.01, 18, Math.PI / 2); place(b, -4, 0.01, 18);
-  a.ws.slot = 1; a.ws.ready = 0;  // revolver
+  a.ws.slot = 0; a.ws.ready = 0;  // revolver
   let seq = a.lastSeq;
   let kills = 0;
   for (let i = 0; i < 400 && g.state !== MATCH_STATE.ENDED; i++) {
     if (b.alive) { place(b, -4, 0.01, 18); }
     const ang = aimAt(a, b);
-    g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, i % 2 ? BTN.FIRE : 0, ang.yaw, ang.pitch, 1, g.time]] });
+    g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, i % 2 ? BTN.FIRE : 0, ang.yaw, ang.pitch, 0, g.time]] });
     g.tick();
     kills = a.stats.kills;
   }
@@ -175,21 +175,21 @@ test('server: fire-rate, ammunition and speed-hack validation', () => {
   const a = join(g, 1, 'Alpha', { classId: 'spy' });
   join(g, 2, 'Bravo');
   startPlaying(g);
-  a.ws.slot = 1; a.ws.ready = 0;
-  const clip0 = a.ws.w[1].clip;
+  a.ws.slot = 0; a.ws.ready = 0;
+  const clip0 = a.ws.w[0].clip;
   // flood: 30 commands in one tick alternating fire -> server only fires at the weapon's cadence
   let seq = a.lastSeq;
   const list = [];
-  for (let i = 0; i < 30; i++) list.push([++seq, 1 / 60, i % 2 ? BTN.FIRE : 0, 0, 0, 1, g.time]);
+  for (let i = 0; i < 30; i++) list.push([++seq, 1 / 60, i % 2 ? BTN.FIRE : 0, 0, 0, 0, g.time]);
   g.handleMessage(1, { t: 'c', c: list });
   for (let i = 0; i < 30; i++) g.tick();
-  const fired = clip0 - a.ws.w[1].clip;
+  const fired = clip0 - a.ws.w[0].clip;
   assert.ok(fired <= Math.ceil(0.5 / WEAPONS.revolver.fireInterval) + 1, `fired ${fired}`);
   // speed hack: claim huge dt per command -> clamped, and command budget limits throughput
   const x0 = a.ms.x;
   place(a, 0, 0.01, 18, -Math.PI / 2);
   const flood = [];
-  for (let i = 0; i < 30; i++) flood.push([++seq, 5, BTN.FORWARD | BTN.SPRINT, -Math.PI / 2, 0, 1, g.time]);
+  for (let i = 0; i < 30; i++) flood.push([++seq, 5, BTN.FORWARD | BTN.SPRINT, -Math.PI / 2, 0, 0, g.time]);
   g.handleMessage(1, { t: 'c', c: flood });
   g.tick();
   const moved = Math.abs(a.ms.x - 0);
@@ -212,7 +212,7 @@ test('server: ability cooldowns are enforced; spy disguise breaks on attack', ()
   assert.equal(j.ability.cdUntil, cd, 'second activation during cooldown ignored');
   press(s, 2, BTN.ABILITY); g.tick();
   assert.ok(s.disguise, 'spy disguised');
-  s.ws.ready = 0; s.ws.slot = 1;
+  s.ws.ready = 0; s.ws.slot = 0;
   press(s, 2, BTN.FIRE); g.tick();
   assert.equal(s.disguise, null, 'attacking reveals the spy');
   assert.ok(s.ability.cdUntil > g.time);
@@ -320,4 +320,80 @@ test('netcode: two clients connect, see each other, predict movement and reconci
   assert.ok(errs.length > 30, 'collected samples');
   assert.ok(maxErr < 2.5, `prediction error ${maxErr.toFixed(2)} m`);
   void dirFromAngles;
+});
+
+test('server: sticky bombs stick, arm, detonate on alt-fire and cap at eight', () => {
+  const { g } = makeServer();
+  const d = join(g, 1, 'Demo', { classId: 'demolitionist' });
+  const v = join(g, 2, 'Target', { classId: 'juggernaut' });
+  startPlaying(g);
+  place(d, 0, 0.01, 18, 0); place(v, 30, 0.01, 30);
+  d.ws.slot = 1; d.ws.ready = 0;
+  let seq = d.lastSeq;
+  const cmd = (b, pitch = -1.2) => { g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, b, 0, pitch, 1, g.time]] }); g.tick(); };
+  // fire at the floor a few times
+  for (let i = 0; i < 40; i++) cmd(i % 2 ? BTN.FIRE : 0);
+  const mine = () => [...g.projectiles.list.values()].filter((p) => p.kind === 'sticky' && p.owner === d.id);
+  assert.ok(mine().length >= 2, `laid ${mine().length} stickies`);
+  for (let i = 0; i < 30; i++) cmd(0);
+  assert.ok(mine().every((p) => p.stuck), 'stickies cling to the floor');
+  const hp0 = d.hp;
+  cmd(BTN.ALT); cmd(0);
+  assert.equal(mine().length, 0, 'alt-fire detonates all armed stickies');
+  assert.ok(d.hp < hp0, 'standing on your own stickies hurts (sticky jump)');
+  // cap
+  for (let i = 0; i < 9; i++) g.projectiles.spawn({ kind: 'sticky', owner: d.id, team: d.team, pos: [0, 0.2, 10], vel: [0, 0, 0], stick: true, noAutoExplode: true, life: 90 });
+  g.projectiles.capStickies(d.id);
+  assert.equal(mine().length, 8);
+});
+
+test('server: spy cloak hides from turrets, blocks attacks and drains; sapper disables turrets', () => {
+  const { g } = makeServer();
+  const s = join(g, 1, 'Spy', { classId: 'spy' });
+  const m = join(g, 2, 'Mech', { classId: 'mechanic' });
+  startPlaying(g);
+  place(s, 0, 0.01, 18, 0); place(m, 4, 0.01, 18);
+  let seq = s.lastSeq;
+  const cmd = (b, slot = 0) => { g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, b, 0, 0, slot, g.time]] }); g.tick(); };
+  cmd(BTN.ALT); cmd(0);
+  assert.equal(s.cloak.on, true, 'right-click cloaks');
+  s.ws.ready = 0;
+  const clip = s.ws.w[0].clip;
+  for (let i = 0; i < 6; i++) cmd(i % 2 ? BTN.FIRE : 0);
+  assert.equal(s.ws.w[0].clip, clip, 'cannot fire while cloaked');
+  for (let i = 0; i < 30 * 3; i++) cmd(0);
+  assert.ok(s.cloak.meter < 0.8, 'meter drains');
+  // enemy turret ignores the cloaked spy
+  const tu = { id: 99, team: m.team, owner: m.id, x: 0, y: 0.01, z: 15, yaw: 0, hp: 160, maxHp: 160, ammo: 150, building: 0, target: -1, nextFire: 0 };
+  g.abilities.turrets.set(tu.id, tu);
+  g.tick();
+  assert.equal(tu.target, -1, 'turret does not see a cloaked spy');
+  cmd(BTN.ALT); cmd(0);
+  assert.equal(s.cloak.on, false, 'right-click again decloaks');
+  // sapper: hold fire on the turret
+  for (let i = 0; i < 30; i++) cmd(0, 1);
+  const hp0 = tu.hp;
+  const ang = anglesFromDir(tu.x - s.ms.x, tu.y + 0.6 - (s.ms.y + 1.62), tu.z - s.ms.z);
+  place(s, 0, 0.01, 16.8, 0);
+  for (let i = 0; i < 20; i++) { g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, BTN.FIRE, ang.yaw, ang.pitch, 1, g.time]] }); g.tick(); }
+  assert.ok(tu.hp < hp0, 'sapper damages the turret');
+  assert.ok(tu.sappedUntil > g.time, 'turret is shorted out');
+});
+
+test('server: soldier Rally Cry protects and speeds up nearby allies', () => {
+  const { g } = makeServer();
+  const so = join(g, 1, 'Sarge', { classId: 'soldier' });
+  const en = join(g, 2, 'Enemy', { classId: 'scout' });
+  const al = join(g, 3, 'Ally', { classId: 'scout', team: so.team });
+  startPlaying(g);
+  assert.equal(al.team, so.team);
+  place(so, 0, 0.01, 18); place(al, 3, 0.01, 18); place(en, 30, 0.01, 30);
+  assert.equal(getClass('soldier').speed, 0.8);
+  assert.equal(getClass('soldier').health, 200);
+  let seq = so.lastSeq;
+  g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, BTN.ABILITY, 0, 0, 0, g.time]] }); g.tick();
+  assert.ok(al.rallyUntil > g.time, 'ally within range is rallied');
+  const hp0 = al.hp;
+  g.combat.damage(al, 40, en, 'scattershot');
+  assert.equal(hp0 - al.hp, 30, '25% damage reduction');
 });

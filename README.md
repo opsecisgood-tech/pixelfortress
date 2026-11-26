@@ -25,7 +25,7 @@ There is no build step. The game is native ES modules plus a vendored copy of th
 | --- | --- | --- |
 | Move | W A S D | Left joystick (floats to wherever your thumb lands) |
 | Look | Mouse (click the game to capture it) | Drag on the right half of the screen |
-| Fire / alt-fire (scope, spin-up) | Left / right mouse | FIRE / ALT |
+| Fire / alt-fire (scope, spin-up, detonate stickies, Spy cloak) | Left / right mouse | FIRE / ALT |
 | Jump (Scout: press again in the air) | Space | JUMP |
 | Sprint | Shift | RUN toggle, or push the stick all the way forward |
 | Crouch | C | C |
@@ -43,14 +43,18 @@ You can drag and resize the touch buttons under **Settings → Touch → Edit la
 
 | Class | HP | Speed | Primary / Secondary / Melee | Ability | Passive |
 | --- | --- | --- | --- | --- | --- |
-| Scout | 125 | 115% | Scattershot / Sidekick / Street Bat | Adrenaline Rush: +30% speed, faster reloads for 4s | Double Jump |
-| Spy | 100 | 100% | Silenced Pistol / Precision Revolver / Shadow Blade | Disguise (attacking or taking 20+ damage reveals you; 8 s cooldown) | Quiet Movement; back attacks deal 220 |
-| Marksman | 110 | 100% | Longshot Rifle (charged scope) / Compact SMG / Utility Knife | Recon Sweep: see every enemy through walls for 5s, 35% slower | Recon: hits reveal the target to your team |
-| Mechanic | 125 | 95% | Rivet Gun / Construction Device (repair beam) / Reinforced Wrench | Automated Turret (limited HP, ammo and range; one per player) | Repair deployables |
-| Doctor | 125 | 103% | Syringe Launcher / Medical Beam / Surgical Saw | Overcharge (built by healing) | Medical Assist |
-| Juggernaut | 300 | 75% | Cyclone Rotary Cannon / Breacher Shotgun / Foundry Hammer | Suppression Mode | Frontline Presence |
-| Incinerator | 175 | 100% | Thermal Projector / Flare Launcher / Furnace Axe | Thermal Burst (also destroys enemy projectiles) | Heat Resistance |
-| Demolitionist | 150 | 95% | Blastcaster / Charge Launcher / Demolition Hammer | Detonation Charge (sticky; press E again to detonate) | Explosive Expertise |
+| Scout | 125 | 115% | Scattergun / Pistol / Bat | Adrenaline Rush: +30% speed, faster reloads for 4s | Double Jump |
+| Soldier | 200 | 80% | Rocket Launcher / Shotgun / Shovel | Rally Cry: you and allies within 9m take 25% less damage and move 15% faster for 6s | Blast Jumper: 40% less self blast damage, stronger rocket jumps, no fall damage |
+| Spy | 100 | 100% | Revolver / Sapper / Knife | Disguise (attacking or taking 20+ damage reveals you; 8 s cooldown). Right-click: invisibility cloak (drains a meter; no attacking while cloaked; turrets and bots can't see you) | Quiet Movement; back attacks deal 220 |
+| Marksman | 110 | 100% | Sniper Rifle (charged scope) / SMG / Kukri | Recon Sweep: see every enemy through walls for 5s, 35% slower | Recon: hits reveal the target to your team |
+| Mechanic | 125 | 95% | Shotgun / Pistol / Wrench (plus the Construction Device and Rivet Gun as alternates) | Automated Turret (limited HP, ammo and range; one per player) | Repair deployables |
+| Doctor | 125 | 103% | Syringe Gun / Healing Gun / Bonesaw | Overcharge (built by healing) | Medical Assist |
+| Juggernaut | 300 | 75% | Minigun / Shotgun / Fists | Suppression Mode | Frontline Presence |
+| Incinerator | 175 | 100% | Flamethrower / Shotgun / Fire Axe | Thermal Burst (also destroys enemy projectiles) | Heat Resistance |
+| Demolitionist | 150 | 95% | Grenade Launcher / Sticky Launcher (right-click detonates, up to 8 bombs) / Bottle | Detonation Charge (sticky; press E again to detonate) | Explosive Expertise |
+
+The Sapper shorts out enemy turrets: they stop firing and take damage while you hold it on them. It does nothing to players and doesn't break your disguise.
+Every slot also has one or more alternate weapons, chosen in the Armory.
 
 All class and weapon numbers live in one place each: `src/shared/config/classes.js` and `src/shared/config/weapons.js`.
 For a balance patch, edit those files or call `applyBalanceOverrides()`.

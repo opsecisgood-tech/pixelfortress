@@ -163,6 +163,7 @@ export class NetClient {
     if (def.spinUp && w.spin > 0) moveMult *= def.spinMoveMult;
     if (def.scope && this.ws.scoped) moveMult *= def.scope.moveMult;
     if (cls.ability.moveMult && this.abilityActive(cls.ability.id)) moveMult *= cls.ability.moveMult;
+    if (this.me?.ry > 0) moveMult *= getClass('soldier').ability.rallyMoveMult;
     return moveParamsFor(cls, { moveMult, frozen: this.latest?.ms === MATCH_STATE.PREROUND, canSprint: !(def.spinUp && w.spin > 0) });
   }
 
@@ -175,7 +176,7 @@ export class NetClient {
       explosiveReloadMult: cls.passive.explosiveReloadMult || 1,
       spreadMult: this.abilityActive('suppression') ? cls.ability.spreadMult : 1,
       hspeed: Math.hypot(this.ms.vx, this.ms.vz), grounded: this.ms.grounded, crouch: this.ms.crouch, sprinting: this.ms.sprinting,
-      disarmed: st === MATCH_STATE.PREROUND || st === MATCH_STATE.ENDED,
+      disarmed: st === MATCH_STATE.PREROUND || st === MATCH_STATE.ENDED || !!this.me?.ck?.[1] || this.me?.ck?.[2] > 0,
     };
   }
 

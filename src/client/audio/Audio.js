@@ -20,6 +20,8 @@ const WEAPON_SOUNDS = {
   flarelauncher: { kind: 'launcher', f: 600, dur: 0.3, thump: 200, vol: 0.8 },
   blastcaster: { kind: 'launcher', f: 380, dur: 0.45, thump: 80, vol: 1.0 },
   chargelauncher: { kind: 'launcher', f: 500, dur: 0.3, thump: 120, vol: 0.85 },
+  stickylauncher: { kind: 'launcher', f: 420, dur: 0.28, thump: 140, vol: 0.8 },
+  sapper: { kind: 'zap', f: 1400, dur: 0.06, vol: 0.3 },
   // alternates
   kickback: { kind: 'shotgun', f: 800, dur: 0.36, thump: 60, vol: 1.1 },
   peashooter: { kind: 'pistol', f: 2600, dur: 0.09, thump: 170, vol: 0.55 },
@@ -28,13 +30,11 @@ const WEAPON_SOUNDS = {
   longbow: { kind: 'pneumatic', f: 500, dur: 0.12, thump: 0, vol: 0.5 },
   scrubcarbine: { kind: 'pistol', f: 2300, dur: 0.09, thump: 140, vol: 0.65 },
   pumpgun: { kind: 'shotgun', f: 750, dur: 0.36, thump: 62, vol: 1.05 },
-  servicepistol: { kind: 'pistol', f: 2000, dur: 0.12, thump: 130, vol: 0.7 },
   crossbow: { kind: 'pneumatic', f: 700, dur: 0.1, thump: 0, vol: 0.55 },
   rapidmender: { kind: 'none' },
   brassthunder: { kind: 'rotary', f: 1500, dur: 0.07, thump: 95, vol: 0.62 },
   slugthrower: { kind: 'shotgun', f: 600, dur: 0.4, thump: 55, vol: 1.1 },
   backdraft: { kind: 'none' },
-  signalshotgun: { kind: 'shotgun', f: 850, dur: 0.34, thump: 66, vol: 1.0 },
   pinpoint: { kind: 'launcher', f: 450, dur: 0.38, thump: 90, vol: 1.0 },
   trenchmortar: { kind: 'launcher', f: 320, dur: 0.4, thump: 70, vol: 1.0 },
 };
@@ -358,7 +358,7 @@ export class AudioEngine {
   }
   voice(classId, kind, pos, local) {
     if (!this.ready()) return;
-    const base = { scout: 300, spy: 200, marksman: 180, mechanic: 190, doctor: 220, juggernaut: 110, incinerator: 160, demolitionist: 150 }[classId] || 200;
+    const base = { scout: 300, spy: 200, marksman: 180, mechanic: 190, doctor: 220, juggernaut: 110, incinerator: 160, demolitionist: 150, soldier: 140 }[classId] || 200;
     const d = this.out(local ? null : pos, local ? 0.35 : 0.6);
     const t = this.ctx.currentTime;
     const ctx = this.ctx;
@@ -381,6 +381,11 @@ export class AudioEngine {
     switch (id) {
       case 'disguise': this.noise(d, t, 0.5, { type: 'bandpass', f: 400, f2: 3000, q: 3, vol: 0.5 }); [880, 1100, 1320].forEach((f, i) => this.tone(d, t + i * 0.06, 0.2, { type: 'sine', f, vol: 0.12 })); break;
       case 'adrenaline': this.tone(d, t, 0.25, { type: 'sawtooth', f: 220, f2: 880, vol: 0.12 }); this.noise(d, t, 0.35, { type: 'bandpass', f: 800, f2: 4000, q: 2, vol: 0.3 }); [0.08, 0.2].forEach((o) => this.tone(d, t + o, 0.1, { type: 'square', f: 1320, vol: 0.06 })); break;
+      case 'rally': [0, 0.14, 0.28].forEach((o, i) => this.tone(d, t + o, 0.22, { type: 'square', f: [392, 523, 659][i], vol: 0.09 })); this.tone(d, t + 0.42, 0.5, { type: 'square', f: 784, vol: 0.1 }); this.noise(d, t, 0.3, { type: 'lowpass', f: 500, vol: 0.25 }); break;
+      case 'cloak': this.tone(d, t, 0.45, { type: 'sine', f: 900, f2: 120, vol: 0.12 }); this.noise(d, t, 0.4, { type: 'highpass', f: 3000, f2: 800, vol: 0.12 }); break;
+      case 'decloak': this.tone(d, t, 0.35, { type: 'sine', f: 140, f2: 1000, vol: 0.12 }); this.noise(d, t + 0.1, 0.25, { type: 'highpass', f: 900, f2: 3500, vol: 0.12 }); break;
+      case 'sapzap': this.noise(d, t, 0.07, { type: 'bandpass', f: 3200, q: 4, vol: 0.18 }); this.tone(d, t, 0.06, { type: 'square', f: 120, f2: 60, vol: 0.05 }); break;
+      case 'stickydet': this.tone(d, t, 0.08, { type: 'square', f: 1600, vol: 0.08 }); this.tone(d, t + 0.09, 0.08, { type: 'square', f: 2000, vol: 0.08 }); break;
       case 'esp': this.tone(d, t, 0.6, { type: 'sine', f: 1200, f2: 300, vol: 0.12 }); [0.05, 0.35].forEach((o) => this.noise(d, t + o, 0.25, { type: 'bandpass', f: 2400, q: 8, vol: 0.18 })); [0, 0.5].forEach((o) => { this.tone(d, t + o, 0.14, { type: 'sine', f: 70, f2: 45, vol: 0.8 }); this.tone(d, t + o + 0.16, 0.12, { type: 'sine', f: 65, f2: 45, vol: 0.6 }); }); break;
       case 'turret': for (let i = 0; i < 5; i++) this.noise(d, t + i * 0.12, 0.05, { type: 'bandpass', f: 1500 + i * 200, q: 6, vol: 0.5 }); this.tone(d, t + 0.7, 0.3, { type: 'square', f: 660, f2: 990, vol: 0.08 }); break;
       case 'overcharge': [523, 659, 784, 1047].forEach((f, i) => this.tone(d, t + i * 0.07, 0.6, { type: 'triangle', f, vol: 0.18 })); this.noise(d, t, 0.8, { type: 'bandpass', f: 1000, f2: 5000, q: 2, vol: 0.2 }); break;
