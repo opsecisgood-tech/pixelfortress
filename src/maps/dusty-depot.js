@@ -132,6 +132,8 @@ export function buildDustyDepot() {
     s.room({ x0: -22, z0: 31, x1: -14, z1: 37.5, y: 0, h: 3.4, t: 0.4, wall: 'woodplank', roof: 'roof',
       doors: { xmin: [{ at: 34, w: 2, h: 2.6 }], zmin: [{ at: -18, w: 2.2, h: 2.6 }] } });
     s.stairs(-13, 0, 31.2, '+z', 1.6, 3.9, 'woodplank');
+    // landing at the top, level with the shack roof, so the stairs don't end in mid-air
+    s.aabb(-14, 0, 36.2, -12.2, 3.9, 37.5, 'woodplank');
     s.pickup('ammo', 'small', -18, 0.05, 35);
 
     // railway with flatcar between yard and warehouse

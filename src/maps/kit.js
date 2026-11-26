@@ -54,12 +54,18 @@ export function standardBase(b, o) {
     // strip along the wall, with stair hole x in [sx+0.5, sx+6]
     sl(sx + 6, Math.min(zMid, zOut), X1 - t, Math.max(zMid, zOut));
     // stairs from hall up toward front
-    b.stairs(sx + 0.5, 0, sgn * (hw - 1.5), '+x', 2, U, stair);
+    // starts ~1.1 m clear of the dividing wall (room to step on) and ends at the slab hole edge (sx + 6)
+    b.stairs(sx + 1.38, 0, sgn * (hw - 1.5), '+x', 2, U, stair, 0.42);
     // railing along flag-room void
     b.aabb(sx + t / 2, U, zIn - 0.06, X1 - t, U + 1.1, zIn + 0.06, rail, { shot: false, trans: true });
     // front balcony outside
     b.aabb(X1, U - 0.4, sgn * (hw - 0.5), X1 + 3.5, U, sgn * (hw - 5), o.upper || o.floor);
-    b.aabb(X1 + 3.4, U, sgn * (hw - 0.5), X1 + 3.5, U + 1.1, sgn * (hw - 5), rail, { shot: false, trans: true });
+    if (o.balconyGap) {
+      // leave an opening where stairs continue from the end of the balcony
+      const [gc, gw] = o.balconyGap;
+      b.aabb(X1 + 3.4, U, sgn * (hw - 0.5), X1 + 3.5, U + 1.1, sgn * (gc + gw / 2), rail, { shot: false, trans: true });
+      b.aabb(X1 + 3.4, U, sgn * (gc - gw / 2), X1 + 3.5, U + 1.1, sgn * (hw - 5), rail, { shot: false, trans: true });
+    } else b.aabb(X1 + 3.4, U, sgn * (hw - 0.5), X1 + 3.5, U + 1.1, sgn * (hw - 5), rail, { shot: false, trans: true });
   }
   // railing at back of flag room (edge of spawn upper floor)
   b.aabb(sx - 0.06, U, -fz, sx + 0.06, U + 1.1, fz, rail, { shot: false, trans: true });

@@ -560,8 +560,9 @@ function buildGeometry(id, skin, team) {
   const pal = { ...BASE, team: TEAM_COLORS_HEX[team ?? 0] };
   const S = new PixelSprite(def.w, def.h);
   def.draw(S);
+  if (def.flipY) S.flipY();
   const px = def.px;
-  const [gx, gy] = def.grip;
+  const [gx, gy] = def.flipY ? [def.grip[0], def.h - 1 - def.grip[1]] : def.grip;
   const map = def.melee
     ? (x, y, l) => [l * px, (x - gx) * px, (y - gy) * px]
     : (x, y, l) => [l * px, -(y - gy) * px, -(x - gx) * px];

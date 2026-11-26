@@ -1,10 +1,11 @@
 // Block models for catalog cosmetics (hats, masks, accessories). Every item is a shape + a colourway
-// [main, secondary, accent]; rarity effects: 'shine' (lit metal), 'glow' (emissive), 'rainbow' (cycling hue).
+// [main, secondary, accent]; rarity effects: 'shine' (lit metal), 'glow' (emissive), 'rainbow' (cycling hue),
+// 'flame' (dark polished finish, smouldering accent trim and live voxel fire - the top hat/mask/accessory tier).
 // Coordinates are in skin pixels: head origin at the neck, top at y=8, face toward -Z, sides at x=±4.
 import * as THREE from 'three';
 import { colorMat, boxGeo } from './blocks.js';
 import { TEAM_COLORS_HEX, TEAM_DARK_HEX } from '../../shared/constants.js';
-import { getItem } from '../../shared/config/cosmetics.js';
+import { getItem, FLAME_STYLES } from '../../shared/config/cosmetics.js';
 
 const rainbowMats = new Map();
 const glowMats = new Map();
@@ -21,7 +22,111 @@ function glowMat(col) {
   }
   return glowMats.get(col);
 }
+
+// ------------------------------------------------------------------ voxel fire
+// One merged mesh of small cubes per worn item; a shared shader animates every cube (rise, drift, shrink,
+// core -> body -> tip colour), so the effect costs no per-frame CPU work beyond one uniform.
+const flameTime = { value: 0 };
+const flameMats = new Map();
+function flameMat(styleId) {
+  if (!flameMats.has(styleId)) {
+    const st = FLAME_STYLES.find((f) => f.id === styleId) || FLAME_STYLES[0];
+    flameMats.set(styleId, new THREE.ShaderMaterial({
+      uniforms: { uTime: flameTime, c0: { value: new THREE.Color(st.flame[0]) }, c1: { value: new THREE.Color(st.flame[1]) }, c2: { value: new THREE.Color(st.flame[2]) } },
+      vertexShader: `
+        uniform float uTime;
+        attribute vec3 aBase;
+        attribute vec4 aP; // phase, speed, size (m), rise height (m)
+        attribute float aS; // sway seed, shared by every cube of one flame tongue so the tongue bends as one
+        varying float vT;
+        void main() {
+          float t = fract(uTime * aP.y + aP.x);
+          vT = t;
+          float sz = aP.z * (1.0 - t * 0.85) * smoothstep(0.0, 0.1, t);
+          float sway = aP.z * 1.3 * t * t;
+          vec3 off = vec3(sin(uTime * 3.3 + aS * 23.0) * sway, t * aP.w, cos(uTime * 2.9 + aS * 19.0) * sway);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(aBase + off + position * sz, 1.0);
+        }`,
+      fragmentShader: `
+        uniform vec3 c0; uniform vec3 c1; uniform vec3 c2;
+        varying float vT;
+        void main() {
+          vec3 col = vT < 0.3 ? mix(c0, c1, vT / 0.3) : mix(c1, c2, (vT - 0.3) / 0.7);
+          gl_FragColor = vec4(col, 1.0 - smoothstep(0.55, 1.0, vT));
+          #include <colorspace_fragment>
+        }`,
+      transparent: true, depthWrite: false,
+    }));
+  }
+  return flameMats.get(styleId);
+}
+const unitCube = new THREE.BoxGeometry(1, 1, 1);
+// points: tongue anchors [[x, y, z], ...] in metres (parent space). Each tongue is opts.per cubes spaced
+// evenly in phase, so at any moment it reads as a tapering stack of fire. opts: { size, rise, speed, per }
+function flameMesh(styleId, points, seed, opts) {
+  const per = opts.per || 1;
+  const n = points.length * per, vpc = unitCube.attributes.position.count, ipc = unitCube.index.count;
+  const pos = new Float32Array(n * vpc * 3), base = new Float32Array(n * vpc * 3), P = new Float32Array(n * vpc * 4), S = new Float32Array(n * vpc);
+  const idx = new Uint32Array(n * ipc);
+  let r = seed >>> 0 || 1;
+  const rnd = () => { r = (Math.imul(r, 1664525) + 1013904223) >>> 0; return r / 4294967296; };
+  let i = 0;
+  for (const pt of points) {
+    const phase0 = rnd(), sway = rnd(), speed = opts.speed * (0.85 + rnd() * 0.3), size = opts.size * (0.75 + rnd() * 0.5), rise = opts.rise * (0.7 + rnd() * 0.6);
+    for (let q = 0; q < per; q++, i++) {
+      const phase = (phase0 + q / per + rnd() * 0.04) % 1;
+      for (let v = 0; v < vpc; v++) {
+        const k = i * vpc + v;
+        pos.set([unitCube.attributes.position.getX(v), unitCube.attributes.position.getY(v), unitCube.attributes.position.getZ(v)], k * 3);
+        base.set(pt, k * 3);
+        P.set([phase, speed, size, rise], k * 4);
+        S[k] = sway;
+      }
+      for (let j = 0; j < ipc; j++) idx[i * ipc + j] = unitCube.index.getX(j) + i * vpc;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aBase', new THREE.BufferAttribute(base, 3));
+  g.setAttribute('aP', new THREE.BufferAttribute(P, 4));
+  g.setAttribute('aS', new THREE.BufferAttribute(S, 1));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  const m = new THREE.Mesh(g, flameMat(styleId));
+  m.frustumCulled = false; m.renderOrder = 2; m.userData.flame = true;
+  return m;
+}
+// Box extents (parent space) of the meshes an adder made.
+function boxesOf(meshes) {
+  return meshes.map((m) => {
+    const p = m.geometry.parameters, h = [p.width / 2, p.height / 2, p.depth / 2];
+    return { min: [m.position.x - h[0], m.position.y - h[1], m.position.z - h[2]], max: [m.position.x + h[0], m.position.y + h[1], m.position.z + h[2]] };
+  });
+}
+// Fire for a hat: flame tongues licking up from the crown, plus a few sparks that rise higher.
+function hatFlames(item, meshes, s) {
+  const bx = boxesOf(meshes.filter((m) => !m.userData.noFlame));
+  if (!bx.length) return null;
+  const top = Math.max(...bx.map((b) => b.max[1]));
+  const crown = bx.filter((b) => b.max[1] > top - 1.3 * s);
+  let r = item.id.length * 7919 + item.shape.charCodeAt(0) * 31;
+  const rnd = () => { r = (Math.imul(r, 48271) + 11) >>> 0; return (r % 100000) / 100000; };
+  const big = item.rarity >= 6;
+  const at = (b, inset) => [b.min[0] + (b.max[0] - b.min[0]) * (inset + rnd() * (1 - 2 * inset)), b.max[1], b.min[2] + (b.max[2] - b.min[2]) * (inset + rnd() * (1 - 2 * inset))];
+  const tongues = [], sparks = [];
+  for (let i = 0, n = big ? 7 : 5; i < n; i++) tongues.push(at(crown[i % crown.length], 0.18));
+  for (let i = 0; i < 5; i++) sparks.push(at(crown[(i * 3) % crown.length], 0.1));
+  const g = new THREE.Group();
+  g.add(flameMesh(item.flame, tongues, r, { size: (big ? 1.5 : 1.25) * s, rise: (big ? 4.6 : 3.6) * s, speed: 1.25, per: 5 }));
+  g.add(flameMesh(item.flame, sparks, r * 3 + 1, { size: 0.45 * s, rise: (big ? 9 : 7) * s, speed: 0.55, per: 1 }));
+  return g;
+}
+// Masks and accessories: a lighter drift of embers so the face and body stay readable.
+function emberFlames(item, pts, s) {
+  return flameMesh(item.flame, pts, item.id.length * 131, { size: 0.6 * s, rise: 3.2 * s, speed: 0.8, per: 2 });
+}
+
 export function tickCosmeticFx(t) {
+  flameTime.value = t;
   for (const [k, m] of rainbowMats) {
     const h = (t * 0.12 + k / 6) % 1;
     m.color.setHSL(h, 0.85, 0.6);
@@ -41,12 +146,14 @@ function makeAdder(parent, s, item, team) {
   const cols = resolveColors(item, team);
   const fx = item?.fx;
   let n = 0, n2 = 0;
-  return (x, y, z, w, h, d, col = 0, flag) => {
+  const made = [];
+  const add = (x, y, z, w, h, d, col = 0, flag) => {
     const isSlot = typeof col === 'number' && col >= 0 && col <= 2;
     const hex = isSlot ? cols[col] : col;
     let mat;
     if (flag === 'g') mat = colorMat(hex, { basic: true });
     else if (isSlot && fx === 'rainbow' && flag !== 'f') mat = rainbowMat(n++ * 0.37 + col);
+    else if (isSlot && fx === 'flame' && col === 2 && flag !== 'f') mat = glowMat(hex); // smouldering trim
     else if (isSlot && (fx === 'glow' || fx === 'shine') && flag !== 'f') mat = glowMat(fx === 'shine' ? hex : hex);
     else mat = colorMat(hex);
     // grow each box by a slightly different hair (anti z-fighting with the body and other parts)
@@ -55,8 +162,11 @@ function makeAdder(parent, s, item, team) {
     m.position.set(x * s, y * s, z * s);
     m.castShadow = true;
     parent.add(m);
+    made.push(m);
     return m;
   };
+  add.meshes = made;
+  return add;
 }
 
 // ------------------------------------------------------------------ hats
@@ -76,7 +186,7 @@ const HAT = {
   party: (A) => { A(0, 8.9, 0, 5, 1.8, 5); A(0, 10.5, 0, 3.4, 1.6, 3.4, 1); A(0, 11.9, 0, 2, 1.4, 2); A(0, 13, 0, 1.4, 1, 1.4, 2); A(0, 8.2, 0, 5.4, 0.4, 5.4, 2); },
   pilot: (A) => { A(0, 8.4, 0, 8.8, 1.4, 8.8); A(4.5, 4.8, 0, 0.6, 4, 4, 0); A(-4.5, 4.8, 0, 0.6, 4, 4, 0); A(-1.8, 8.0, -4.6, 2.8, 1.4, 0.8, 2, 'g'); A(1.8, 8.0, -4.6, 2.8, 1.4, 0.8, 2, 'g'); A(0, 8.0, -4.7, 1, 0.6, 0.6, 1); },
   mohawk: (A) => { for (let i = 0; i < 6; i++) A(0, 8.8 + (i === 0 || i === 5 ? 0 : 0.6), -3.5 + i * 1.4, 1.6, 2.2 + (i > 0 && i < 5 ? 1 : 0), 1.4, i % 2 ? 0 : 1); },
-  headphones: (A) => { A(0, 8.9, 0, 9.2, 1, 2); A(4.6, 4.5, 0, 1.4, 3.6, 3.6, 1); A(-4.6, 4.5, 0, 1.4, 3.6, 3.6, 1); A(4.9, 4.5, 0, 0.6, 2.4, 2.4, 2); A(-4.9, 4.5, 0, 0.6, 2.4, 2.4, 2); A(4.6, 7, 0, 0.8, 2.4, 1, 0); A(-4.6, 7, 0, 0.8, 2.4, 1, 0); },
+  headphones: (A) => { A(0, 8.5, 0, 9.4, 1, 2); A(0, 8.05, 0, 7.4, 0.2, 1.6, 1); A(4.6, 4.5, 0, 1.4, 3.6, 3.6, 1); A(-4.6, 4.5, 0, 1.4, 3.6, 3.6, 1); A(4.9, 4.5, 0, 0.6, 2.4, 2.4, 2); A(-4.9, 4.5, 0, 0.6, 2.4, 2.4, 2); A(4.65, 7, 0, 0.8, 2.6, 1, 0); A(-4.65, 7, 0, 0.8, 2.6, 1, 0); },
   propeller: (A) => { A(0, 8.5, 0, 8.6, 2.4, 8.6); A(-2.2, 8.5, 0, 2, 2.42, 8.62, 1); A(2.2, 8.5, 0, 2, 2.42, 8.62, 2); A(0, 10.2, 0, 0.6, 1.2, 0.6, 2); A(0, 10.9, 0, 7, 0.3, 1, 1); },
   viking: (A) => { A(0, 8.6, 0, 8.8, 2, 8.8); A(0, 9.8, 0, 6, 0.8, 6); A(0, 7.8, -4.4, 1, 3, 0.4); for (const sx of [-1, 1]) { A(sx * 5, 9.2, 0, 2.2, 2, 2, 1); A(sx * 6.1, 10.8, 0, 1.6, 2, 1.6, 1); A(sx * 6.4, 12.4, 0, 1, 1.6, 1, 1); } A(0, 7.8, 0, 9, 0.5, 9, 2); },
   wizard: (A) => { A(0, 8.0, 0, 12, 0.5, 12); A(0, 9.2, 0, 7.4, 2, 7.4); A(0.4, 11, 0.4, 5.4, 1.8, 5.4); A(0.9, 12.6, 0.9, 3.6, 1.6, 3.6); A(1.6, 14, 1.6, 2, 1.4, 2); A(2.4, 15, 2.4, 1, 1, 1); A(0, 8.6, 0, 7.6, 0.8, 7.6, 1); A(-1.5, 10, -3.8, 1, 1, 0.3, 2, 'g'); A(1.6, 11.6, -2.8, 0.8, 0.8, 0.3, 2, 'g'); },
@@ -171,16 +281,43 @@ function backExtent(j, s) {
 }
 
 // Attach the worn hat/mask/accessory meshes. Returns true when a hat was placed (caller hides the class hat).
+// Hats that cover the ears (class ear gear such as the scout headset is hidden under them).
+const EAR_HATS = new Set(['headphones', 'astro', 'pilot', 'ushanka', 'tanker', 'weldmask', 'bombhelm', 'gillie', 'batterhelmet']);
+
 export function attachCosmetics(j, s, cos, team) {
-  if (!cos) return { hat: false };
-  let hat = false;
+  if (!cos) return { hat: false, ears: false };
+  let hat = false, ears = false;
   const hatItem = getItem(cos.hat);
-  if (hatItem && HAT[hatItem.shape]) { HAT[hatItem.shape](makeAdder(j.head, s, hatItem, team)); hat = true; }
+  if (hatItem && HAT[hatItem.shape]) {
+    const A = makeAdder(j.head, s, hatItem, team);
+    HAT[hatItem.shape](A);
+    hat = true; ears = EAR_HATS.has(hatItem.shape);
+    if (hatItem.fx === 'flame') { const f = hatFlames(hatItem, A.meshes, s); if (f) j.head.add(f); }
+  }
   const maskItem = getItem(cos.mask);
-  if (maskItem && MASK[maskItem.shape]) MASK[maskItem.shape](makeAdder(j.head, s, maskItem, team));
+  if (maskItem && MASK[maskItem.shape]) {
+    const A = makeAdder(j.head, s, maskItem, team);
+    MASK[maskItem.shape](A);
+    if (maskItem.fx === 'flame') {
+      const b = boxesOf(A.meshes);
+      const x0 = Math.min(...b.map((q) => q.min[0])), x1 = Math.max(...b.map((q) => q.max[0]));
+      const y0 = Math.min(...b.map((q) => q.min[1])), y1 = Math.max(...b.map((q) => q.max[1]));
+      const z0 = Math.min(...b.map((q) => q.min[2]));
+      const pts = [];
+      for (let i = 0; i < 8; i++) pts.push([i % 2 ? x1 : x0, y0 + ((i >> 1) / 3) * (y1 - y0), z0 + 0.5 * s]);
+      j.head.add(emberFlames(maskItem, pts, s));
+    }
+  }
   const accItem = getItem(cos.accessory);
-  if (accItem && ACC[accItem.shape]) ACC[accItem.shape](makeAdder(j.torso, s, accItem, team), j.bodyH, j.bodyW, j.bodyD, backExtent(j, s));
-  return { hat };
+  if (accItem && ACC[accItem.shape]) {
+    ACC[accItem.shape](makeAdder(j.torso, s, accItem, team), j.bodyH, j.bodyW, j.bodyD, backExtent(j, s));
+    if (accItem.fx === 'flame') {
+      const pts = [];
+      for (let i = 0; i < 10; i++) pts.push([(i / 9 - 0.5) * j.bodyW * s, j.bodyH * s, ((i * 7) % 5 / 4 - 0.5) * j.bodyD * s]);
+      j.torso.add(emberFlames(accItem, pts, s));
+    }
+  }
+  return { hat, ears };
 }
 
 // Glove paint spec for the skin atlas: { main, cuff, stripe } or null.

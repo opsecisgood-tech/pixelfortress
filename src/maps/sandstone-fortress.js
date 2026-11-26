@@ -33,6 +33,7 @@ export function buildSandstoneFortress() {
     standardBase(s, {
       X0: -62, X1: -44, hw: 16, H: 10,
       wall: 'sandstone', inner: 'sandbrick', floor: 'sandtile', upper: 'plank', roof: 'sandstone', trim: 'team', stair: 'plank', label: 'KEEP',
+      balconyGap: [13, 3], // the tower stairs connect to the end of each balcony
     });
     // keep battlements
     for (let z = -15.5; z <= 15.5; z += 2.2) s.box(-44.3, 10.5, z, 0.8, 0.9, 1.1, 'sandstone');
@@ -51,7 +52,11 @@ export function buildSandstoneFortress() {
     s.light(-36, 7.2, -13, 0xffa040, 0.8, 10);
 
     // ---------------- COURTYARD ----------------
-    s.floor(-34, -19, 0, 26, 0.03, 'sandtile', 0.1);
+    // courtyard tiles, leaving the opposite tunnel's exit stairs (x -31.3..-25.1, z 20.3..23.7) open
+    s.floor(-34, -19, 0, 20.3, 0.03, 'sandtile', 0.1);
+    s.floor(-34, 20.3, -31.3, 26, 0.03, 'sandtile', 0.1);
+    s.floor(-25.1, 20.3, 0, 26, 0.03, 'sandtile', 0.1);
+    s.floor(-31.3, 23.7, -25.1, 26, 0.03, 'sandtile', 0.1);
     // low cover walls
     s.box(-28, 0, -8, 1, 1.2, 5, 'sandbrick');
     s.box(-24, 0, 9, 4, 1.2, 1, 'sandbrick');
@@ -93,10 +98,11 @@ export function buildSandstoneFortress() {
 
   // central raised plaza with the well
   b.aabb(-6, 0, -6, 6, 1.2, 6, 'sandtile');
-  b.stairs(-8.5, 0, 0, '+x', 4, 1.2, 'sandstone');
-  b.stairs(8.5, 0, 0, '-x', 4, 1.2, 'sandstone');
-  b.stairs(0, 0, -8.5, '+z', 4, 1.2, 'sandstone');
-  b.stairs(0, 0, 8.5, '-z', 4, 1.2, 'sandstone');
+  // three 0.5 m steps on each side, ending flush against the plaza edge (|6|)
+  b.stairs(-7.5, 0, 0, '+x', 4, 1.2, 'sandstone');
+  b.stairs(7.5, 0, 0, '-x', 4, 1.2, 'sandstone');
+  b.stairs(0, 0, -7.5, '+z', 4, 1.2, 'sandstone');
+  b.stairs(0, 0, 7.5, '-z', 4, 1.2, 'sandstone');
   b.prop('well', 0, 1.2, 0, { col: [2.6, 3, 2.6] });
   b.pickup('health', 'large', 4.5, 1.25, 4.5);
   b.pickup('health', 'large', -4.5, 1.25, -4.5);

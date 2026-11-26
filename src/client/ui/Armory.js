@@ -168,7 +168,7 @@ export class Armory {
     const p = this.app.profile;
     const own = p.owns(it.id);
     const who = it.classes ? `${it.classes.map((c) => esc(getClass(c).displayName)).join(', ')} only` : 'All classes';
-    return `<div class="det r${it.rarity}">${this.thumb(it, clsId)}<div class="txt"><b>${esc(it.name)}</b><div>${rarityChip(it.rarity)} <span class="muted">${esc(SLOT_NAMES[it.slot].replace(/s$/, ''))} · ${who}${it.fx ? ` · ${{ shine: 'Polished', glow: 'Glowing', rainbow: 'Iridescent shimmer' }[it.fx]}` : ''}</span></div>
+    return `<div class="det r${it.rarity}">${this.thumb(it, clsId)}<div class="txt"><b>${esc(it.name)}</b><div>${rarityChip(it.rarity)} <span class="muted">${esc(SLOT_NAMES[it.slot].replace(/s$/, ''))} · ${who}${it.fx ? ` · ${{ shine: 'Polished', glow: 'Glowing', rainbow: 'Iridescent shimmer', flame: 'Burning' }[it.fx]}` : ''}</span></div>
       <div class="muted small">${own ? (it.id === equipped ? 'Equipped' : 'Owned') : 'Not owned yet. Previewing.'}</div></div>
       <div class="acts">${own && it.id === equipped && !['weaponSkin', 'victoryPose', 'elimEffect', 'banner'].includes(it.slot) ? '<button class="btn small unequip">Unequip</button>' : ''}</div></div>`;
   }

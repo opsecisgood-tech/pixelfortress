@@ -124,6 +124,7 @@ export class Renderer {
       const w = buildWeapon(id, { team: 0 });
       const g = new THREE.Group(); g.add(w);
       if (w.userData.def.melee) g.rotation.x = -Math.PI / 2;
+      if (w.userData.def.flipY) w.rotation.y = Math.PI; // icons keep the drawn (blade-down) look
       g.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(g);
       const c = box.getCenter(new THREE.Vector3());

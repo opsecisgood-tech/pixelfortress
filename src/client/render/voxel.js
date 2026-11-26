@@ -30,6 +30,16 @@ export class PixelSprite {
     return this;
   }
   clear(x, y, w, h) { return this.rect(x, y, w, h, null); }
+  // mirror the sprite top-to-bottom (used to put a melee weapon's edge on its leading side)
+  flipY() {
+    const { w, h } = this;
+    for (let y = 0; y < h >> 1; y++) for (let x = 0; x < w; x++) {
+      const a = this.idx(x, y), b = this.idx(x, h - 1 - y);
+      [this.key[a], this.key[b]] = [this.key[b], this.key[a]];
+      [this.depth[a], this.depth[b]] = [this.depth[b], this.depth[a]];
+    }
+    return this;
+  }
   line(x0, y0, x1, y1, key, depth) {
     const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
     const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;

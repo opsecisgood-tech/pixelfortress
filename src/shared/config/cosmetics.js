@@ -27,8 +27,25 @@ export const COLORWAYS = [
   { id: 'royal', prefix: 'Royal', tier: 2, colors: [0x4b2a7a, 0x2a1748, 0xf0c94a] },
   { id: 'golden', prefix: 'Golden', tier: 3, colors: [0xe6b53a, 0xa87a18, 0xfff0b0], fx: 'shine' },
   { id: 'aurora', prefix: 'Aurora', tier: 4, colors: [0x46e0d0, 0x2a7ad8, 0xd8fff8], fx: 'glow' },
-  { id: 'prismatic', prefix: 'Prismatic', tier: 5, colors: [0xff5a9a, 0x5adfff, 0xfff27a], fx: 'rainbow' },
+  // top colourway (id kept as 'prismatic' so owned items survive): a dark, polished finish with burning
+  // trim and a live flame effect. Each shape gets one of the FLAME_STYLES, so the items look distinct.
+  { id: 'prismatic', prefix: 'Blazing', tier: 5, colors: null, fx: 'flame' },
 ];
+// flame: [core, body, tip] colours of the fire; colors: the item's [main, secondary, accent].
+export const FLAME_STYLES = [
+  { id: 'ember', prefix: 'Blazing', colors: [0x2b2326, 0x7a2412, 0xffa53a], flame: [0xfff3b8, 0xff8a1e, 0xa8220c] },
+  { id: 'azure', prefix: 'Frostfire', colors: [0x1d2330, 0x1f4478, 0x9ae0ff], flame: [0xf2ffff, 0x48b8ff, 0x1a3c9e] },
+  { id: 'jade', prefix: 'Hexfire', colors: [0x1b241f, 0x1d5c34, 0xa6ff84], flame: [0xf2ffe2, 0x4ae86c, 0x0f6a2c] },
+  { id: 'violet', prefix: 'Voidfire', colors: [0x231d2d, 0x4c2070, 0xdba2ff], flame: [0xfff0ff, 0xb45cff, 0x4c108e] },
+  { id: 'solar', prefix: 'Sunfire', colors: [0x2e2a22, 0x8a6a1c, 0xfff0a0], flame: [0xffffff, 0xffd84a, 0xd8661a] },
+];
+const strHash = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return h >>> 0; };
+export const flameStyleFor = (shape) => FLAME_STYLES[strHash(shape) % FLAME_STYLES.length];
+// name / colours / effect for an item of a shape in a colourway
+function colorway(cw, key, name, colors) {
+  if (cw.fx === 'flame') { const f = flameStyleFor(key); return { name: `${f.prefix} ${name}`, colors: f.colors, fx: 'flame', flame: f.id }; }
+  return { name: cw.prefix ? `${cw.prefix} ${name}` : name, colors: cw.colors || colors, fx: cw.fx || null };
+}
 const CLASS_COLORWAYS = ['classic', 'crimson', 'golden', 'prismatic'];
 
 // Generic shapes (any class). colors: default palette [main, secondary, accent].
@@ -174,10 +191,7 @@ function build() {
   const shaped = (slot, list, classes = null) => {
     for (const [key, name, tier, colors] of list) {
       for (const cw of COLORWAYS) {
-        add({
-          id: `${slot}:${key}:${cw.id}`, slot, shape: key, name: cw.prefix ? `${cw.prefix} ${name}` : name,
-          rarity: clampR(tier + cw.tier), colors: cw.colors || colors, fx: cw.fx || null, classes,
-        });
+        add({ id: `${slot}:${key}:${cw.id}`, slot, shape: key, ...colorway(cw, key, name, colors), rarity: clampR(tier + cw.tier), classes });
       }
     }
   };
@@ -187,7 +201,7 @@ function build() {
   for (const [cls, slot, key, name, tier, colors] of CLASS_ITEMS) {
     for (const cwId of CLASS_COLORWAYS) {
       const cw = COLORWAYS.find((c) => c.id === cwId);
-      add({ id: `${slot}:${key}:${cw.id}`, slot, shape: key, name: cw.prefix ? `${cw.prefix} ${name}` : name, rarity: clampR(tier + cw.tier), colors: cw.colors || colors, fx: cw.fx || null, classes: [cls] });
+      add({ id: `${slot}:${key}:${cw.id}`, slot, shape: key, ...colorway(cw, key, name, colors), rarity: clampR(tier + cw.tier), classes: [cls] });
     }
   }
   for (const [pk, pn, pt] of SKIN_PATTERNS) {

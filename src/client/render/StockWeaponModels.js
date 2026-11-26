@@ -106,9 +106,10 @@ export const STOCK_MODELS = {
       S.line(2, 14, 0, 19, 'black', 3);
     },
   },
-  // Fire axe: red head with a broad blade on one side and a pick on the other.
+  // Fire axe: red head with a broad blade on one side and a pick on the other. Drawn blade-down (as the
+  // icon shows it); flipY puts the blade on the leading side of the swing in hand.
   furnaceaxe: {
-    w: 43, h: 22, px: 0.0166, grip: [4, 9], melee: true,
+    w: 43, h: 22, px: 0.0166, grip: [4, 9], melee: true, flipY: true,
     draw(S) {
       S.rect(0, 8, 34, 3, 'wood', 3); S.rect(0, 8, 8, 3, 'grip', 3); S.line(9, 8, 33, 8, 'hl');
       S.poly([[33, 7], [37, 7], [35, 1]], 'red', 3); S.px(35, 1, 'steel', 3);

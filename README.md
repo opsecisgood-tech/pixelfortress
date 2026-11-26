@@ -69,7 +69,7 @@ For a balance patch, edit those files or call `applyBalanceOverrides()`.
 
 ## Cosmetics and inventory
 
-About 900 cosmetic items, all visual only, across eight slots: hats, masks, accessories, weapon skins, gloves, victory poses, elimination effects and profile banners. Every class also has items only that class can wear. Items come in seven rarities: common, uncommon, rare, epic, legendary, mythic (glows) and iridescent (animated rainbow).
+About 900 cosmetic items, all visual only, across eight slots: hats, masks, accessories, weapon skins, gloves, victory poses, elimination effects and profile banners. Every class also has items only that class can wear. Items come in seven rarities: common, uncommon, rare, epic, legendary, mythic and iridescent. The top hat, mask and accessory colourway is a dark polished finish with smouldering trim and live voxel fire, in five flame styles (Blazing, Frostfire, Hexfire, Voidfire, Sunfire) so each item looks distinct. Weapon skins and gloves keep the animated rainbow at iridescent.
 
 Everyone starts with a starter set; every other item can be previewed in the loadout screen. The server checks that each worn item exists, fits its slot and can be worn by that class. Bots wear random items.
 

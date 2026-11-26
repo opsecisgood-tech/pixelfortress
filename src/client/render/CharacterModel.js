@@ -86,7 +86,7 @@ function styleFor(classId, team) {
   return { ...S, tc, td };
 }
 
-function paintPart(classId, team, part, dims, gloves) {
+function paintPart(classId, team, part, dims, gloves, bare) {
   const [w, h, d] = dims;
   const L = layout(w, h, d);
   const cv = makeCanvas(L.W, L.H);
@@ -233,7 +233,7 @@ function paintPart(classId, team, part, dims, gloves) {
     if (classId === 'marksman') band(5, 2, '#5a4a30');
     band(0, 1, st.tc);
   }
-  if (SIGNATURE.has(classId)) signaturePaint(classId, part, c, L, st, rnd, dims, glove);
+  if (SIGNATURE.has(classId)) signaturePaint(classId, part, c, L, st, rnd, dims, glove, bare);
   if (part === 'arm' && gs) {
     const gh = classId === 'spy' ? 2 : 3;
     if (gs.cuff != null) band(h - gh - 1, 1, gs.cuff);
@@ -252,7 +252,7 @@ function paintPart(classId, team, part, dims, gloves) {
 // Marksman (slouch hat, amber shades, open vest over a rolled-sleeve shirt, jeans) and Demolitionist
 // (knit cap, eye patch, armoured vest with grenade pods, rolled undershirt, gaiters).
 const SIGNATURE = new Set(['scout', 'spy', 'marksman', 'demolitionist', 'incinerator', 'juggernaut', 'mechanic', 'doctor', 'soldier']);
-function signaturePaint(classId, part, c, L, st, rnd, dims, glove) {
+function signaturePaint(classId, part, c, L, st, rnd, dims, glove, bare) {
   const [w, h] = dims;
   const sides = ['right', 'front', 'left', 'back'];
   const fill = (col, amt = 0.07) => { for (const f of ['top', 'bottom', ...sides]) { const [x, y, fw, fh] = L[f]; noise(c, x, y, fw, fh, col, amt, rnd); } };
@@ -376,8 +376,9 @@ function signaturePaint(classId, part, c, L, st, rnd, dims, glove) {
     if (part === 'head') {
       fill(st.skin, 0.05);
       // helmet sits low over the eyes (voxel helmet on top); square jaw, gritted teeth, stubble
-      const helm = st.helmet;
-      for (const f of sides) { const [x, y, ww] = L[f]; noise(c, x, y, ww, 4, helm, 0.1, rnd); }
+      // under a cosmetic hat ("bare") the painted helmet rim becomes short cropped hair instead
+      const helm = bare ? st.hair : st.helmet;
+      for (const f of sides) { const [x, y, ww] = L[f]; noise(c, x, y, ww, bare ? (f === 'front' ? 1 : f === 'back' ? 3 : 2) : 4, helm, 0.1, rnd); }
       const [tx, ty, tw, th] = L.top; noise(c, tx, ty, tw, th, helm, 0.1, rnd);
       P(c, fx, fy + 4, fw, 1, hex(shadeNum(st.skin, 0.62)));
       P(c, fx + 3, fy + 4, 2, 2, hex(shadeNum(st.skin, 0.86))); P(c, fx + 3, fy + 5, 2, 1, hex(shadeNum(st.skin, 0.74)));
@@ -780,13 +781,15 @@ function hairVoxels(classId, team, s, flatten) {
     cells.push({ x, y: 11, z, c: col(1.2) });
     if (rnd() < 0.5) cells.push({ x, y: 12, z: z + 1, c: col(1.25) });
   }
-  return voxelCells(cells, s, [-4 * s, 0, -4 * s]);
+  // under a hat only the hair below the hat line stays (no tufts poking through the crown or brim)
+  const kept = flatten ? cells.filter((c) => c.y < 6) : cells;
+  return voxelCells(kept, s, [-4 * s, 0, -4 * s]);
 }
 
 const texCache = new Map();
-function partTexture(classId, team, part, dims, gloves) {
-  const key = `${classId}|${team}|${part}|${gloves || ''}`;
-  if (!texCache.has(key)) texCache.set(key, paintPart(classId, team, part, dims, gloves));
+function partTexture(classId, team, part, dims, gloves, bare = false) {
+  const key = `${classId}|${team}|${part}|${gloves || ''}|${bare ? 1 : 0}`;
+  if (!texCache.has(key)) texCache.set(key, paintPart(classId, team, part, dims, gloves, bare));
   return texCache.get(key);
 }
 
@@ -813,10 +816,13 @@ function accessories(classId, team, j, s, prop, cos) {
       hat.push(A(j.head, 0, 8.35, 0, 8.8, 1.7, 8.8, 0x2e2e31), A(j.head, 0, 9.3, 0, 7.6, 0.5, 7.6, 0x2e2e31), A(j.head, 0, 9.65, 0, 1, 0.3, 1, 0x4a4a4e), A(j.head, 0, 7.75, 5.3, 6.8, 0.5, 2.8, 0x262628), A(j.head, 0, 7.75, -4.45, 8.8, 0.6, 0.2, 0x3a3a3e));
       // headset: band over the cap, yellow ear cups, mic boom to the mouth
       hat.push(A(j.head, 0, 9.55, 0.8, 9.6, 0.5, 1.2, 0x2a2a2a));
-      A(j.head, 4.6, 4.6, 0.6, 0.6, 5, 1, 0x2a2a2a); A(j.head, -4.6, 4.6, 0.6, 0.6, 5, 1, 0x2a2a2a);
-      A(j.head, 4.75, 4.4, 0.4, 1.1, 3.2, 3.2, 0xe2b440); A(j.head, -4.75, 4.4, 0.4, 1.1, 3.2, 3.2, 0xe2b440);
-      A(j.head, 5.35, 4.4, 0.4, 0.2, 2.2, 2.2, 0x2a2a2a); A(j.head, -5.35, 4.4, 0.4, 0.2, 2.2, 2.2, 0x2a2a2a);
-      A(j.head, 4.55, 2.9, -2.4, 0.4, 0.4, 4.4, 0x2a2a2a); A(j.head, 3.4, 2.5, -4.55, 1.2, 0.8, 0.8, 0x1a1a1a);
+      // (ear gear: hidden under hats that cover the ears)
+      for (const m of [
+        A(j.head, 4.6, 4.6, 0.6, 0.6, 5, 1, 0x2a2a2a), A(j.head, -4.6, 4.6, 0.6, 0.6, 5, 1, 0x2a2a2a),
+        A(j.head, 4.75, 4.4, 0.4, 1.1, 3.2, 3.2, 0xe2b440), A(j.head, -4.75, 4.4, 0.4, 1.1, 3.2, 3.2, 0xe2b440),
+        A(j.head, 5.35, 4.4, 0.4, 0.2, 2.2, 2.2, 0x2a2a2a), A(j.head, -5.35, 4.4, 0.4, 0.2, 2.2, 2.2, 0x2a2a2a),
+        A(j.head, 4.55, 2.9, -2.4, 0.4, 0.4, 4.4, 0x2a2a2a), A(j.head, 3.4, 2.5, -4.55, 1.2, 0.8, 0.8, 0x1a1a1a),
+      ]) m.userData.ear = true;
       // satchel on the hip
       A(j.torso, -(bw / 2 + 0.6), 1.6, 1.2, 1.4, 3.4, 3.6, 0x5a4632); A(j.torso, -(bw / 2 + 1.35), 2.2, 1.2, 0.2, 1.8, 2.6, 0x4a3826);
       break;
@@ -1043,8 +1049,9 @@ export class CharacterRig {
     this.scale = s;
     this.prop = prop;
     const gloves = this.opts.cosmetics?.gloves;
+    const bareHead = !!getItem(this.opts.cosmetics?.hat);
     const mk = (part, dims) => {
-      const { tex, L } = partTexture(this.classId, this.team, part, dims, gloves);
+      const { tex, L } = partTexture(this.classId, this.team, part, dims, gloves, part === 'head' && bareHead);
       const mat = new THREE.MeshLambertMaterial({ map: tex });
       this.materials.push(mat);
       const m = new THREE.Mesh(atlasGeometry(dims[0], dims[1], dims[2], s, L), mat);
@@ -1096,6 +1103,7 @@ export class CharacterRig {
     }
     const worn = attachCosmetics(j, s, this.opts.cosmetics, this.team);
     if (worn.hat) for (const h of this.classHat) h.visible = false;
+    if (worn.ears) for (const m of j.head.children) if (m.userData.ear) m.visible = false;
     this.armLen = (prop.arm[1] - prop.arm[0] / 2) * s;
     // both hands converge on a point in front of the chest (rigid arms can't bend)
     const sx = armX, reachZ = Math.sqrt(Math.max(0.01, this.armLen ** 2 - (sx * 0.85) ** 2));
@@ -1360,6 +1368,7 @@ export class CharacterRig {
   dispose() {
     for (const m of this.materials) m.dispose();
     this.root.traverse((o) => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry' && o.material?.map) o.geometry.dispose(); });
+    this.root.traverse((o) => { if (o.userData.flame) o.geometry.dispose(); }); // per-item fire meshes
   }
 }
 
@@ -1388,7 +1397,7 @@ function poseAngles(id, t) {
     case 'facepalm': return pose(2.4, 0.1, -0.95, -0.05, { headX: 0.45 });
     case 'victory': return pose(2.8, 2.8, 0.8, -0.8, { hop: hopAbs(4, 1.4) });
     case 'meditate': return pose(0.9, 0.9, 0.35, -0.35, { hop: 1.6 + sn(t * 2) * 0.6, headX: 0.1 });
-    case 'bow': return pose(1.1, -0.4, -0.7, -0.1, { torso: 0.75, headX: 0.2 });
+    case 'bow': return pose(0.75, -0.35, -0.75, -0.1, { torso: -0.7, headX: 0.3 }); // negative torso = bend forward
     case 'legend': return pose(3.05, 0.55, 0.1, -0.7, { torso: -0.12, headX: -0.25, headY: 0.2 });
     case 'bunt': return pose(1.2, 1.25, -0.35, 0.35, { torso: 0.2 });
     case 'tiptoe': return pose(1.35, -0.35, -0.5, -0.1, { hop: 0.6, headX: -0.15 });
