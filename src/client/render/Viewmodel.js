@@ -41,7 +41,8 @@ export class Viewmodel {
     this.rig.clear();
     const md = WEAPON_MODELS[weaponId];
     const w = buildWeapon(weaponId, { team, skin, shadow: false });
-    const fp = md.fp || { pos: [0.2, -0.2, -0.4], scale: 1 };
+    if (md.boxing) w.visible = false; // gloves are worn, nothing is held
+    const fp = md.boxing ? { pos: [0.22, -0.2, -0.58], scale: 1, rot: [0, 0, 0] } : (md.fp || { pos: [0.2, -0.2, -0.4], scale: 1 });
     this.base = new THREE.Vector3(...fp.pos);
     this.baseRot = new THREE.Euler(...(fp.rot || [0, 0, 0]));
     if (!md.melee) {
@@ -56,13 +57,20 @@ export class Viewmodel {
     w.scale.setScalar(fp.scale || 1);
     this.rig.add(this.holder);
     // arms
-    const arm = () => buildArmMesh(classId, team, gloves, 0.75);
+    const arm = () => buildArmMesh(classId, team, gloves, 0.75, !!md.boxing);
     this.armR = arm();
     this.armR.position.set(0, -0.03, 0.06);
     this.armR.rotation.set(0.35, 0.25, 0);
     this.holder.add(this.armR);
     this.armL = arm();
-    if (md.melee) {
+    if (md.boxing) {
+      // second fist held up on the left in a guard
+      this.armL.position.set(-0.24, -0.21, -0.66);
+      this.armL.scale.setScalar(0.5);
+      this.armL.rotation.set(0.3, -0.12, 0);
+      this.rig.add(this.armL);
+      this.armL.userData.free = true;
+    } else if (md.melee) {
       this.armL.position.set(-0.22, -0.2, -0.05);
       this.armL.scale.setScalar(0.58);
       this.armL.rotation.set(0.5, -0.3, 0);

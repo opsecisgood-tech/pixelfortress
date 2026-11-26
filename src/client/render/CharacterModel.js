@@ -814,9 +814,6 @@ function accessories(classId, team, j, s, prop, cos) {
         A(j.torso, -x, y + 1.25, bd / 2 + 0.7, 0.9, 0.7, 1.1, 0xe08a3a);
       }
       A(j.torso, bw / 2 - 1.6, 0.2, -(bd / 2 + 0.8), 2.6, 3.4, 1.6, 0x2e2e2c); A(j.torso, bw / 2 - 1.6, 1.6, -(bd / 2 + 1.65), 2.6, 0.6, 0.1, 0x3e3e3a);
-      // red boxing gloves wrapped around both hands
-      const gcol = gloveSpec(cos?.gloves, team)?.main;
-      for (const [arm, inner] of [[j.armR, -1], [j.armL, 1]]) boxingGlove((x, y, z, w, h, d, c) => A(arm, x, y, z, w, h, d, c), prop.arm, inner, gcol ?? GLOVE_RED);
       break;
     }
     case 'incinerator': {
@@ -859,7 +856,15 @@ function accessories(classId, team, j, s, prop, cos) {
   return hat;
 }
 
-// ---------------------------------------------------------------- boxing gloves (Juggernaut)
+// Placeholder "weapon" for gloves (nothing in the hand, but a muzzle anchor for effects).
+function emptyWeapon() {
+  const g = new THREE.Group();
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.1, 0); g.add(muzzle);
+  g.userData = { muzzle, spin: null, def: null };
+  return g;
+}
+
+// ---------------------------------------------------------------- boxing gloves (melee weapon)
 // A(x, y, z, w, h, d, colour) adds a box in arm space (pixels); arm = [w, len, d]; inner = side of the thumb.
 const GLOVE_RED = 0xc4282a, GLOVE_DARK = 0x941c1e, GLOVE_CUFF = 0xefe8d8;
 function boxingGlove(A, arm, inner, col = GLOVE_RED) {
@@ -965,8 +970,10 @@ export class CharacterRig {
     this.weaponId = weaponId;
     this.weaponSkin = skin;
     if (this.weapon) this.j.handR.remove(this.weapon);
-    const w = buildWeapon(weaponId, { team: this.team, skin });
     const def = WEAPON_MODELS[weaponId];
+    // boxing gloves are worn on both hands instead of held
+    this.setBoxing(!!def?.boxing);
+    const w = def?.boxing ? emptyWeapon() : buildWeapon(weaponId, { team: this.team, skin });
     this.melee = !!def?.melee;
     this.twoHand = !!(def && !def.melee && Math.abs(def.muzzle3[2]) > 0.35);
     if (this.melee) { w.rotation.x = -Math.PI / 2; w.position.set(0, 0, 0); }
@@ -975,6 +982,24 @@ export class CharacterRig {
     w.scale.setScalar(sc);
     this.weapon = w;
     this.j.handR.add(w);
+  }
+
+  setBoxing(on) {
+    if (on && !this.gloves) {
+      const s = this.scale;
+      this.gloves = [this.j.armR, this.j.armL].map((arm, i) => {
+        const g = new THREE.Group();
+        boxingGlove((x, y, z, w, h, d, c) => {
+          const m = new THREE.Mesh(boxGeo(w * s, h * s, d * s), colorMat(c));
+          m.position.set(x * s, y * s, z * s);
+          m.castShadow = true;
+          g.add(m);
+        }, this.prop.arm, i === 0 ? -1 : 1);
+        arm.add(g);
+        return g;
+      });
+    }
+    if (this.gloves) for (const g of this.gloves) g.visible = on;
   }
 
   muzzleWorld(out = new THREE.Vector3()) {
@@ -1142,7 +1167,7 @@ function poseAngles(id, t) {
 
 // First-person arm: same painted skin and sleeve overlay as the third-person model.
 // Hand end at the origin, sleeve extends toward +Z (toward the camera).
-export function buildArmMesh(classId, team, gloves, len) {
+export function buildArmMesh(classId, team, gloves, len, boxing = false) {
   const prop = PROPORTIONS[classId] || PROPORTIONS.marksman;
   const dims = prop.arm;
   const s = len / dims[1];
@@ -1163,15 +1188,14 @@ export function buildArmMesh(classId, team, gloves, len) {
   // slimmer cross-section in first person so the arm frames the weapon instead of covering it
   g.scale.set(0.5, 0.5, 1);
   g.add(m);
-  if (classId === 'juggernaut') {
-    // boxing glove, parented to the arm mesh so it uses the same space as the third-person arm
+  if (boxing) {
+    // boxing glove (weapon), parented to the arm mesh so it uses the same space as the third-person arm
     // (offset by the mesh centre); widened to undo the slimmer first-person cross-section.
     const gp = new THREE.Group();
-    gp.scale.set(1.7, 1, 1.7);
-    const gs = gloveSpec(gloves, team);
+    gp.scale.set(0.8, 0.55, 0.8);
     const off = dims[1] / 2 - dims[0] / 2;
     boxingGlove((x, y, z, w, h, d, c) => {
-      const mm = new THREE.Mesh(boxGeo(w * s, h * s, d * s), colorMat(gs && c !== GLOVE_CUFF ? gs.main : c));
+      const mm = new THREE.Mesh(boxGeo(w * s, h * s, d * s), colorMat(c));
       mm.position.set(x * s, (y + off) * s, z * s);
       gp.add(mm);
     }, dims, -1);
