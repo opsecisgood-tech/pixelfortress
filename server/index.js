@@ -5,6 +5,12 @@
 //
 //   npm install && npm start          -> http://localhost:8080
 //   PORT=9000 BOTS=8 npm start
+//
+// Verified usernames and join logs (docs/VERIFIED_NAMES.md):
+//   FIREBASE_PROJECT_ID=my-project   check signed-in players' accounts and claimed usernames
+//   REQUIRE_ACCOUNT=1                only signed-in players with a username may join
+//   LOG_FILE=logs/players.log        append join/leave/chat records (one JSON object per line)
+//   BANNED_UIDS=uid1,uid2            account ids that may not join
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,11 +20,26 @@ import { ServerGame } from '../src/server/ServerGame.js';
 import { SERVER_TICK_RATE, GAME_VERSION } from '../src/shared/constants.js';
 import { MAP_IDS } from '../src/maps/index.js';
 import { MODES } from '../src/shared/config/modes.js';
+import { checkJoin } from './accounts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = +process.env.PORT || 8080;
 const BOTS = process.env.BOTS !== undefined ? +process.env.BOTS : 8;
 const MAX_ROOMS = +process.env.MAX_ROOMS || 12;
+const ACCOUNTS = {
+  projectId: process.env.FIREBASE_PROJECT_ID || '',
+  requireAccount: process.env.REQUIRE_ACCOUNT === '1',
+  banned: new Set((process.env.BANNED_UIDS || '').split(',').map((s) => s.trim()).filter(Boolean)),
+};
+const LOG_FILE = process.env.LOG_FILE || '';
+if (LOG_FILE) fs.mkdirSync(path.dirname(path.resolve(LOG_FILE)), { recursive: true });
+
+// Player log: one JSON line per join / leave / chat / rejected join.
+function audit(roomId, rec) {
+  const line = { time: new Date().toISOString(), room: roomId, ...rec };
+  console.log(`[room ${roomId}] ${rec.ev} ${rec.name ?? ''}${rec.uid ? ` uid=${rec.uid}` : ''}${rec.verified ? ' (verified)' : ''}${rec.text ? `: ${rec.text}` : ''}${rec.reason ? ` - ${rec.reason}` : ''}`);
+  if (LOG_FILE) fs.appendFile(LOG_FILE, `${JSON.stringify(line)}\n`, () => {});
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -62,6 +83,7 @@ function createRoom({ name, mapId, mode, botFill, persistent = false, maxPlayers
       if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
     },
     log: (s) => console.log(`[room ${id}] ${s}`),
+    audit: (rec) => audit(id, rec),
   });
   rooms.set(id, room);
   console.log(`room ${id} created: ${room.game.roomName} ${room.game.mapId} ${room.game.modeId}`);
@@ -82,6 +104,7 @@ wss.on('connection', (ws) => {
   const connId = nextConnId++;
   let room = null;
   let msgCount = 0;
+  let joining = false; // waiting for an account check
   const rate = setInterval(() => { msgCount = 0; }, 1000);
   ws.on('message', (raw) => {
     if (++msgCount > 200) return; // flood protection
@@ -106,6 +129,22 @@ wss.on('connection', (ws) => {
         if (!room.persistent && room.game.hostConn === -1) room.game.hostConn = connId;
         ws.send(JSON.stringify({ t: 'joined', room: room.id, info: room.game.info() }));
       }
+      return;
+    }
+    if (msg.t === 'hello') {
+      if (joining) return;
+      joining = true;
+      const r = room;
+      checkJoin(msg, ACCOUNTS).then((res) => {
+        joining = false;
+        if (room !== r || ws.readyState !== 1) return;
+        if (res.reject) {
+          audit(r.id, { ev: 'rejected', name: String(msg.name || '').slice(0, 16), reason: res.reject });
+          ws.send(JSON.stringify({ t: 'error', reason: res.reject }));
+          return;
+        }
+        r.game.handleMessage(connId, msg, { account: res.account || null, guestName: res.guestName || null });
+      }).catch((e) => { joining = false; console.error('account check failed', e); ws.send(JSON.stringify({ t: 'error', reason: 'Could not check your account. Try again.' })); });
       return;
     }
     room.game.handleMessage(connId, msg);
@@ -148,4 +187,6 @@ server.listen(PORT, () => {
   console.log(`  game:      http://localhost:${PORT}/`);
   console.log(`  websocket: ws://localhost:${PORT}/ws`);
   console.log(`  rooms:     http://localhost:${PORT}/api/rooms`);
+  console.log(`  accounts:  ${ACCOUNTS.projectId ? `verifying Firebase project "${ACCOUNTS.projectId}"${ACCOUNTS.requireAccount ? ', sign-in required' : ', guests allowed'}` : 'off (set FIREBASE_PROJECT_ID to verify usernames)'}`);
+  if (LOG_FILE) console.log(`  player log: ${path.resolve(LOG_FILE)}`);
 });

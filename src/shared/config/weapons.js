@@ -360,12 +360,6 @@ def('slugthrower', {
   damage: 20, pellets: 3, fireInterval: 0.75, clip: 4, reserve: 28, ...SHOTGUN,
   spread: 0.025, effectiveRange: 11, minFalloff: 0.45, botRange: 10,
 });
-def('ironknuckles', {
-  name: 'Boxing Gloves', slot: 2, type: 'melee', category: 'Boxing Gloves',
-  description: 'Padded red boxing gloves worn on both hands. Short reach, quick punches.',
-  damage: 48, fireInterval: 0.7, auto: true,
-  melee: { range: 1.9, angle: 0.55, windup: 0.1 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.3,
-});
 
 // ---------------- INCINERATOR ----------------
 def('backdraft', {

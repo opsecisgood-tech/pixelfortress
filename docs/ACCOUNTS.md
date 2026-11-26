@@ -70,6 +70,9 @@ Without this, Google sign-in shows an "unauthorized domain" error.
    }
    ```
 
+   If you also want unique, verified usernames on a dedicated server, use the longer rules in
+   [VERIFIED_NAMES.md](VERIFIED_NAMES.md) instead.
+
 ## 6. Publish
 
 Commit the edited `config.js`, for example by editing it directly on github.com. The Pages
@@ -88,8 +91,8 @@ deploy runs automatically. Open the game, click **Sign in** in the top bar, and 
 
 ## Limits
 
-- **Player names in matches aren't verified.** Accounts protect saved progress, but the
-  multiplayer server has no backend to check identity, so players still choose their callsign.
-  Verifying identity in matches would need a dedicated server that checks Firebase ID tokens.
+- **Player names are only verified on a dedicated server.** In games hosted from the website, players
+  still choose their callsign. To get unique usernames with a ✓, a player log and account bans, run
+  the Node.js server with account checks: see [VERIFIED_NAMES.md](VERIFIED_NAMES.md).
 - **Progress is still client-side.** Players can edit their own local profile before it uploads.
   That only affects their own cosmetic and stat data.

@@ -9,6 +9,7 @@ import { getMap } from '../../maps/index.js';
 import { PROJECTILE_KINDS } from '../../server/projectiles.js';
 import { PF, MATCH_STATE, FLAG_STATE, FLAG_STATE_NAMES, TEAM_NAMES } from '../../shared/constants.js';
 
+const VERIFIED = '<span class="vcheck" title="Verified account">✓</span>';
 const STICKY_KIND = PROJECTILE_KINDS.indexOf('sticky');
 const BRIEFCASE = '<svg viewBox="0 0 30 26" aria-hidden="true"><rect x="2" y="7" width="26" height="17" rx="2" fill="#ece3cb" stroke="#2a2420" stroke-width="2"/><path d="M10 7V4h10v3" fill="none" stroke="#ece3cb" stroke-width="3"/><rect x="12" y="13" width="6" height="4" fill="#2a2420"/></svg>';
 const CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="#ece3cb" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
@@ -477,7 +478,7 @@ export class Hud {
     const icons = this.app.icons;
     const team = (t) => {
       const ps = players.filter((p) => p.team === t).sort((a, b) => b.s - a.s || b.k - a.k);
-      const rows = ps.map((p) => `<tr class="${p.id === this.myId ? 'me' : ''} ${p.alive ? '' : 'dead'}"><td>${esc(p.name)}${p.bot ? '<span class="bot">BOT</span>' : ''}${p.host ? '<span class="bot">HOST</span>' : ''}</td><td><img src="${icons.portraits[`${p.cls}_${p.team}`] || ''}" alt="${esc(getClass(p.cls).displayName)}" title="${esc(getClass(p.cls).displayName)}"></td><td>${p.k}</td><td>${p.a}</td><td>${p.d}</td>${this.mode === 'ctf' ? `<td>${p.cap}</td>` : ''}<td>${p.s}</td><td>${p.bot ? '–' : p.ping}</td></tr>`).join('');
+      const rows = ps.map((p) => `<tr class="${p.id === this.myId ? 'me' : ''} ${p.alive ? '' : 'dead'}"><td>${esc(p.name)}${p.v ? VERIFIED : ''}${p.bot ? '<span class="bot">BOT</span>' : ''}${p.host ? '<span class="bot">HOST</span>' : ''}</td><td><img src="${icons.portraits[`${p.cls}_${p.team}`] || ''}" alt="${esc(getClass(p.cls).displayName)}" title="${esc(getClass(p.cls).displayName)}"></td><td>${p.k}</td><td>${p.a}</td><td>${p.d}</td>${this.mode === 'ctf' ? `<td>${p.cap}</td>` : ''}<td>${p.s}</td><td>${p.bot ? '–' : p.ping}</td></tr>`).join('');
       const avg = ps.length ? Math.round(ps.reduce((s, p) => s + p.s, 0) / ps.length) : 0;
       return `<div class="sb-team t${t}"><div class="sb-title"><b>${snap ? snap.sc[t] : 0}</b><h3>${TEAM_NAMES[t]}</h3><span>${ps.length} players · avg score ${avg}</span></div><table><thead><tr><th>Player</th><th>Class</th><th>K</th><th>A</th><th>D</th>${this.mode === 'ctf' ? '<th>Caps</th>' : ''}<th>Score</th><th>Ping</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     };
@@ -487,7 +488,7 @@ export class Hud {
 
   // ---------------------------------------------------------------- chat
   chatMessage(m) {
-    const d = h('div', 'chatline', `${m.teamOnly ? '(Team) ' : ''}<b class="t${m.team}">${esc(m.from)}</b>: ${esc(m.text)}`);
+    const d = h('div', 'chatline', `${m.teamOnly ? '(Team) ' : ''}<b class="t${m.team}">${esc(m.from)}</b>${m.v ? VERIFIED : ''}: ${esc(m.text)}`);
     this.el.chat.appendChild(d);
     while (this.el.chat.children.length > 8) this.el.chat.firstChild.remove();
   }

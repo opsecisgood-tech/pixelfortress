@@ -953,21 +953,6 @@ function emptyWeapon() {
   return g;
 }
 
-// ---------------------------------------------------------------- boxing gloves (melee weapon)
-// A(x, y, z, w, h, d, colour) adds a box in arm space (pixels); arm = [w, len, d]; inner = side of the thumb.
-const GLOVE_RED = 0xc4282a, GLOVE_DARK = 0x941c1e, GLOVE_CUFF = 0xefe8d8;
-function boxingGlove(A, arm, inner, col = GLOVE_RED) {
-  const [aw, al, ad] = arm;
-  const end = -(al - aw / 2);           // bottom of the arm
-  const cy = end + 1.0;                 // glove centre: sits over the fist, past the end of the arm
-  const dark = (col & 0xfefefe) >> 1 | 0;
-  A(0, cy, -0.3, aw + 2, 5.2, ad + 2.6, col);                     // fist
-  A(0, cy - 1.2, -(ad / 2 + 1.25), aw + 1.4, 2.2, 0.4, col === GLOVE_RED ? GLOVE_DARK : dark); // knuckle pad
-  A(inner * (aw / 2 + 1.3), cy + 0.6, -1.2, 1.4, 3.2, 2.6, col);  // thumb
-  A(0, cy + 3.1, 0, aw + 1.4, 1.4, ad + 1.4, GLOVE_CUFF);          // cuff
-  A(0, cy + 3.1, -(ad / 2 + 0.75), 0.6, 1.5, 0.1, 0x3a3a3a);      // lace
-}
-
 // ---------------------------------------------------------------- rig
 const _qx = new THREE.Quaternion(), _qy = new THREE.Quaternion();
 const _X = new THREE.Vector3(1, 0, 0), _Y = new THREE.Vector3(0, 1, 0);
@@ -1060,9 +1045,8 @@ export class CharacterRig {
     this.weaponSkin = skin;
     if (this.weapon) this.j.handR.remove(this.weapon);
     const def = WEAPON_MODELS[weaponId];
-    // boxing gloves are worn on both hands instead of held
-    this.setBoxing(!!def?.boxing);
-    const w = def?.boxing || def?.fists ? emptyWeapon() : buildWeapon(weaponId, { team: this.team, skin });
+    // bare fists: nothing is held
+    const w = def?.fists ? emptyWeapon() : buildWeapon(weaponId, { team: this.team, skin });
     this.melee = !!def?.melee;
     this.twoHand = !!(def && !def.melee && Math.abs(def.muzzle3[2]) > 0.35);
     if (this.melee) { w.rotation.x = -Math.PI / 2; w.position.set(0, 0, 0); }
@@ -1071,24 +1055,6 @@ export class CharacterRig {
     w.scale.setScalar(sc);
     this.weapon = w;
     this.j.handR.add(w);
-  }
-
-  setBoxing(on) {
-    if (on && !this.gloves) {
-      const s = this.scale;
-      this.gloves = [this.j.armR, this.j.armL].map((arm, i) => {
-        const g = new THREE.Group();
-        boxingGlove((x, y, z, w, h, d, c) => {
-          const m = new THREE.Mesh(boxGeo(w * s, h * s, d * s), colorMat(c));
-          m.position.set(x * s, y * s, z * s);
-          m.castShadow = true;
-          g.add(m);
-        }, this.prop.arm, i === 0 ? -1 : 1);
-        arm.add(g);
-        return g;
-      });
-    }
-    if (this.gloves) for (const g of this.gloves) g.visible = on;
   }
 
   muzzleWorld(out = new THREE.Vector3()) {
@@ -1257,7 +1223,7 @@ function poseAngles(id, t) {
 
 // First-person arm: same painted skin and sleeve overlay as the third-person model.
 // Hand end at the origin, sleeve extends toward +Z (toward the camera).
-export function buildArmMesh(classId, team, gloves, len, boxing = false) {
+export function buildArmMesh(classId, team, gloves, len) {
   const prop = PROPORTIONS[classId] || PROPORTIONS.marksman;
   const dims = prop.arm;
   const s = len / dims[1];
@@ -1278,19 +1244,6 @@ export function buildArmMesh(classId, team, gloves, len, boxing = false) {
   // slimmer cross-section in first person so the arm frames the weapon instead of covering it
   g.scale.set(0.5, 0.5, 1);
   g.add(m);
-  if (boxing) {
-    // boxing glove (weapon), parented to the arm mesh so it uses the same space as the third-person arm
-    // (offset by the mesh centre); widened to undo the slimmer first-person cross-section.
-    // positions stay true (so the glove sits on the fist); only the box sizes are slimmed
-    const gp = new THREE.Group();
-    const off = dims[1] / 2 - dims[0] / 2;
-    boxingGlove((x, y, z, w, h, d, c) => {
-      const mm = new THREE.Mesh(boxGeo(w * s * 0.8, h * s * 0.6, d * s * 0.8), colorMat(c));
-      mm.position.set(x * s * 0.8, (y + off) * s, z * s * 0.8);
-      gp.add(mm);
-    }, dims, -1);
-    m.add(gp);
-  }
   g.userData.thick = dims[0] * s * 0.5;
   return g;
 }

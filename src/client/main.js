@@ -118,7 +118,8 @@ class App {
   hello() {
     let token = null;
     try { token = sessionStorage.getItem('pf_token'); } catch { /* ignore */ }
-    return { name: this.profile.name || 'Recruit', classId: this.profile.data.selectedClass, loadouts: this.profile.loadoutsPayload(), weapons: this.profile.weaponsPayload(), token };
+    const idToken = this.auth?.user ? this.auth.idToken || undefined : undefined;
+    return { idToken, name: this.profile.name || 'Recruit', classId: this.profile.data.selectedClass, loadouts: this.profile.loadoutsPayload(), weapons: this.profile.weaponsPayload(), token };
   }
 
   beginGame(transport, meta) {

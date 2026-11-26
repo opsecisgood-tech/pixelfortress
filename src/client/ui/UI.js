@@ -224,7 +224,17 @@ export class UI {
     if (a.user) {
       const sync = { idle: '', syncing: 'Syncing…', saved: 'Progress saved to your account.', error: `Cloud save failed: ${esc(authErrorText(a.syncError))}` }[a.syncState];
       body.innerHTML = `<div class="acct-row"><div><b>${esc(a.user.name || 'Signed in')}</b><div class="note" style="margin:2px 0 0">${esc(a.user.email || '')} · ${a.user.provider === 'google.com' ? 'Google account' : 'Email account'}${a.user.provider !== 'google.com' && !a.user.verified ? ' · email not verified yet' : ''}</div></div><button class="btn signout">Sign out</button></div>
+        <div class="field" style="margin-top:12px"><label>Username ${a.username ? '<span class="vcheck">✓</span>' : ''}</label><div class="row-btns" style="margin:0"><input class="input a-user" maxlength="16" value="${esc(a.username || this.app.profile.name || '')}" placeholder="Pick a unique username"><button class="btn a-claim">${a.username ? 'Change' : 'Claim'}</button></div>
+        <div class="note a-umsg">${a.username ? 'Servers that verify accounts show this name with a check mark, and nobody else can use it there.' : 'Claim a unique username. Servers that verify accounts show it with a check mark.'}</div></div>
         <p class="note">${sync}</p><p class="note">Your level, stats, loadouts and weapon choices follow you to any device you sign in on.</p>`;
+      const uin = body.querySelector('.a-user');
+      uin.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') body.querySelector('.a-claim').click(); });
+      body.querySelector('.a-claim').addEventListener('click', async () => {
+        const m = body.querySelector('.a-umsg');
+        m.textContent = 'Saving…'; m.style.color = '';
+        try { await a.claimUsername(uin.value); this.renderProfileCard?.(); this.renderAccount(body); this.toast(`Username set: ${esc(a.username)}`); }
+        catch (e) { m.textContent = e.code?.startsWith('username/') ? e.message : authErrorText(e); m.style.color = 'var(--bad)'; }
+      });
       body.querySelector('.signout').addEventListener('click', () => a.signOut().catch((e) => this.toast(esc(authErrorText(e)))));
       return;
     }

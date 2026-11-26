@@ -397,3 +397,27 @@ test('server: soldier Rally Cry protects and speeds up nearby allies', () => {
   g.combat.damage(al, 40, en, 'scattershot');
   assert.equal(hp0 - al.hp, 30, '25% damage reduction');
 });
+
+test('server: verified usernames come only from the trusted account check and take precedence', async () => {
+  const logs = [];
+  const { g } = makeServer({ audit: (r) => logs.push(r) });
+  // a client cannot claim verification by putting fields in its own hello
+  const fake = join(g, 1, 'Ace', { account: { uid: 'x', username: 'Ace' }, verified: true });
+  assert.equal(fake.verified, false);
+  // the dedicated server passes the checked account separately; the real owner gets the name
+  g.handleMessage(2, { t: 'hello', protocol: PROTOCOL_VERSION, name: 'whatever' }, { account: { uid: 'uid-ace', username: 'Ace' } });
+  const real = [...g.players.values()].find((p) => p.connId === 2);
+  assert.equal(real.name, 'Ace');
+  assert.equal(real.verified, true);
+  assert.equal(real.uid, 'uid-ace');
+  assert.notEqual(fake.name.toLowerCase(), 'ace', 'the impostor is renamed');
+  // guests renamed by the server keep the replacement name
+  g.handleMessage(3, { t: 'hello', protocol: PROTOCOL_VERSION, name: 'Ace' }, { guestName: 'Guest1234' });
+  assert.equal([...g.players.values()].find((p) => p.connId === 3).name, 'Guest1234');
+  assert.ok(logs.some((r) => r.ev === 'join' && r.uid === 'uid-ace' && r.verified));
+  g.handleMessage(2, { t: 'chat', text: 'hello all' });
+  assert.ok(logs.some((r) => r.ev === 'chat' && r.text === 'hello all' && r.uid === 'uid-ace'));
+  // without a project id the account check is a no-op
+  const { checkJoin } = await import('../server/accounts.js');
+  assert.deepEqual(await checkJoin({ name: 'Ace' }, { projectId: '' }), {});
+});

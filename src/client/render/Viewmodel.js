@@ -41,7 +41,7 @@ export class Viewmodel {
     this.rig.clear();
     const md = WEAPON_MODELS[weaponId];
     const w = buildWeapon(weaponId, { team, skin, shadow: false });
-    const worn = md.boxing || md.fists; // gloves or bare fists: nothing is held
+    const worn = !!md.fists; // bare fists: nothing is held
     if (worn) w.visible = false;
     const fp = worn ? { pos: [0.22, -0.2, -0.58], scale: 1, rot: [0, 0, 0] } : (md.fp || { pos: [0.2, -0.2, -0.4], scale: 1 });
     this.base = new THREE.Vector3(...fp.pos);
@@ -58,7 +58,7 @@ export class Viewmodel {
     w.scale.setScalar(fp.scale || 1);
     this.rig.add(this.holder);
     // arms
-    const arm = () => buildArmMesh(classId, team, gloves, 0.75, !!md.boxing);
+    const arm = () => buildArmMesh(classId, team, gloves, 0.75);
     this.armR = arm();
     this.armR.position.set(0, -0.03, 0.06);
     this.armR.rotation.set(0.35, 0.25, 0);

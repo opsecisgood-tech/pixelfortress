@@ -212,7 +212,7 @@ const BASE_CLASSES = {
     difficulty: 2,
     difficultyLabel: 'Medium',
     weapons: ['cyclone', 'breacher', 'fists'],
-    arsenal: [['cyclone', 'brassthunder'], ['breacher', 'slugthrower'], ['fists', 'ironknuckles', 'foundryhammer']], // weapon choices per slot (first = default)
+    arsenal: [['cyclone', 'brassthunder'], ['breacher', 'slugthrower'], ['fists', 'foundryhammer']], // weapon choices per slot (first = default)
     signature: 'cyclone',
     ability: {
       id: 'suppression', name: 'Suppression Mode', key: 'E',

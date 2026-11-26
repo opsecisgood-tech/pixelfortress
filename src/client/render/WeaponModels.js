@@ -480,16 +480,6 @@ Object.assign(WEAPON_MODELS, {
       S.line(11, 8, 11, 10, 'dark', 1); S.line(11, 10, 14, 10, 'dark', 1);
     },
   },
-  // Boxing gloves: this sprite is only used for the icon; in game the gloves are worn on both hands.
-  ironknuckles: {
-    w: 24, h: 18, px: 0.0165, grip: [3, 9], melee: true, boxing: true,
-    draw(S) {
-      S.rect(0, 5, 6, 8, 'white', 5); S.line(1, 6, 1, 11, 'tape'); S.px(3, 8, 'dark', 5); S.px(3, 10, 'dark', 5);
-      S.poly([[6, 3], [16, 1], [22, 4], [23, 10], [21, 16], [12, 17], [6, 14]], 'red', 7);
-      S.line(8, 4, 15, 2, 'hl'); S.line(20, 6, 21, 13, 'dark');
-      S.poly([[9, 12], [15, 13], [15, 17], [9, 16]], 'red', 7); S.line(9, 12, 15, 13, 'dark');
-    },
-  },
   backdraft: {
     w: 54, h: 20, px: 0.0168, grip: [12, 15], muzzle: [53, 9], flame: true,
     draw(S) {
@@ -549,7 +539,7 @@ WEAPON_MODELS.fists.fp = WEAPON_MODELS.foundryhammer.fp;
 const ALT_FP_FROM = {
   kickback: 'scattershot', peashooter: 'sidekick', slugger: 'streetbat', derringer: 'silencedpistol', longsix: 'revolver', stiletto: 'shadowblade',
   longbow: 'longshot', scrubcarbine: 'compactsmg', machete: 'kukri', pipewrench: 'wrench',
-  crossbow: 'syringelauncher', rapidmender: 'medbeam', wardcleaver: 'surgicalsaw', brassthunder: 'cyclone', slugthrower: 'breacher', ironknuckles: 'foundryhammer',
+  crossbow: 'syringelauncher', rapidmender: 'medbeam', wardcleaver: 'surgicalsaw', brassthunder: 'cyclone', slugthrower: 'breacher',
   backdraft: 'thermal', hydranthook: 'furnaceaxe', pinpoint: 'blastcaster', trenchmortar: 'chargelauncher', claymore: 'demohammer',
 };
 for (const [id, from] of Object.entries(ALT_FP_FROM)) if (WEAPON_MODELS[id] && !WEAPON_MODELS[id].fp) WEAPON_MODELS[id].fp = WEAPON_MODELS[from]?.fp;

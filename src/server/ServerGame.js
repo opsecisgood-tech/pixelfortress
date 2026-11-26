@@ -187,6 +187,7 @@ export class ServerGame {
       this.ghosts.set(p.token, { player: p, until: this.time + RECONNECT_GRACE });
     }
     this.event(['ann', 'leave', p.name]);
+    if (!p.isBot) this.opts.audit?.({ ev: 'leave', name: p.name, uid: p.uid || null, verified: !!p.verified });
     this.balanceBots();
     this.sendRoster();
     if (this.humanCount() === 0 && !this.opts.persistent) {
@@ -200,12 +201,13 @@ export class ServerGame {
     return n;
   }
 
-  handleMessage(connId, msg) {
+  // trusted: set only by the dedicated server after checking the player's account (never from the client).
+  handleMessage(connId, msg, trusted = null) {
     if (!msg || typeof msg !== 'object') return;
     const pid = this.conns.get(connId);
     const p = pid !== undefined ? this.players.get(pid) : null;
     switch (msg.t) {
-      case 'hello': return this.onHello(connId, msg);
+      case 'hello': return this.onHello(connId, msg, trusted);
       case 'c': if (p) this.onCommands(p, msg.c); return;
       case 'class': if (p) this.requestClass(p, msg.classId); return;
       case 'team': if (p) this.requestTeam(p, msg.team); return;
@@ -218,13 +220,17 @@ export class ServerGame {
     }
   }
 
-  onHello(connId, msg) {
+  onHello(connId, msg, trusted = null) {
     if (this.conns.has(connId)) return;
     if (msg.protocol !== PROTOCOL_VERSION) {
       this.send(connId, { t: 'error', reason: `Version mismatch (server v${GAME_VERSION}). Refresh the page.` });
       return;
     }
     let name = String(msg.name || 'Player').replace(/[^\w \-\.\[\]]/g, '').trim().slice(0, 16) || 'Player';
+    const account = trusted?.account || null;
+    const verified = !!account?.username;
+    if (verified) name = account.username;
+    else if (trusted?.guestName) name = trusted.guestName;
     // Reconnection
     const ghost = msg.token ? this.ghosts.get(msg.token) : null;
     let p;
@@ -242,8 +248,11 @@ export class ServerGame {
       const team = this.pickTeam(msg.team ?? -1);
       if (team < 0) { this.send(connId, { t: 'error', reason: 'Server is full.' }); return; }
       const classId = CLASS_IDS.includes(msg.classId) && classAllowed([...this.players.values()], team, msg.classId, getClass(msg.classId).limit) ? msg.classId : this.pickClass(team);
-      p = this.createPlayer({ name: this.uniqueName(name), team, classId, isBot: false, connId, loadouts: sanitizeLoadouts(msg.loadouts), weaponPicks: sanitizeWeaponLoadouts(msg.weapons), token: msg.token || randomToken() });
+      if (verified) this.freeName(name);
+      p = this.createPlayer({ name: verified ? name : this.uniqueName(name), team, classId, isBot: false, connId, loadouts: sanitizeLoadouts(msg.loadouts), weaponPicks: sanitizeWeaponLoadouts(msg.weapons), token: msg.token || randomToken() });
     }
+    p.uid = account?.uid || null;
+    p.verified = verified;
     this.conns.set(connId, p.id);
     if (this.hostConn === null) this.hostConn = connId;
     this.sendWelcome(p, 'welcome');
@@ -257,6 +266,7 @@ export class ServerGame {
     }
     this.sendRoster();
     this.log(`join ${p.name} team=${TEAM_NAMES[p.team]} class=${p.classId}`);
+    this.opts.audit?.({ ev: 'join', name: p.name, uid: p.uid, verified: p.verified, team: TEAM_NAMES[p.team] });
   }
 
   sendWelcome(p, type) {
@@ -267,12 +277,18 @@ export class ServerGame {
     });
   }
 
+  // A verified player owns their name: anyone else here using it (case-insensitive) is renamed.
+  freeName(name) {
+    const key = name.toLowerCase();
+    for (const q of this.players.values()) if (q.name.toLowerCase() === key) { q.name = this.uniqueName(`${q.name}_`); this.rosterDirty = true; }
+  }
+
   uniqueName(name) {
-    const names = new Set([...this.players.values()].map((p) => p.name));
-    if (!names.has(name)) return name;
-    for (let i = 2; i < 99; i++) if (!names.has(`${name}${i}`)) return `${name}${i}`;
+    const names = new Set([...this.players.values()].map((p) => p.name.toLowerCase()));
+    if (names.has(name.toLowerCase())) { for (let i = 2; i < 99; i++) if (!names.has(`${name}${i}`.toLowerCase())) return `${name}${i}`; }
     return name;
   }
+
 
   maxPerTeam() { return Math.max(1, Math.ceil(Math.max(this.maxPlayers, this.botFill) / 2)); }
   teamCount(t) { let n = 0; for (const p of this.players.values()) if (p.team === t) n++; return n; }
@@ -406,8 +422,9 @@ export class ServerGame {
     for (const q of this.players.values()) {
       if (q.connId === null) continue;
       if (msg.team && q.team !== p.team) continue;
-      this.send(q.connId, { t: 'chat', from: p.name, team: p.team, teamOnly: !!msg.team, text });
+      this.send(q.connId, { t: 'chat', from: p.name, team: p.team, teamOnly: !!msg.team, text, v: p.verified ? 1 : 0 });
     }
+    this.opts.audit?.({ ev: 'chat', name: p.name, uid: p.uid || null, verified: !!p.verified, text, teamOnly: !!msg.team });
   }
 
   onHostCommand(msg) {
@@ -886,7 +903,7 @@ export class ServerGame {
     const list = [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, team: p.team, cls: p.classId, bot: p.isBot, k: p.stats.kills, d: p.stats.deaths,
       a: p.stats.assists, s: p.stats.score, cap: p.stats.captures, dmg: Math.round(p.stats.damage), heal: Math.round(p.stats.healing),
-      ping: p.isBot ? 0 : p.ping, alive: p.alive, cos: wornBy(p), wp: p.weapons, host: p.connId !== null && p.connId === this.hostConn,
+      ping: p.isBot ? 0 : p.ping, alive: p.alive, v: p.verified ? 1 : 0, cos: wornBy(p), wp: p.weapons, host: p.connId !== null && p.connId === this.hostConn,
     }));
     this.broadcast({ t: 'r', players: list, room: this.roomName, mapId: this.mapId, mode: this.modeId, botFill: this.botFill });
   }

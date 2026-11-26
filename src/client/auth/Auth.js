@@ -45,6 +45,9 @@ export class Auth {
     this.db = fsMod.getFirestore(fbApp);
     await authMod.getRedirectResult(this.auth).catch(() => null);
     authMod.onAuthStateChanged(this.auth, (u) => this.onUser(u));
+    // keep a fresh ID token for joining dedicated servers that verify accounts (tokens last an hour)
+    authMod.onIdTokenChanged(this.auth, async (u) => { this.idToken = u ? await u.getIdToken().catch(() => null) : null; });
+    setInterval(() => { this.auth.currentUser?.getIdToken(true).then((t) => { this.idToken = t; }).catch(() => {}); }, 40 * 60 * 1000);
     this.status = 'ready';
     this.emit();
   }
@@ -52,7 +55,7 @@ export class Auth {
   async onUser(u) {
     this.user = u ? { uid: u.uid, email: u.email, name: u.displayName, verified: u.emailVerified, provider: u.providerData?.[0]?.providerId || 'password' } : null;
     this.emit();
-    if (!u) { this.app.profile.onSave = null; return; }
+    if (!u) { this.app.profile.onSave = null; this.username = null; this.idToken = null; return; }
     if (!this.app.profile.name && u.displayName) this.app.profile.name = u.displayName.replace(/[^\w \-.[\]]/g, '').slice(0, 16);
     await this.pullOrPush();
     // keep the cloud copy current (debounced) while signed in
@@ -69,6 +72,8 @@ export class Auth {
       const snap = await this.F.getDoc(this.profileRef());
       const local = this.app.profile.data;
       if (snap.exists()) {
+        this.username = snap.data().username || null;
+        if (this.username && this.app.profile.name !== this.username) this.app.profile.name = this.username;
         const cloud = JSON.parse(snap.data().data || 'null');
         if (cloud && (cloud.updatedAt || 0) > (local.updatedAt || 0)) {
           this.app.profile.importData(cloud);
@@ -83,9 +88,31 @@ export class Auth {
   async push() {
     if (!this.user) return;
     try {
-      await this.F.setDoc(this.profileRef(), { data: JSON.stringify(this.app.profile.data), updatedAt: this.app.profile.data.updatedAt || Date.now(), name: this.app.profile.name || '' });
+      await this.F.setDoc(this.profileRef(), { data: JSON.stringify(this.app.profile.data), updatedAt: this.app.profile.data.updatedAt || Date.now(), name: this.app.profile.name || '' }, { merge: true });
       this.syncState = 'saved';
     } catch (e) { this.syncState = 'error'; this.syncError = e; }
+    this.emit();
+  }
+
+  // ---------------------------------------------------------------- usernames
+  // A username is unique across the game: claiming one writes usernames/{lowercase} = { uid, name }
+  // (the security rules only allow creating a free name) and records it on the profile. Dedicated
+  // servers that verify accounts show this name with a check mark and stop anyone else using it.
+  async claimUsername(name) {
+    name = String(name || '').trim();
+    if (!/^[A-Za-z0-9_.-]{3,16}$/.test(name)) { const e = new Error('Use 3-16 letters, numbers, dots, dashes or underscores.'); e.code = 'username/invalid'; throw e; }
+    const F = this.F, uid = this.user.uid;
+    const ref = F.doc(this.db, 'usernames', name.toLowerCase());
+    const old = this.username && this.username.toLowerCase() !== name.toLowerCase() ? F.doc(this.db, 'usernames', this.username.toLowerCase()) : null;
+    await F.runTransaction(this.db, async (tx) => {
+      const cur = await tx.get(ref);
+      if (cur.exists() && cur.data().uid !== uid) { const e = new Error('That username is taken.'); e.code = 'username/taken'; throw e; }
+      if (old) { const o = await tx.get(old); if (o.exists() && o.data().uid === uid) tx.delete(old); }
+      if (!cur.exists()) tx.set(ref, { uid, name });
+      tx.set(this.profileRef(), { username: name }, { merge: true });
+    });
+    this.username = name;
+    this.app.profile.name = name;
     this.emit();
   }
 

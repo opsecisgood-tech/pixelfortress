@@ -489,7 +489,8 @@ export class Game {
   }
 
   nameTag(R, entry, hp, maxHp, isTeammate, ap) {
-    const name = ap.disguised && !isTeammate ? (this.net.roster.get(R.fakeId)?.name || entry?.name) : entry?.name || '?';
+    const shown = ap.disguised && !isTeammate ? (this.net.roster.get(R.fakeId) || entry) : entry;
+    const name = `${shown?.name || '?'}${shown?.v ? ' ✓' : ''}`;
     const pct = Math.round(clamp(hp / Math.max(1, maxHp), 0, 1.5) * 20);
     const key = `${name}|${pct}|${ap.team}|${ap.disguised ? 1 : 0}`;
     if (key === R.nameKey) return;
