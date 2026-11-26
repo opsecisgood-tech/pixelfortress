@@ -79,6 +79,7 @@ export class NetClient {
       case 'chat': this.emit('chat', m); break;
       case 'notice': this.emit('notice', m); break;
       case 'admin': this.emit('admin', m); break;
+      case 'gift': this.emit('gift', m); break;
       case 'ping': this.t.send({ t: 'pong', n: m.n }); break;
       case 'error': this.emit('error', m.reason); break;
       default:
@@ -166,6 +167,7 @@ export class NetClient {
     if (cls.ability.moveMult && this.abilityActive(cls.ability.id)) moveMult *= cls.ability.moveMult;
     if (this.me?.ry > 0) moveMult *= getClass('soldier').ability.rallyMoveMult;
     if (this.me?.adm?.speed) moveMult *= this.me.adm.speed;
+    if (this.me?.sl > 0) moveMult *= getClass('juggernaut').ability.slowMult;
     return moveParamsFor(cls, { moveMult, frozen: this.latest?.ms === MATCH_STATE.PREROUND, canSprint: !(def.spinUp && w.spin > 0) });
   }
 
@@ -179,6 +181,7 @@ export class NetClient {
       spreadMult: this.abilityActive('suppression') ? cls.ability.spreadMult : 1,
       hspeed: Math.hypot(this.ms.vx, this.ms.vz), grounded: this.ms.grounded, crouch: this.ms.crouch, sprinting: this.ms.sprinting,
       disarmed: st === MATCH_STATE.PREROUND || st === MATCH_STATE.ENDED || !!this.me?.ck?.[1] || this.me?.ck?.[2] > 0,
+      noCooldown: !!this.me?.adm?.nocd,
     };
   }
 

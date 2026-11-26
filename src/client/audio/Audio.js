@@ -382,6 +382,8 @@ export class AudioEngine {
     switch (id) {
       case 'disguise': this.noise(d, t, 0.5, { type: 'bandpass', f: 400, f2: 3000, q: 3, vol: 0.5 }); [880, 1100, 1320].forEach((f, i) => this.tone(d, t + i * 0.06, 0.2, { type: 'sine', f, vol: 0.12 })); break;
       case 'adrenaline': this.tone(d, t, 0.25, { type: 'sawtooth', f: 220, f2: 880, vol: 0.12 }); this.noise(d, t, 0.35, { type: 'bandpass', f: 800, f2: 4000, q: 2, vol: 0.3 }); [0.08, 0.2].forEach((o) => this.tone(d, t + o, 0.1, { type: 'square', f: 1320, vol: 0.06 })); break;
+      case 'groundslam': this.tone(d, t, 0.6, { type: 'sine', f: 70, f2: 28, vol: 0.9 }); this.noise(d, t, 0.7, { type: 'lowpass', f: 500, f2: 120, vol: 0.8 }); this.noise(d, t + 0.05, 0.4, { type: 'bandpass', f: 1800, q: 1, vol: 0.2 }); break;
+      case 'clusterbomb': this.noise(d, t, 0.25, { type: 'bandpass', f: 900, f2: 300, q: 2, vol: 0.35 }); this.tone(d, t, 0.15, { type: 'square', f: 300, f2: 180, vol: 0.06 }); break;
       case 'rally': [0, 0.14, 0.28].forEach((o, i) => this.tone(d, t + o, 0.22, { type: 'square', f: [392, 523, 659][i], vol: 0.09 })); this.tone(d, t + 0.42, 0.5, { type: 'square', f: 784, vol: 0.1 }); this.noise(d, t, 0.3, { type: 'lowpass', f: 500, vol: 0.25 }); break;
       case 'cloak': this.tone(d, t, 0.45, { type: 'sine', f: 900, f2: 120, vol: 0.12 }); this.noise(d, t, 0.4, { type: 'highpass', f: 3000, f2: 800, vol: 0.12 }); break;
       case 'decloak': this.tone(d, t, 0.35, { type: 'sine', f: 140, f2: 1000, vol: 0.12 }); this.noise(d, t + 0.1, 0.25, { type: 'highpass', f: 900, f2: 3500, vol: 0.12 }); break;

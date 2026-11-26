@@ -465,6 +465,8 @@ def('sapper', {
 export const ABILITY_SOURCES = {
   turret: { id: 'turret', name: 'Automated Turret', damage: 8, range: 22, fireInterval: 0.16, maxHp: 160, maxAmmo: 150, turnRate: 3.2, spread: 0.035, buildTime: 1.2 },
   detcharge: { id: 'detcharge', name: 'Detonation Charge' },
+  clusterbomb: { id: 'clusterbomb', name: 'Cluster Bomb' },
+  groundslam: { id: 'groundslam', name: 'Ground Slam' },
   thermalburst: { id: 'thermalburst', name: 'Thermal Burst' },
   afterburn: { id: 'afterburn', name: 'Afterburn' },
   fall: { id: 'fall', name: 'Fall' },

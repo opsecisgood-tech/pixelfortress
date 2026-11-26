@@ -204,7 +204,7 @@ const BASE_CLASSES = {
     role: 'Heavy Assault / Frontline / Suppression',
     shortRole: 'HEAVY',
     description:
-      'A walking fortress with 300 health and a six-barrel cannon. Slow, loud and devastating in any doorway he plants himself in.',
+      'A walking fortress with 300 health and a six-barrel cannon. Slow and loud; his Ground Slam throws anyone who gets close into the air.',
     health: 300,
     speed: 0.75,
     jumpPower: 0.92,
@@ -215,9 +215,9 @@ const BASE_CLASSES = {
     arsenal: [['cyclone', 'brassthunder'], ['breacher', 'slugthrower'], ['fists', 'foundryhammer']], // weapon choices per slot (first = default)
     signature: 'cyclone',
     ability: {
-      id: 'suppression', name: 'Suppression Mode', key: 'E',
-      cooldown: 20, duration: 6, damageReduction: 0.35, spreadMult: 0.45, moveMult: 0.55,
-      description: 'Brace into a firing stance: -35% damage taken, tighter spread, reduced movement for 6s.',
+      id: 'groundslam', name: 'Ground Slam', key: 'E',
+      cooldown: 15, radius: 6.5, damage: 40, knockUp: 7.5, knockOut: 6, slowMult: 0.6, slowTime: 2.5,
+      description: 'Stomp the ground: a shockwave damages enemies within 6.5m, throws them into the air and slows them by 40% for 2.5s.',
     },
     passive: { id: 'frontline', name: 'Frontline Presence', allyRadius: 8, damageReduction: 0.1, description: '-10% damage taken while an ally is within 8m.' },
     hitbox: { width: 0.95, height: 2.0, head: 0.48 },
@@ -266,7 +266,7 @@ const BASE_CLASSES = {
     role: 'Explosive Damage / Area Control',
     shortRole: 'DEMOLITION',
     description:
-      'Explosives expert. Arc blast shells over cover, bounce charges around corners and wire a remote detonation charge for ambushes.',
+      'Explosives expert. Lob grenades over cover, lay sticky-bomb traps and blanket choke points with a cluster bomb.',
     health: 150,
     speed: 0.95,
     jumpPower: 1.0,
@@ -277,9 +277,9 @@ const BASE_CLASSES = {
     arsenal: [['chargelauncher', 'trenchmortar'], ['stickylauncher'], ['bottle', 'claymore', 'demohammer']], // weapon choices per slot (first = default)
     signature: 'stickylauncher',
     ability: {
-      id: 'detcharge', name: 'Detonation Charge', key: 'E',
-      cooldown: 14, duration: 20, damage: 110, radius: 5,
-      description: 'Throw a sticky charge. Press E again to detonate it remotely (auto-detonates after 20s).',
+      id: 'clusterbomb', name: 'Cluster Bomb', key: 'E',
+      cooldown: 16, damage: 40, radius: 2.4, bomblets: 6, bombletDamage: 45, bombletRadius: 2.6,
+      description: 'Lob a cluster bomb. It bounces once, then bursts into six bomblets that scatter and explode across the area.',
     },
     passive: { id: 'explosiveexpertise', name: 'Explosive Expertise', explosiveReloadMult: 1.2, selfDamageMult: 0.65, description: 'Explosive weapons reload 20% faster; self blast damage reduced 35%.' },
     hitbox: { width: 0.82, height: 1.86, head: 0.44 },

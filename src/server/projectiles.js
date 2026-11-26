@@ -3,7 +3,7 @@ import { getClass } from '../shared/config/classes.js';
 import { shotDirections } from '../shared/weaponLogic.js';
 import { rayAabb, round2 } from '../shared/math.js';
 
-export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt', 'sticky', 'hopshell'];
+export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt', 'sticky', 'hopshell', 'cluster', 'bomblet'];
 export const MAX_STICKIES = 8;
 
 // Shared muzzle offset so client-predicted projectiles line up with server ones.
@@ -99,6 +99,7 @@ export class Projectiles {
   detonate(pr) {
     const owner = this.g.players.get(pr.owner) || null;
     const ex = pr.explode;
+    if (pr.kind === 'cluster') this.g.abilities.burstCluster(pr);
     this.g.combat.explode([pr.x, pr.y, pr.z], {
       owner, team: pr.team, weaponId: pr.weaponId, damage: pr.damage, radius: ex.radius, minMult: ex.minMult,
       knockback: ex.knockback, selfKnockback: ex.selfKnockback, selfMult: ex.selfMult, noEnemy: !!ex.noEnemy, hopper: !!ex.hopper,
@@ -112,7 +113,7 @@ export class Projectiles {
     for (const pr of [...this.list.values()]) {
       if (pr.detonate) { this.detonate(pr); continue; }
       if (g.time >= pr.die) {
-        if (pr.explode && !pr.noAutoExplode && (pr.fuseExplode || pr.kind === 'shell' || pr.kind === 'hopshell' || pr.kind === 'detcharge')) this.detonate(pr);
+        if (pr.explode && !pr.noAutoExplode && (pr.fuseExplode || pr.kind === 'shell' || pr.kind === 'hopshell' || pr.kind === 'detcharge' || pr.kind === 'cluster' || pr.kind === 'bomblet')) this.detonate(pr);
         else if (pr.kind === 'sticky') this.fizzle(pr);
         else this.remove(pr);
         continue;

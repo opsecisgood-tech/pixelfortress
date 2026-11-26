@@ -296,11 +296,11 @@ export class BotController {
       if (this.strafeTimer <= 0) { this.strafe = Math.random() < 0.5 ? -1 : 1; this.strafeTimer = 0.4 + Math.random() * 1.1; }
       // abilities in combat
       switch (cls.ability.id) {
-        case 'suppression': if (dist < 18 && p.hp < p.maxHp * 0.8) this.pulseAbility(); break;
+        case 'groundslam': if (dist < 5.5) this.pulseAbility(); break;
         case 'thermalburst': if (dist < 4.5) this.pulseAbility(); break;
         case 'esp': if (dist > 25 || Math.random() < 0.004) this.pulseAbility(); break;
         case 'adrenaline': if (p.carrying >= 0 || p.hp < p.maxHp * 0.4 || Math.random() < 0.003) this.pulseAbility(); break;
-        case 'detcharge': if (dist < 16 && Math.random() < 0.02) this.pulseAbility(); break;
+        case 'clusterbomb': if (dist > 5 && dist < 20 && Math.random() < 0.03) this.pulseAbility(); break;
         case 'rally': if (dist < 20 && (p.hp < p.maxHp * 0.7 || Math.random() < 0.01)) this.pulseAbility(); break;
         default:
       }

@@ -49,9 +49,9 @@ You can drag and resize the touch buttons under **Settings → Touch → Edit la
 | Marksman | 110 | 100% | Sniper Rifle (charged scope) / SMG / Kukri | Recon Sweep: see every enemy through walls for 5s, 35% slower | Recon: hits reveal the target to your team |
 | Mechanic | 125 | 95% | Shotgun / Pistol / Wrench (plus the Construction Device and Rivet Gun as alternates) | Automated Turret (limited HP, ammo and range; one per player) | Repair deployables |
 | Doctor | 125 | 103% | Syringe Gun / Healing Gun / Bonesaw | Overcharge (built by healing) | Medical Assist |
-| Juggernaut | 300 | 75% | Minigun / Shotgun / Fists | Suppression Mode | Frontline Presence |
+| Juggernaut | 300 | 75% | Minigun / Shotgun / Fists | Ground Slam: a shockwave damages enemies within 6.5m, throws them into the air and slows them 40% for 2.5s | Frontline Presence |
 | Incinerator | 175 | 100% | Flamethrower / Shotgun / Fire Axe | Thermal Burst (also destroys enemy projectiles) | Heat Resistance |
-| Demolitionist | 150 | 95% | Grenade Launcher / Sticky Launcher (right-click detonates, up to 8 bombs) / Bottle | Detonation Charge (sticky; press E again to detonate) | Explosive Expertise |
+| Demolitionist | 150 | 95% | Grenade Launcher / Sticky Launcher (right-click detonates, up to 8 bombs) / Bottle | Cluster Bomb: lob a bomb that bursts into six bouncing bomblets | Explosive Expertise |
 
 The **Sky Hopper** is the Soldier's second primary.
 - Fire it at your feet to launch high and fast, with lighter gravity and stronger air control until you land.
@@ -99,6 +99,37 @@ Everyone starts with a starter set; every other item can be previewed in the loa
 - Tiers and odds are in `src/shared/config/crates.js`.
 
 The catalog is defined in `src/shared/config/cosmetics.js`.
+
+## Owner (admin) commands
+
+The signed-in account that owns the verified username **owner** gets admin commands on dedicated servers. So does any account listed in `ADMIN_UIDS`, and the host of their own browser-hosted game. Type them in chat:
+
+| Command | What it does |
+| --- | --- |
+| `/help` | List all commands |
+| `/admin` | Show which toggles are on |
+| `/nocd` | No cooldowns for abilities and weapons (rapid fire, instant reloads) |
+| `/god` | Take no damage |
+| `/ammo` | Infinite ammo |
+| `/speed X` | Movement speed, 0.5 to 3 |
+| `/heal` | Heal to 150% |
+| `/class NAME` | Switch class on the spot |
+| `/tp PLAYER` | Teleport to a player |
+| `/kill PLAYER` | Eliminate a player |
+| `/kick PLAYER` | Remove a player |
+| `/bots N` | Set how many bots fill the server |
+| `/map ID [mode]` | Change map (and mode) |
+| `/restart` | Restart the match |
+| `/end` | End the match |
+| `/keys N`, `/addkeys N` | Set or add keys |
+| `/items` | Unlock every item |
+| `/allhats` | Unlock every hat |
+| `/allwraps` | Unlock every weapon skin and glove |
+| `/gift PLAYER ITEM` | Give a player an item, by ID or name |
+
+- `/keys`, `/items`, `/allhats` and `/allwraps` change your own saved profile, so they only take effect while you're signed in to the owner account.
+- Guests can't use the name "owner".
+- On dedicated servers, admin commands and gifts are written to the player log.
 
 ## Accounts (optional)
 

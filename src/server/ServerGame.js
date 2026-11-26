@@ -8,7 +8,7 @@ import {
 import { CLASSES, CLASS_IDS, getClass } from '../shared/config/classes.js';
 import { WEAPONS } from '../shared/config/weapons.js';
 import { MODES, SCORE_VALUES, MATCH_DEFAULTS } from '../shared/config/modes.js';
-import { sanitizeLoadouts, randomLoadouts } from '../shared/config/cosmetics.js';
+import { sanitizeLoadouts, randomLoadouts, ITEMS, ITEM_BY_ID, SLOT_NAMES } from '../shared/config/cosmetics.js';
 import { resolveWeapons, sanitizeWeaponLoadouts } from '../shared/config/classes.js';
 import { World } from '../shared/physics.js';
 import { NavGraph } from '../shared/nav.js';
@@ -161,14 +161,34 @@ export class ServerGame {
     this.opts.audit?.({ ev: 'admin', name: p.name, uid: p.uid || null, verified: !!p.verified, text });
     switch ((cmd || '').toLowerCase()) {
       case 'help':
-        say('Admin: /keys N · /addkeys N · /items · /nocd · /god · /ammo · /speed X · /heal · /class NAME · /tp PLAYER · /kill PLAYER · /kick PLAYER · /bots N · /map ID [tdm|ctf] · /restart · /end · /admin (status)');
+        say('Admin: /gift PLAYER ITEM · /allhats · /allwraps (skins + gloves) · /nocd (abilities + weapons). /keys N · /addkeys N · /items · /nocd · /god · /ammo · /speed X · /heal · /class NAME · /tp PLAYER · /kill PLAYER · /kick PLAYER · /bots N · /map ID [tdm|ctf] · /restart · /end · /admin (status)');
         return;
       case 'admin': say(`Admin status · nocd ${A.nocd ? 'on' : 'off'} · god ${A.god ? 'on' : 'off'} · ammo ${A.ammo ? 'on' : 'off'} · speed x${A.speed}`); return;
       // profile changes are applied by the admin's own game (keys and items live in their profile)
       case 'keys': { const n = Math.max(0, Math.min(9999, parseInt(args[0], 10) || 0)); this.send(p.connId, { t: 'admin', action: 'keys', n }); return; }
       case 'addkeys': { const n = Math.max(-9999, Math.min(9999, parseInt(args[0], 10) || 0)); this.send(p.connId, { t: 'admin', action: 'addkeys', n }); return; }
       case 'items': this.send(p.connId, { t: 'admin', action: 'items' }); return;
-      case 'nocd': toggle('nocd', 'No cooldowns'); return;
+      case 'allhats': this.send(p.connId, { t: 'admin', action: 'items', slots: ['hat'] }); return;
+      case 'allwraps': this.send(p.connId, { t: 'admin', action: 'items', slots: ['weaponSkin', 'gloves'] }); return;
+      case 'gift': {
+        // /gift PLAYER ITEM  (item: id or name, exact or partial)
+        const q = findPlayer(args[0]);
+        if (!q || q.isBot || q.connId === null) { say('Gift: no such (human) player. Usage: /gift PLAYER ITEM NAME'); return; }
+        const want = args.slice(1).join(' ').trim().toLowerCase();
+        if (!want) { say('Usage: /gift PLAYER ITEM NAME (e.g. /gift Bolt crimson beanie)'); return; }
+        let it = ITEM_BY_ID.get(want) || ITEMS.find((x) => x.name.toLowerCase() === want);
+        if (!it) {
+          const matches = ITEMS.filter((x) => x.name.toLowerCase().includes(want) || x.id.toLowerCase().includes(want));
+          if (matches.length === 1) it = matches[0];
+          else if (matches.length > 1) { say(`Gift: ${matches.length} items match "${want}": ${matches.slice(0, 6).map((x) => x.name).join(', ')}${matches.length > 6 ? '…' : ''}`); return; }
+        }
+        if (!it) { say(`Gift: no item called "${want}".`); return; }
+        this.send(q.connId, { t: 'gift', item: it.id, from: p.name });
+        say(`Gifted ${it.name} (${SLOT_NAMES[it.slot] || it.slot}) to ${q.name}.`);
+        this.opts.audit?.({ ev: 'gift', name: p.name, uid: p.uid || null, verified: !!p.verified, to: q.name, toUid: q.uid || null, item: it.id });
+        return;
+      }
+      case 'nocd': toggle('nocd', 'No cooldowns (abilities and weapons)'); return;
       case 'god': toggle('god', 'God mode'); return;
       case 'ammo': toggle('ammo', 'Infinite ammo'); return;
       case 'speed': { const x = Math.max(0.5, Math.min(3, parseFloat(args[0]) || 1)); A.speed = x; say(`Speed x${x}`); return; }
@@ -580,6 +600,7 @@ export class ServerGame {
     if (cls.ability.moveMult && this.abilities.isActive(p, cls.ability.id)) moveMult *= cls.ability.moveMult;
     if (p.rallyUntil > this.time) moveMult *= CLASSES.soldier.ability.rallyMoveMult;
     if (p.admin?.speed) moveMult *= p.admin.speed;
+    if (p.slowUntil > this.time) moveMult *= CLASSES.juggernaut.ability.slowMult;
     const frozen = this.state === MATCH_STATE.PREROUND;
     return moveParamsFor(cls, { moveMult, frozen, canSprint: !(def.spinUp && wst.spin > 0) });
   }
@@ -593,6 +614,7 @@ export class ServerGame {
       spreadMult: this.abilities.isActive(p, 'suppression') ? cls.ability.spreadMult : 1,
       hspeed: Math.hypot(p.ms.vx, p.ms.vz), grounded: p.ms.grounded, crouch: p.ms.crouch, sprinting: p.ms.sprinting,
       disarmed: this.state === MATCH_STATE.PREROUND || this.state === MATCH_STATE.ENDED || p.cloak.on || this.time < p.cloak.attackAt,
+      noCooldown: !!p.admin?.nocd,
     };
   }
 
@@ -732,6 +754,7 @@ export class ServerGame {
     p.healTarget = -1;
     p.revealedUntil = 0;
     p.rallyUntil = 0;
+    p.slowUntil = 0;
     p.cloak.on = false; p.cloak.meter = 1; p.cloak.attackAt = 0;
     p.ability.activeUntil = 0;
     p.ability.active = false;
@@ -971,6 +994,7 @@ export class ServerGame {
     if (q.ws.scoped) f |= PF.SCOPED;
     if (q.rallyUntil > this.time) f |= PF.RALLIED;
     if (q.cloak.on) f |= PF.CLOAKED;
+    if (q.slowUntil > this.time) f |= PF.SLOWED;
     if (w && w.spin > 0) f |= PF.SPUN;
     if (q.healedBy.size && [...q.healedBy.values()].some((t) => this.time - t < 0.3)) f |= PF.HEALED;
     return f;
@@ -1017,6 +1041,7 @@ export class ServerGame {
         ra: p.alive ? 0 : Math.max(0, round2(p.respawnAt - this.time)),
         ry: p.rallyUntil > this.time ? round2(p.rallyUntil - this.time) : 0,
         adm: p.admin ? { ...p.admin } : null,
+        sl: p.slowUntil > this.time ? round2(p.slowUntil - this.time) : 0,
         ck: p.classId === 'spy' ? [round2(p.cloak.meter), p.cloak.on ? 1 : 0, Math.max(0, round2(p.cloak.attackAt - this.time))] : null,
         cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying, wp: p.weapons,
       };

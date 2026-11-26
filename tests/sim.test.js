@@ -206,7 +206,7 @@ test('server: ability cooldowns are enforced; spy disguise breaks on attack', ()
   const press = (p, conn, b) => g.handleMessage(conn, { t: 'c', c: [[++p.__seq || (p.__seq = p.lastSeq + 1), 1 / 30, b, 0, 0, null, g.time]] });
   void seq;
   press(j, 1, BTN.ABILITY); g.tick();
-  assert.equal(j.ability.active, true);
+  assert.ok(j.ability.cdUntil > g.time, 'Ground Slam used');
   const cd = j.ability.cdUntil;
   press(j, 1, 0); g.tick(); press(j, 1, BTN.ABILITY); g.tick();
   assert.equal(j.ability.cdUntil, cd, 'second activation during cooldown ignored');
@@ -539,4 +539,64 @@ test('server: admin commands only for the verified "owner" (or the host of their
   assert.ok(host.admin && host.name === 'owner');
   assert.equal(other.admin, null);
   assert.notEqual(other.name.toLowerCase(), 'owner');
+});
+
+test('server: Ground Slam throws, damages and slows enemies; Cluster Bomb bursts into bomblets', () => {
+  const { g } = makeServer();
+  const j = join(g, 1, 'Heavy', { classId: 'juggernaut' });
+  const e = join(g, 2, 'Scout', { classId: 'scout' });
+  startPlaying(g);
+  place(j, 0, 0.01, 18); place(e, 3, 0.01, 18);
+  let seq = j.lastSeq;
+  g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, BTN.ABILITY, 0, 0, 0, g.time]] }); g.tick();
+  assert.ok(e.hp < e.maxHp, 'damaged');
+  assert.ok(e.ms.vy > 2 || e.ms.y > 0.2, 'thrown upward');
+  assert.ok(e.slowUntil > g.time, 'slowed');
+  // demolitionist cluster bomb
+  const { g: g2 } = makeServer();
+  const d = join(g2, 1, 'Demo', { classId: 'demolitionist' });
+  join(g2, 2, 'Other');
+  startPlaying(g2);
+  place(d, 0, 0.01, 18, 0);
+  let s2 = d.lastSeq;
+  g2.handleMessage(1, { t: 'c', c: [[++s2, 1 / 30, BTN.ABILITY, 0, -0.3, 0, g2.time]] }); g2.tick();
+  const kinds = () => [...g2.projectiles.list.values()].map((p) => p.kind);
+  assert.ok(kinds().includes('cluster'));
+  let sawBomblets = 0;
+  for (let i = 0; i < 60; i++) { g2.tick(); sawBomblets = Math.max(sawBomblets, kinds().filter((k) => k === 'bomblet').length); }
+  assert.equal(sawBomblets, 6, 'six bomblets');
+});
+
+test('admin /nocd removes weapon cooldowns too (instant reload, rapid fire)', () => {
+  const { g } = makeServer();
+  const o = (g.handleMessage(1, { t: 'hello', protocol: PROTOCOL_VERSION, name: 'x', classId: 'marksman' }, { account: { uid: 'u', username: 'owner' } }), [...g.players.values()][0]);
+  join(g, 2, 'Other');
+  startPlaying(g);
+  g.handleMessage(1, { t: 'chat', text: '/nocd' });
+  place(o, 0, 0.01, 18, 0); o.ws.slot = 0; o.ws.ready = 0;
+  const shots0 = o.ws.shots;
+  let seq = o.lastSeq;
+  for (let i = 0; i < 30; i++) { g.handleMessage(1, { t: 'c', c: [[++seq, 1 / 30, BTN.FIRE, 0, 0, 0, g.time]] }); g.tick(); }
+  // the sniper rifle normally fires about once every 1.5 s; with no cooldowns it fires continuously
+  assert.ok(o.ws.shots - shots0 >= 10, `fired ${o.ws.shots - shots0} times in 1 s`);
+  assert.ok(o.ws.w[0].clip > 0, 'instant reloads keep the clip loaded');
+});
+
+test('admin /gift sends a named item to a player; /allhats and /allwraps target slots', () => {
+  const out = new Map();
+  const { g } = makeServer({ send: (c, m) => { if (!out.has(c)) out.set(c, []); out.get(c).push(m); } });
+  g.handleMessage(1, { t: 'hello', protocol: PROTOCOL_VERSION, name: 'x' }, { account: { uid: 'u', username: 'owner' } });
+  join(g, 2, 'Bolt');
+  g.handleMessage(1, { t: 'chat', text: '/gift Bolt hat:beanie:classic' });
+  assert.ok(out.get(2).some((m) => m.t === 'gift' && m.item === 'hat:beanie:classic'));
+  g.handleMessage(1, { t: 'chat', text: '/gift bo Fur Ushanka' });
+  const g2 = out.get(2).filter((m) => m.t === 'gift');
+  assert.ok(g2.length === 2 || out.get(1).some((m) => m.t === 'notice' && /match/.test(m.text)), 'name lookup');
+  g.handleMessage(1, { t: 'chat', text: '/allhats' });
+  g.handleMessage(1, { t: 'chat', text: '/allwraps' });
+  const adm = out.get(1).filter((m) => m.t === 'admin');
+  assert.deepEqual(adm.map((m) => m.slots), [['hat'], ['weaponSkin', 'gloves']]);
+  // a non-admin cannot gift
+  g.handleMessage(2, { t: 'chat', text: '/gift x hat:beanie:classic' });
+  assert.equal(out.get(1).filter((m) => m.t === 'gift').length, 0);
 });

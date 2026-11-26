@@ -14,6 +14,7 @@ import { WEAPONS, ABILITY_SOURCES } from '../shared/config/weapons.js';
 import { MODES } from '../shared/config/modes.js';
 import { PF, MATCH_STATE, TEAM_COLORS_HEX, TEAM_NAMES, FLAG_STATE, EYE_HEIGHT, CROUCH_EYE_HEIGHT, otherTeam } from '../shared/constants.js';
 import { shotDirections } from '../shared/weaponLogic.js';
+import { getItem } from '../shared/config/cosmetics.js';
 import { dirFromAngles, damp, clamp, wrapAngle } from '../shared/math.js';
 
 const CLASS_BY_INDEX = CLASS_IDS.reduce((a, id) => { a[CLASSES[id].index] = id; return a; }, {});
@@ -96,6 +97,7 @@ export class Game {
       .on('chat', (m) => this.ui.hud.chatMessage(m))
       .on('notice', (m) => this.ui.hud.notify(m.text, m.short ? 'short' : 'info'))
       .on('admin', (m) => this.onAdmin(m))
+      .on('gift', (m) => this.onGift(m))
       .on('spawned', (me) => this.onSpawned(me))
       .on('died', () => this.onDied())
       .on('matchstate', (st, prev) => this.onMatchState(st, prev))
@@ -398,6 +400,8 @@ export class Game {
       case 'charge': bx(g, 0, -0.13, 0, 0.26, 0.26, 0.26, 0x3a3a3a); bx(g, 0, -0.05, 0, 0.28, 0.08, 0.28, col); break;
       case 'detcharge': bx(g, 0, -0.1, 0, 0.36, 0.2, 0.36, 0x545c3c); bx(g, 0, 0.1, 0, 0.12, 0.06, 0.12, 0xff3030, { basic: true, name: 'blink' }); break;
       case 'hopshell': bx(g, 0, -0.09, 0, 0.18, 0.18, 0.45, 0xf08a24); bx(g, 0, -0.05, -0.25, 0.12, 0.12, 0.08, 0xffffff); bx(g, 0, -0.06, 0.24, 0.13, 0.13, 0.06, 0xffd040, { basic: true }); break;
+      case 'cluster': bx(g, 0, -0.17, 0, 0.34, 0.34, 0.34, 0x3a3e34); bx(g, 0, -0.06, 0, 0.36, 0.08, 0.36, col); bx(g, 0, 0.17, 0, 0.08, 0.08, 0.08, 0x8a8f98); bx(g, 0, 0.23, 0, 0.05, 0.05, 0.05, 0xffb040, { basic: true, name: 'blink' }); break;
+      case 'bomblet': bx(g, 0, -0.08, 0, 0.16, 0.16, 0.16, 0x2e3228); bx(g, 0, -0.02, 0, 0.17, 0.04, 0.17, col); bx(g, 0, 0.09, 0, 0.04, 0.04, 0.04, 0xff6a30, { basic: true, name: 'blink' }); break;
       case 'sticky': bx(g, 0, -0.11, 0, 0.22, 0.22, 0.22, 0x2e3034); bx(g, 0, -0.05, 0, 0.24, 0.07, 0.24, col); for (const [x, z] of [[0.13, 0], [-0.13, 0], [0, 0.13], [0, -0.13]]) bx(g, x, -0.13, z, 0.06, 0.06, 0.06, 0x8a9098); bx(g, 0, 0.11, 0, 0.07, 0.05, 0.07, team ? 0x7ac8ff : 0xff6a50, { basic: true, name: 'blink' }); break;
       default: bx(g, 0, -0.05, 0, 0.1, 0.1, 0.1, 0xffffff, { basic: true });
     }
@@ -702,6 +706,8 @@ export class Game {
       if (def && def.spinUp && (R.flags & PF.SPUN)) this.audio.loop(`s${id}`, 'spin', pos, true);
       else this.audio.loop(`s${id}`, null, null, false);
       if (R.flags & PF.ABILITY) this.abilityAura(R, dt);
+      // slowed by a Ground Slam: dizzy dust at the feet
+      if ((R.flags & PF.SLOWED) && Math.random() < dt * 14) { const rp = R.root.position; this.effects.spawn({ x: rp.x + (Math.random() - 0.5) * 0.8, y: rp.y + 0.1, z: rp.z + (Math.random() - 0.5) * 0.8, vy: 0.5, life: 0.5, size: 0.09, end: 0.4, color: 0x9a8c74, g: 0, drag: 2 }); }
     }
     fx.endBeams();
   }
@@ -726,9 +732,6 @@ export class Game {
         if (chance(12)) { const fwd = dirFromAngles(R.root.rotation.y, 0); fx.spawn({ x: p.x + fwd[0] * 0.3, y: p.y + 1.62, z: p.z + fwd[2] * 0.3, life: 0.25, size: 0.07, end: 0.1, color: 0xffb030, g: 0, drag: 6 }); }
         break;
       }
-      case 'suppression':
-        if (chance(26)) { const a = Math.random() * Math.PI * 2; fx.spawn({ x: p.x + Math.cos(a) * 0.9, y: p.y + 0.08, z: p.z + Math.sin(a) * 0.9, vy: 0.6, life: 0.4, size: 0.08, end: 0.3, color: team, g: 0, drag: 2 }); }
-        break;
       case 'overcharge':
         if (chance(22)) fx.spawn({ x: p.x + (Math.random() - 0.5) * 0.9, y: p.y + Math.random() * 2, z: p.z + (Math.random() - 0.5) * 0.9, vy: 0.8, life: 0.6, size: 0.07, end: 0.2, color: Math.random() < 0.5 ? 0xfff28a : 0xffffff, g: -0.5, drag: 1 });
         break;
@@ -737,6 +740,16 @@ export class Game {
   }
 
   // Expanding ring of heat for Thermal Burst.
+  // Ground Slam: a dust-and-debris shockwave rolling out across the floor.
+  slamRing(x, y, z) {
+    const r = getClass('juggernaut').ability.radius;
+    for (let i = 0; i < 48; i++) {
+      const a = (i / 48) * Math.PI * 2;
+      this.effects.spawn({ x, y: y + 0.1, z, vx: Math.cos(a) * r * 1.9, vy: 0.8 + Math.random() * 1.2, vz: Math.sin(a) * r * 1.9, life: 0.55, size: 0.2, end: 0.6, color: i % 3 ? 0x9a8c74 : 0x6a5e4c, g: 3, drag: 3 });
+    }
+    for (let i = 0; i < 14; i++) this.effects.spawn({ x: x + (Math.random() - 0.5), y: y + 0.1, z: z + (Math.random() - 0.5), vx: (Math.random() - 0.5) * 4, vy: 4 + Math.random() * 3, vz: (Math.random() - 0.5) * 4, life: 0.8, size: 0.1, end: 0.6, color: 0x5a5040, g: 14, drag: 0.5 });
+  }
+
   heatRing(x, y, z) {
     for (let i = 0; i < 36; i++) {
       const a = (i / 36) * Math.PI * 2;
@@ -770,7 +783,8 @@ export class Game {
         if (!stuck) m.lookAt(m.position.x + vx, m.position.y + vy - g * age, m.position.z + vz);
         if (kind === 'hopshell' && Math.random() < 0.6) this.effects.spawn({ x: m.position.x, y: m.position.y, z: m.position.z, life: 0.45, size: 0.11, end: 0.5, color: 0xffffff, g: -0.5, drag: 2 });
         if (kind === 'flare' || kind === 'shell') { if (Math.random() < 0.6) this.effects.spawn({ x: m.position.x, y: m.position.y, z: m.position.z, life: 0.5, size: 0.12, end: 0.6, color: kind === 'flare' ? 0xffa030 : 0x888888, g: -0.5, drag: 2 }); }
-        if (kind === 'detcharge') { const b = m.getObjectByName('blink'); if (b) b.visible = Math.sin(this.time * 10) > 0; }
+        if (kind === 'detcharge' || kind === 'cluster' || kind === 'bomblet') { const b = m.getObjectByName('blink'); if (b) b.visible = Math.sin(this.time * (kind === 'bomblet' ? 22 : 12) + id) > 0; }
+        if ((kind === 'cluster' || kind === 'bomblet') && Math.random() < 0.5) this.effects.spawn({ x: m.position.x, y: m.position.y + 0.15, z: m.position.z, life: 0.3, size: 0.05, end: 0.2, color: 0xffb040, g: -1, drag: 3 });
         if (kind === 'sticky') { const b = m.getObjectByName('blink'); if (b) b.visible = stuck && Math.sin(this.time * 6 + id) > -0.2; }
       }
     }
@@ -1165,6 +1179,16 @@ export class Game {
     this.ui.hud.notify(msg, 'info');
   }
 
+  // An admin gifted this player an item.
+  onGift(m) {
+    const it = getItem(m.item);
+    if (!it) return;
+    const dup = this.app.profile.grantItem(it.id);
+    this.app.profile.save();
+    this.ui.hud.notify(dup ? `${m.from} gifted you ${it.name} (you already had it)` : `${m.from} gifted you ${it.name}!`, 'info');
+    this.audio.jingle?.('pickup');
+  }
+
   onCloakEvent(e) {
     const [, pid, on] = e;
     const me = this.net.myId;
@@ -1187,6 +1211,7 @@ export class Game {
       if (on) { this.r.vm.onAbility(id); this.audio.ability(id, null, true); this.ui.hud.abilityFlash(id); }
       if (id === 'thermalburst') { this.heatRing(this.net.ms.x, this.net.ms.y + 0.9, this.net.ms.z); this.shake = Math.max(this.shake, 0.4); }
       if (id === 'esp' && on) this.ui.hud.notify('Recon Sweep: all enemies marked for 5s', 'short');
+      if (id === 'groundslam') { this.slamRing(this.net.ms.x, this.net.ms.y, this.net.ms.z); this.shake = Math.max(this.shake, 0.7); if (extra) this.ui.hud.notify(`Ground Slam hit ${extra} ${extra === 1 ? 'enemy' : 'enemies'}`, 'short'); }
       if (id === 'rally' && on) { this.rallyRing(this.net.ms.x, this.net.ms.y, this.net.ms.z, this.net.me?.team ?? 0, true); this.ui.hud.notify('Rally Cry: nearby allies take less damage and move faster', 'short'); }
       if (id === 'disguise') this.ui.hud.notify(on ? 'Disguised — attack or heavy damage reveals you' : 'Disguise removed', 'short');
       return;
@@ -1199,7 +1224,8 @@ export class Game {
       case 'disguise': this.effects.burst(pos[0], pos[1], pos[2], 24, { color: [0x555555, 0x888888, 0x333333], speed: 2, life: 0.8, size: 0.2, g: -1 }); break;
       case 'thermalburst': this.heatRing(pos[0], pos[1] - 0.3, pos[2]); if (extra) this.ui.hud.notify(`${extra} projectile(s) incinerated`, 'short'); break;
       case 'overcharge': if (on) this.effects.burst(pos[0], pos[1], pos[2], 30, { color: [0xffffff, 0xfff28a], speed: 4, life: 0.8, size: 0.1, g: -2 }); break;
-      case 'suppression': if (on) this.effects.burst(pos[0], pos[1] - 1, pos[2], 16, { color: [0x8a8070, 0x5a5040], speed: 3, life: 0.5, size: 0.12, g: 6 }); break;
+      case 'groundslam': this.slamRing(pos[0], pos[1] - 1.1, pos[2]); { const d = Math.hypot(pos[0] - this.net.ms.x, pos[2] - this.net.ms.z); if (d < 14) this.shake = Math.max(this.shake, 0.5 * (1 - d / 14)); } break;
+      case 'clusterbomb': this.effects.burst(pos[0], pos[1], pos[2], 6, { color: [0xffffff, 0xd8d0c0], speed: 1.5, life: 0.3, size: 0.06, g: 1 }); break;
       case 'adrenaline': if (on) this.effects.burst(pos[0], pos[1] - 0.8, pos[2], 14, { color: [0xffffff, 0xd8f0ff], speed: 4, life: 0.4, size: 0.08, g: 2 }); break;
       case 'esp': if (on) this.effects.burst(pos[0], pos[1] + 0.5, pos[2], 10, { color: [0xffb030, 0xffe070], speed: 1.5, life: 0.5, size: 0.06, g: -1 }); break;
       case 'rally': if (on) this.rallyRing(pos[0], pos[1] - 1, pos[2], this.rigs.get(pid)?.realTeam ?? 0); break;

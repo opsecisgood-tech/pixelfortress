@@ -111,9 +111,13 @@ export function shotDirections(yaw, pitch, spread, pellets, seed) {
 
 /**
  * Step weapon logic for one command.
- * ctx: { pid, alive, reloadMult, explosiveReloadMult, spreadMult, hspeed, grounded, crouch, sprinting, disarmed }
+ * ctx: { pid, alive, reloadMult, explosiveReloadMult, spreadMult, hspeed, grounded, crouch, sprinting, disarmed, noCooldown }
+ * noCooldown (admin /nocd): instant switch, reload, spin-up and scope charge; guns fire continuously at up
+ * to NOCD_INTERVAL; melee swings much faster.
  * returns array of events.
  */
+export const NOCD_INTERVAL = 0.06; // fastest fire rate with admin no-cooldowns (~16 shots/s)
+
 export function stepWeapons(ws, cmd, ctx) {
   const dt = Math.min(Math.max(cmd.dt || 0, 0), 0.05);
   const events = [];
@@ -133,7 +137,7 @@ export function stepWeapons(ws, cmd, ctx) {
     ws.scoped = false;
     ws.slot = cmd.w;
     const nd = WEAPONS[ws.w[ws.slot].id];
-    ws.ready = t + (oldDef.holsterTime || 0.1) + (nd.deployTime || 0.35);
+    ws.ready = ctx.noCooldown ? t : t + (oldDef.holsterTime || 0.1) + (nd.deployTime || 0.35);
     events.push({ type: 'switch', slot: ws.slot });
   }
 
@@ -144,12 +148,19 @@ export function stepWeapons(ws, cmd, ctx) {
   const altHeld = !!(b & BTN.ALT) && !ctx.disarmed;
   const firePressed = !!(pressed & BTN.FIRE) && !ctx.disarmed;
   const reloadMult = (ctx.reloadMult || 1) * (def.explosive ? (ctx.explosiveReloadMult || 1) : 1);
+  const nocd = !!ctx.noCooldown;
+  const interval = nocd ? Math.min(def.fireInterval, def.type === 'melee' ? 0.25 : NOCD_INTERVAL) : def.fireInterval;
+  if (nocd && def.clip > 0 && w.clip < def.clip && w.reserve > 0) {
+    // instant reload from reserve
+    const take = Math.min(def.clip - w.clip, w.reserve);
+    w.clip += take; w.reserve -= take; w.rel = 0;
+  }
 
   // ---- Rotary spin ---------------------------------------------------------
   if (def.spinUp) {
     if ((fireHeld || altHeld) && ready && w.rel === 0) {
       if (w.spin === 0) events.push({ type: 'spinup' });
-      w.spin = Math.min(def.spinUp, w.spin + dt);
+      w.spin = nocd ? def.spinUp : Math.min(def.spinUp, w.spin + dt);
     } else {
       if (w.spin > 0 && w.spin - dt * 1.5 <= 0) events.push({ type: 'spindown' });
       w.spin = Math.max(0, w.spin - dt * 1.5);
@@ -162,7 +173,7 @@ export function stepWeapons(ws, cmd, ctx) {
     if (wantScope && !ws.scoped) { ws.scoped = true; w.scopeStart = t + def.scope.delay; w.charge = 0; events.push({ type: 'scope', on: true }); }
     else if (!wantScope && ws.scoped) { ws.scoped = false; w.charge = 0; events.push({ type: 'scope', on: false }); }
     if (ws.scoped && t >= w.next && t >= w.scopeStart) {
-      w.charge = Math.min(1, w.charge + dt / def.scope.chargeTime);
+      w.charge = nocd ? 1 : Math.min(1, w.charge + dt / def.scope.chargeTime);
     }
   }
 
@@ -209,22 +220,22 @@ export function stepWeapons(ws, cmd, ctx) {
   // semi-auto trigger presses are buffered while deploying / between shots (released trigger clears it)
   if (!fireHeld) ws.queued = 0;
   else if (firePressed && (!ready || t < w.next || w.rel > 0)) ws.queued = 1;
-  const wantsFire = def.auto ? fireHeld : firePressed || (fireHeld && ws.queued === 1) || (fireHeld && def.type !== 'hitscan' && def.type !== 'projectile');
+  const wantsFire = def.auto || nocd ? fireHeld : firePressed || (fireHeld && ws.queued === 1) || (fireHeld && def.type !== 'hitscan' && def.type !== 'projectile');
   if (def.type === 'melee') {
     if (w.melee >= 0 && t >= w.melee) {
       w.melee = -1;
       events.push({ type: 'melee_hit', weaponId: w.id, slot: ws.slot });
     }
     if (fireHeld && ready && t >= w.next) {
-      w.next = t + def.fireInterval;
-      w.melee = t + def.melee.windup;
+      w.next = t + interval;
+      w.melee = t + (nocd ? Math.min(def.melee.windup, 0.06) : def.melee.windup);
       ws.shots++;
       ws.lastFire = t;
       events.push({ type: 'swing', weaponId: w.id, slot: ws.slot });
     }
   } else if (def.type === 'beam') {
     if (fireHeld && ready) {
-      if (t >= w.next) { w.next = t + def.fireInterval; events.push({ type: 'beam', weaponId: w.id, slot: ws.slot }); }
+      if (t >= w.next) { w.next = t + interval; events.push({ type: 'beam', weaponId: w.id, slot: ws.slot }); }
     }
   } else if (wantsFire && ready) {
     // reload interruption for single reloads
@@ -234,7 +245,7 @@ export function stepWeapons(ws, cmd, ctx) {
       if (def.clip < 0 || w.clip >= def.ammoPerShot) {
         if (def.clip >= 0) w.clip -= def.ammoPerShot;
         // catch-up cadence for automatic weapons at low command rates
-        w.next = (t - w.next < def.fireInterval * 0.5 ? w.next : t) + def.fireInterval;
+        w.next = (t - w.next < interval * 0.5 ? w.next : t) + interval;
         ws.shots++;
         ws.queued = 0;
         ws.lastFire = t;

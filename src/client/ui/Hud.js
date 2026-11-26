@@ -203,6 +203,7 @@ export class Hud {
     if (flags & PF.DISGUISED) fx.push('<span class="rev">Disguised</span>');
     if (flags & PF.CARRIER) fx.push('<span class="oc">Carrying flag</span>');
     if (flags & PF.CLOAKED) fx.push('<span class="rev">Cloaked</span>');
+    if (me.sl > 0) fx.push(`<span class="burn">Slowed ${Math.ceil(me.sl)}s</span>`);
     if (me.ry > 0) fx.push(`<span class="heal">Rallied ${Math.ceil(me.ry)}s</span>`);
     const fxs = fx.join('');
     if (fxs !== this.lastFx) { this.lastFx = fxs; el.fx.innerHTML = fxs; }

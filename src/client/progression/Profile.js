@@ -171,7 +171,13 @@ export class Profile {
     if (!Profile.isOwner(auth)) return 'Keys and items can only be changed while signed in to the "owner" account.';
     if (m.action === 'keys') { this.data.keys = Math.max(0, m.n | 0); this.save(); return `Keys set to ${this.data.keys}.`; }
     if (m.action === 'addkeys') { this.data.keys = Math.max(0, this.data.keys + (m.n | 0)); this.save(); return `Keys: ${this.data.keys}.`; }
-    if (m.action === 'items') { let n = 0; for (const it of ITEMS) if (!this.owns(it.id)) { this.data.inventory[it.id] = 1; n++; } this.save(); return `Unlocked ${n} items (all ${ITEMS.length}).`; }
+    if (m.action === 'items') {
+      const pool = m.slots ? ITEMS.filter((it) => m.slots.includes(it.slot)) : ITEMS;
+      let n = 0; for (const it of pool) if (!this.owns(it.id)) { this.data.inventory[it.id] = 1; n++; }
+      this.save();
+      const what = m.slots ? (m.slots.includes('hat') ? 'hats' : 'weapon skins and gloves') : 'items';
+      return `Unlocked ${n} ${what} (you now own all ${pool.length}).`;
+    }
     return '';
   }
 

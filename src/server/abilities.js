@@ -46,7 +46,6 @@ export class Abilities {
         return;
       case 'adrenaline':
       case 'esp':
-      case 'suppression':
         if (t < p.ability.cdUntil || p.ability.active) return;
         p.ability.active = true;
         p.ability.activeUntil = t + ab.duration;
@@ -80,6 +79,16 @@ export class Abilities {
         if (t < p.ability.cdUntil) return;
         p.ability.cdUntil = t + ab.cooldown;
         this.thermalBurst(p, ab);
+        return;
+      case 'groundslam':
+        if (t < p.ability.cdUntil) return;
+        p.ability.cdUntil = t + ab.cooldown;
+        this.groundSlam(p, ab);
+        return;
+      case 'clusterbomb':
+        if (t < p.ability.cdUntil) return;
+        p.ability.cdUntil = t + ab.cooldown;
+        this.throwCluster(p, ab);
         return;
       case 'detcharge': {
         const existing = this.charges.get(p.id);
@@ -239,7 +248,62 @@ export class Abilities {
     g.event(['ab', p.id, 'thermalburst', 1, n], p.ms);
   }
 
-  // ---------------- Demolitionist
+  // ---------------- Juggernaut: Ground Slam
+  groundSlam(p, ab) {
+    const g = this.g;
+    const c = [p.ms.x, p.ms.y + 0.3, p.ms.z];
+    let hits = 0;
+    for (const q of g.players.values()) {
+      if (!q.alive || q === p || q.team === p.team) continue;
+      const d = Math.hypot(q.ms.x - c[0], (q.ms.y - p.ms.y) * 0.6, q.ms.z - c[2]);
+      if (d > ab.radius) continue;
+      if (!g.world.los([c[0], c[1] + 0.6, c[2]], [q.ms.x, q.ms.y + 0.9, q.ms.z])) continue;
+      const f = 1 - d / ab.radius;
+      const dx = q.ms.x - c[0], dz = q.ms.z - c[2];
+      const l = Math.hypot(dx, dz) || 1;
+      const heavy = getClass(q.classId).id === 'juggernaut' ? 0.5 : 1;
+      applyImpulse(q.ms, (dx / l) * ab.knockOut * (0.4 + 0.6 * f) * heavy, ab.knockUp * (0.5 + 0.5 * f) * heavy, (dz / l) * ab.knockOut * (0.4 + 0.6 * f) * heavy);
+      g.combat.damage(q, Math.round(ab.damage * (0.5 + 0.5 * f)), p, 'groundslam', { point: [q.ms.x, q.ms.y + 0.5, q.ms.z] });
+      if (q.alive) q.slowUntil = Math.max(q.slowUntil || 0, g.time + ab.slowTime);
+      hits++;
+    }
+    for (const tu of [...this.turrets.values()]) {
+      if (tu.team !== p.team && Math.hypot(tu.x - c[0], tu.z - c[2]) < ab.radius) this.damageTurret(tu, ab.damage, p);
+    }
+    g.event(['ab', p.id, 'groundslam', 1, hits], p.ms);
+  }
+
+  // ---------------- Demolitionist: Cluster Bomb
+  throwCluster(p, ab) {
+    const g = this.g;
+    const eye = g.eyePos(p);
+    const d = dirFromAngles(p.ms.yaw, p.ms.pitch);
+    g.projectiles.spawn({
+      kind: 'cluster', owner: p.id, team: p.team, weaponId: 'clusterbomb', pos: eye,
+      vel: [d[0] * 16 + p.ms.vx * 0.3, d[1] * 16 + 4, d[2] * 16 + p.ms.vz * 0.3], gravity: 18, radius: 0.16,
+      life: 1.15, bounce: 0.35, fuseExplode: true, damage: ab.damage,
+      explode: { radius: ab.radius, minMult: 0.4, knockback: 6, selfKnockback: 8, selfMult: 0.5 }, key: -(g.time * 100 | 0),
+    });
+    g.event(['ab', p.id, 'clusterbomb', 1], p.ms);
+  }
+
+  // called when a cluster bomb bursts: scatter bomblets in a ring
+  burstCluster(pr) {
+    const ab = CLASSES.demolitionist.ability;
+    const n = ab.bomblets;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+      const sp = 4 + Math.random() * 3.5;
+      this.g.projectiles.spawn({
+        kind: 'bomblet', owner: pr.owner, team: pr.team, weaponId: 'clusterbomb', pos: [pr.x, pr.y + 0.15, pr.z],
+        vel: [Math.cos(a) * sp, 4.5 + Math.random() * 2, Math.sin(a) * sp], gravity: 18, radius: 0.1,
+        life: 0.75 + Math.random() * 0.55, bounce: 0.4, fuseExplode: true, damage: ab.bombletDamage,
+        explode: { radius: ab.bombletRadius, minMult: 0.35, knockback: 5, selfKnockback: 6, selfMult: 0.5 }, key: -((this.g.time * 1000 | 0) + i),
+      });
+    }
+  }
+
+  // ---------------- Demolitionist (legacy detonation charge)
   throwCharge(p, ab) {
     const g = this.g;
     const eye = g.eyePos(p);

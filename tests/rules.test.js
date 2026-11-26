@@ -25,7 +25,7 @@ test('balance overrides patch the single source of truth and can be reset', () =
   applyBalanceOverrides({ juggernaut: { health: 280, ability: { cooldown: 25 } } });
   assert.equal(getClass('juggernaut').health, 280);
   assert.equal(getClass('juggernaut').ability.cooldown, 25);
-  assert.equal(getClass('juggernaut').ability.duration, 6, 'unpatched nested fields preserved');
+  assert.equal(getClass('juggernaut').ability.radius, 6.5, 'unpatched nested fields preserved');
   resetBalance();
   assert.equal(getClass('juggernaut').health, 300);
 });
