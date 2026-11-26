@@ -1271,7 +1271,18 @@ export class Game {
     const [, key, a, b] = e;
     switch (key) {
       case 'preround': this.ui.hud.bigText('GET READY', `Match begins in ${a}s`); break;
-      case 'start': this.ui.hud.bigText('FIGHT!', MODES[this.net.mode]?.name || ''); this.audio.jingle('start'); this.audio.announce(this.net.mode === 'ctf' ? 'Capture the enemy flag!' : 'Eliminate the enemy team!'); break;
+      case 'start':
+        if (MODES[this.net.mode]?.duel) break; // duels announce each round instead
+        this.ui.hud.bigText('FIGHT!', MODES[this.net.mode]?.name || ''); this.audio.jingle('start'); this.audio.announce(this.net.mode === 'ctf' ? 'Capture the enemy flag!' : 'Eliminate the enemy team!'); break;
+      case 'round': this.ui.hud.bigText(`ROUND ${a}`, `${TEAM_NAMES[0]} ${b} — ${e[4]} ${TEAM_NAMES[1]} · first to ${MODES[this.net.mode]?.scoreLimit ?? 5}`); this.audio.jingle('start'); this.audio.announce(`Round ${a}. Fight!`); break;
+      case 'roundwin': {
+        const mine = this.net.me?.team;
+        if (a === -1) { this.ui.hud.bigText('ROUND DRAW', b ? `Round ${b}` : ''); break; }
+        this.ui.hud.bigText(a === mine ? 'ROUND WON' : 'ROUND LOST', `${TEAM_NAMES[a]} takes round ${b}${e[4] === 'time' ? ' on health' : ''}`);
+        this.audio.jingle(a === mine ? 'capture' : 'enemyCapture');
+        break;
+      }
+      case 'duelwait': this.ui.hud.notify(`Waiting for players: ${a}/${b}. The duel starts when both teams are full.`, 'short'); break;
       case 'min1': this.ui.hud.notify('One minute remaining!', 'warn'); this.audio.announce('One minute remaining'); break;
       case 'overtime': this.ui.hud.bigText('OVERTIME', 'Next score wins'); break;
       case 'end': break;

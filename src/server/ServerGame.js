@@ -18,12 +18,13 @@ import { chooseTeam, canSwitchTeam, classAllowed, isValidTeam } from '../shared/
 import { fallDamage } from '../shared/damage.js';
 import { assignAwards, mvpScore } from '../shared/awards.js';
 import { computeKeyRewards, KEY_RULES } from '../shared/rewards.js';
-import { getMap, MAP_IDS } from '../maps/index.js';
+import { getMap, MAP_IDS, mapSupports, mapsForMode } from '../maps/index.js';
 import { Combat } from './combat.js';
 import { Projectiles } from './projectiles.js';
 import { Abilities } from './abilities.js';
 import { TeamDeathmatch } from './modes/tdm.js';
 import { CaptureTheFlag } from './modes/ctf.js';
+import { Duel } from './modes/duel.js';
 import { BotController, BOT_NAMES } from './bots/Bot.js';
 import { round2, round3, wrapAngle } from '../shared/math.js';
 
@@ -66,6 +67,8 @@ export class ServerGame {
     this.roomName = opts.roomName || 'Pixel Fortress Server';
     this.maxPlayers = Math.min(opts.maxPlayers || 12, 16);
     this.botFill = opts.botFill ?? 8;
+    this.baseMaxPlayers = this.maxPlayers; // duel modes shrink these while they are loaded
+    this.baseBotFill = this.botFill;
     this.botDifficulty = opts.botDifficulty ?? 0.6;
     this.rotation = opts.rotation || null;
     this.players = new Map();     // id -> player
@@ -82,9 +85,12 @@ export class ServerGame {
 
   // ------------------------------------------------------------------ map / match lifecycle
   loadMap(mapId, mode) {
-    this.mapId = MAP_IDS.includes(mapId) ? mapId : MAP_IDS[0];
     this.modeId = MODES[mode] ? mode : 'tdm';
     this.modeCfg = { ...MODES[this.modeId] };
+    // every mode has its own map set (team maps vs duel arenas): fall back to the mode's first map
+    this.mapId = MAP_IDS.includes(mapId) && mapSupports(mapId, this.modeId) ? mapId : mapsForMode(this.modeId)[0];
+    if (this.modeCfg.duel) { this.maxPlayers = this.modeCfg.maxPlayers; this.botFill = Math.min(this.baseBotFill ?? this.botFill, this.modeCfg.maxPlayers); }
+    else if (this.baseMaxPlayers) { this.maxPlayers = this.baseMaxPlayers; this.botFill = this.baseBotFill; }
     this.map = getMap(this.mapId);
     this.world = new World(this.map.boxes, this.map.bounds);
     if (!navCache.has(this.mapId)) navCache.set(this.mapId, new NavGraph(new World(this.map.boxes, this.map.bounds), this.map.bounds));
@@ -92,7 +98,7 @@ export class ServerGame {
     this.combat = new Combat(this);
     this.projectiles = new Projectiles(this);
     this.abilities = new Abilities(this);
-    this.mode = this.modeId === 'ctf' ? new CaptureTheFlag(this) : new TeamDeathmatch(this);
+    this.mode = this.modeId === 'ctf' ? new CaptureTheFlag(this) : this.modeCfg.duel ? new Duel(this) : new TeamDeathmatch(this);
     this.pickups = this.map.pickups.map((p, i) => ({ ...p, idx: i, respawnAt: 0, active: true }));
     this.scores = [0, 0];
     this.state = MATCH_STATE.WARMUP;
@@ -126,6 +132,7 @@ export class ServerGame {
     this.state = MATCH_STATE.PLAYING;
     this.matchStart = this.time;
     this.event(['ann', 'start']);
+    this.mode.onStart?.();
   }
 
   endMatch(winner, reason) {
@@ -248,8 +255,8 @@ export class ServerGame {
     let mapId = this.mapId, mode = this.modeId;
     if (this.pendingMap) { mapId = this.pendingMap.mapId; mode = this.pendingMap.mode; this.pendingMap = null; }
     else if (this.rotation) {
-      const i = (MAP_IDS.indexOf(this.mapId) + 1) % MAP_IDS.length;
-      mapId = MAP_IDS[i];
+      const list = mapsForMode(mode);
+      mapId = list[(list.indexOf(this.mapId) + 1) % list.length];
     }
     this.changeMap(mapId, mode);
   }
@@ -358,7 +365,10 @@ export class ServerGame {
     } else {
       if (this.humanCount() >= this.maxPlayers) { this.send(connId, { t: 'error', reason: 'Server is full.' }); return; }
       this.trimBotsFor(1);
-      const team = this.pickTeam(msg.team ?? -1);
+      // party members (same group id) join their partner's team when there is room
+      const group = typeof msg.group === 'string' ? msg.group.slice(0, 40) : null;
+      const mate = group ? [...this.players.values()].find((q) => q.group === group && !q.isBot) : null;
+      const team = mate && this.teamCount(mate.team) < this.maxPerTeam() ? mate.team : this.pickTeam(msg.team ?? -1);
       if (team < 0) { this.send(connId, { t: 'error', reason: 'Server is full.' }); return; }
       if (CLASS_IDS.includes(msg.classId)) this.makeRoomForClass(team, msg.classId);
       const classId = CLASS_IDS.includes(msg.classId) && classAllowed([...this.players.values()], team, msg.classId, getClass(msg.classId).limit) ? msg.classId : this.pickClass(team);
@@ -367,6 +377,7 @@ export class ServerGame {
     }
     p.uid = account?.uid || null;
     p.verified = verified;
+    if (typeof msg.group === 'string') p.group = msg.group.slice(0, 40);
     this.conns.set(connId, p.id);
     if (this.hostConn === null) this.hostConn = connId;
     const isAdmin = (verified && name.toLowerCase() === ADMIN_NAME) || !!trusted?.admin
@@ -735,6 +746,7 @@ export class ServerGame {
     const cls = getClass(p.classId);
     const sp = this.chooseSpawn(p);
     p.ms = createMoveState(sp.pos[0], sp.pos[1], sp.pos[2], sp.yaw);
+    p.spawnYaw = sp.yaw;
     p.ms.grounded = true;
     p.weapons = resolveWeapons(p.classId, p.weaponPicks?.[p.classId]);
     p.ws = createWeaponState(cls, 0, p.weapons);
@@ -1033,7 +1045,7 @@ export class ServerGame {
         plist.push(full[i]);
       }
       const me = {
-        id: p.id, ack: p.lastSeq, sc: p.spawnCount, alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxHp,
+        id: p.id, ack: p.lastSeq, sc: p.spawnCount, sy: round3(p.spawnYaw || 0), alive: p.alive, hp: Math.ceil(p.hp), mhp: p.maxHp,
         m: [round3(p.ms.x), round3(p.ms.y), round3(p.ms.z), round3(p.ms.vx), round3(p.ms.vy), round3(p.ms.vz),
           p.ms.grounded ? 1 : 0, p.ms.crouch ? 1 : 0, p.ms.airJumps, round3(p.ms.coyote), round3(p.ms.jumpBuffer), p.ms.prevButtons, round3(p.ms.landTimer), round3(p.ms.airTime), p.ms.blastJump | 0, round3(p.ms.blastLand || 0)],
         w: packWeaponState(p.ws),
@@ -1071,6 +1083,7 @@ export class ServerGame {
     return {
       room: this.roomName, mapId: this.mapId, mode: this.modeId, players: this.humanCount(), bots: this.players.size - this.humanCount(),
       maxPlayers: this.maxPlayers, state: this.state, scores: this.scores, timeLeft: Math.round(this.timeLeft),
+      private: !!this.opts.private, ...(this.mode.info ? { duel: this.mode.info() } : {}),
     };
   }
 }

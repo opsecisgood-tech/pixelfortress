@@ -281,7 +281,7 @@ export class Hud {
     // death panel respawn timer
     if (!me.alive && this.deathShown) {
       const rs = el.death.querySelector('.rs');
-      if (rs) rs.textContent = snap.ms === MATCH_STATE.ENDED ? '' : me.ra > 0 ? `Respawn in ${Math.ceil(me.ra)}` : 'Respawning…';
+      if (rs) rs.textContent = snap.ms === MATCH_STATE.ENDED ? '' : me.ra > 0 ? `Respawn in ${Math.ceil(me.ra)}` : MODES[this.app.game?.net.mode]?.duel ? 'Out for this round. You return when the next round starts.' : 'Respawning…';
       const nc = el.death.querySelector('.nc');
       if (nc) nc.textContent = me.ncls !== me.cls ? `Next life: ${getClass(me.ncls).displayName}` : '';
     }

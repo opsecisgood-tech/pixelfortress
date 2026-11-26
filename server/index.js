@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { ServerGame } from '../src/server/ServerGame.js';
 import { SERVER_TICK_RATE, GAME_VERSION } from '../src/shared/constants.js';
-import { MAP_IDS } from '../src/maps/index.js';
+import { MAP_IDS, mapsForMode, mapSupports } from '../src/maps/index.js';
 import { MODES } from '../src/shared/config/modes.js';
 import { checkJoin } from './accounts.js';
 
@@ -73,13 +73,17 @@ const rooms = new Map();
 let nextRoomId = 1;
 let nextConnId = 1;
 
-function createRoom({ name, mapId, mode, botFill, persistent = false, maxPlayers = 16 }) {
+function createRoom({ name, mapId, mode, botFill, persistent = false, maxPlayers = 16, priv = false }) {
   if (rooms.size >= MAX_ROOMS) return null;
   const id = String(nextRoomId++);
-  const room = { id, conns: new Map(), persistent, emptySince: Date.now() };
+  const room = { id, conns: new Map(), persistent, emptySince: Date.now(), priv };
+  mode = MODES[mode] ? mode : 'tdm';
+  const duel = !!MODES[mode].duel;
   room.game = new ServerGame({
-    mapId: MAP_IDS.includes(mapId) ? mapId : MAP_IDS[0], mode: MODES[mode] ? mode : 'tdm',
-    botFill: Math.max(0, Math.min(16, botFill ?? BOTS)), maxPlayers, roomName: name || `Room ${id}`,
+    mapId: mapSupports(mapId, mode) ? mapId : mapsForMode(mode)[0], mode, private: priv,
+    // duels never fill with bots on the dedicated server; the room waits for real opponents
+    botFill: duel ? 0 : Math.max(0, Math.min(16, botFill ?? BOTS)), maxPlayers: duel ? MODES[mode].maxPlayers : maxPlayers,
+    roomName: name || (duel ? `${MODES[mode].name} #${id}` : `Room ${id}`),
     rotation: true, hostConn: -1,
     send: (connId, msg) => {
       const ws = room.conns.get(connId);
@@ -94,7 +98,14 @@ function createRoom({ name, mapId, mode, botFill, persistent = false, maxPlayers
 }
 
 function roomList() {
-  return [...rooms.values()].map((r) => ({ id: r.id, ...r.game.info() }));
+  return [...rooms.values()].filter((r) => !r.priv).map((r) => ({ id: r.id, ...r.game.info() }));
+}
+
+// Free human slots on the emptier team (a party of n must fit on one team to play together).
+function teamRoom(room) {
+  const g = room.game, per = g.maxPerTeam(), c = [0, 0];
+  for (const p of g.players.values()) if (!p.isBot) c[p.team]++;
+  return Math.max(per - c[0], per - c[1]);
 }
 
 createRoom({ name: 'Fortress TDM #1', mapId: 'dusty_depot', mode: 'tdm', persistent: true });
@@ -118,10 +129,12 @@ wss.on('connection', (ws) => {
         if (msg.action === 'list') { ws.send(JSON.stringify({ t: 'rooms', rooms: roomList() })); return; }
         let target = null;
         if (msg.action === 'join') target = rooms.get(String(msg.room));
-        else if (msg.action === 'create') target = createRoom({ name: String(msg.name || '').slice(0, 32), mapId: msg.mapId, mode: msg.mode, botFill: msg.botFill });
+        else if (msg.action === 'create') target = createRoom({ name: String(msg.name || '').slice(0, 32), mapId: msg.mapId, mode: msg.mode, botFill: msg.botFill, priv: !!msg.private });
         else if (msg.action === 'quick') {
           const wantMode = MODES[msg.mode] ? msg.mode : null;
-          const cands = [...rooms.values()].filter((r) => (!wantMode || r.game.modeId === wantMode) && r.game.humanCount() < r.game.maxPlayers)
+          const party = Math.max(1, Math.min(8, +msg.party || 1));
+          const cands = [...rooms.values()].filter((r) => !r.priv && (!wantMode || r.game.modeId === wantMode)
+            && r.game.humanCount() + party <= r.game.maxPlayers && (party === 1 || teamRoom(r) >= party))
             .sort((a, b) => b.game.humanCount() - a.game.humanCount());
           target = cands[0] || createRoom({ mapId: msg.mapId, mode: wantMode || 'tdm' });
         }

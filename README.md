@@ -1,12 +1,13 @@
 # Pixel Fortress
 
 A class-based, team-versus-team multiplayer FPS with a blocky pixel-art look, playable in the browser.
-Eight classes, two teams (RED and BLUE), two modes (Team Deathmatch and Capture the Flag) and four maps.
+Nine classes, two teams (RED and BLUE), four modes (Team Deathmatch, Capture the Flag, 1v1 Duel and 2v2 Duel), four team maps and a duel arena.
 Every model, texture, sound and map here was made for this project, procedurally at runtime. None is copied from another game.
 
 - **Play solo** against bots that play every class and both objectives.
 - **Host online** from your own browser and share a five-letter room code. Players connect peer-to-peer over WebRTC, so this works from static hosting such as GitHub Pages.
 - **Join a dedicated server** that runs on Node.js (`npm start`), with room-based matchmaking.
+- **Play with friends:** add friends by username, form a party, challenge friends to 1v1 duels, queue 2v2 together and trade items ([docs/SOCIAL.md](docs/SOCIAL.md)).
 
 ## Quick start
 
@@ -135,6 +136,21 @@ The signed-in account that owns the verified username **owner** gets admin comma
 
 Players can sign in with Google or with an email and password, and their progress syncs to the cloud. This uses Firebase and stays switched off until you add your own Firebase project's settings to `src/client/auth/config.js`. Follow [docs/ACCOUNTS.md](docs/ACCOUNTS.md) for the steps. For unique usernames with a ✓, a player log and bans on a dedicated server, see [docs/VERIFIED_NAMES.md](docs/VERIFIED_NAMES.md).
 
+## Friends, parties, duels and trading
+
+Signed-in players with a username get a **Friends** panel (the people icon in the top bar, also in the pause menu):
+
+- **Friends by username:** send a request, the other player accepts. You see who's online or in a match, and can join them.
+- **Parties:** invite friends. When the leader starts or joins an online match, the party follows and stays on one team.
+- **1v1 and 2v2:** challenge a friend to a private 1v1, or queue 2v2 with a party of two. Anyone can also pick *1v1 Duel* or *2v2 Duel* in Find game.
+- **Trading:** offer items and keys, both press Ready, then Confirm. Changing an offer resets Ready for both.
+
+Setup: publish the Firestore rules in [docs/SOCIAL.md](docs/SOCIAL.md), and set your dedicated server's address in Settings → Network so duels use it.
+
+### Duel modes
+
+Round-based elimination on the *Proving Grounds* arena: no respawns inside a round, last team standing takes it, first to 5 rounds wins. A round that times out goes to the team with more health. The match waits until both teams are full, and a team that leaves forfeits.
+
 ## Maps
 
 | Map | Theme | Signature features |
@@ -144,7 +160,9 @@ Players can sign in with Google or with an email and password, and their progres
 | Pixelworks | Factory | Moving conveyor belts, glass control room, gantry bridges, service corridors |
 | Sandstone Fortress | Desert keeps | Defensive towers, colonnades, raised market plaza, tunnel under the courtyard |
 
-Each map uses 180° rotational symmetry, so both teams get identical routes. Every map supports both modes.
+| Proving Grounds | Walled training yard (duel arena) | Covered spawn bays, raised centre platform with the health pack, container flanks |
+
+Each map uses 180° rotational symmetry, so both teams get identical routes. The four team maps support TDM and CTF; Proving Grounds is for 1v1 and 2v2 duels.
 
 ## Multiplayer
 
@@ -188,7 +206,7 @@ PORT=8080 BOTS=8 npm start
 ```
 
 The server also serves the game, so players just open `http://your-server:8080`.
-It always runs a TDM room and a CTF room, each rotating through all four maps. Players can create more rooms (up to `MAX_ROOMS`, default 12).
+It always runs a TDM room and a CTF room, each rotating through all four team maps. Players can create more rooms (up to `MAX_ROOMS`, default 12). 1v1 and 2v2 rooms are created on demand by quick play, party queues and friend challenges (private rooms are hidden from the list), and they never fill with bots.
 `GET /api/rooms` lists the rooms as JSON. Put a TLS reverse proxy in front of it so the game works over `https`/`wss`.
 
 ## Testing

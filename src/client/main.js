@@ -8,7 +8,9 @@ import { Game } from './Game.js';
 import { Profile } from './progression/Profile.js';
 import { Auth } from './auth/Auth.js';
 import { loadSettings, saveSettings, resolveQuality, isTouchDevice } from './settings.js';
-import { HostSession, PeerClient } from './net/transports.js';
+import { HostSession, PeerClient, WSClient, defaultServerUrl } from './net/transports.js';
+import { Social } from './social/Social.js';
+import { MODES } from '../shared/config/modes.js';
 import { validateClasses } from '../shared/config/classes.js';
 import { WEAPONS, validateWeapons } from '../shared/config/weapons.js';
 
@@ -32,6 +34,7 @@ class App {
     this.settings = loadSettings();
     this.profile = new Profile();
     this.auth = new Auth(this);
+    this.social = new Social(this);
     if (this.profile.name && !this.settings.name) this.settings.name = this.profile.name;
     this.isTouch = isTouchDevice();
     const canvas = document.getElementById('view');
@@ -119,7 +122,7 @@ class App {
     let token = null;
     try { token = sessionStorage.getItem('pf_token'); } catch { /* ignore */ }
     const idToken = this.auth?.user ? this.auth.idToken || undefined : undefined;
-    return { idToken, name: this.profile.name || 'Recruit', classId: this.profile.data.selectedClass, loadouts: this.profile.loadoutsPayload(), weapons: this.profile.weaponsPayload(), token };
+    return { idToken, name: this.profile.name || 'Recruit', classId: this.profile.data.selectedClass, loadouts: this.profile.loadoutsPayload(), weapons: this.profile.weaponsPayload(), token, group: this.social?.partyId || undefined };
   }
 
   beginGame(transport, meta) {
@@ -137,16 +140,18 @@ class App {
     if (!this.touch.active) this.input.requestLock();
   }
 
-  async startHost({ mode, mapId, online, public: isPublic, roomName }) {
+  async startHost({ mode, mapId, online, public: isPublic, roomName, botFill, onCode }) {
     this.ui.closeSheet();
     this.ui.showLoading(online ? 'Opening your room' : 'Starting practice', online ? 'Registering with the WebRTC relay…' : 'Spinning up the local server…');
     const host = new HostSession({
       online, public: isPublic,
-      game: { mapId, mode, botFill: this.settings.botFill, botDifficulty: this.settings.botDifficulty, maxPlayers: 12, roomName: roomName || `${this.profile.name || 'Recruit'}'s fortress` },
+      game: { mapId, mode, botFill: botFill ?? this.settings.botFill, botDifficulty: this.settings.botDifficulty, maxPlayers: 12, roomName: roomName || `${this.profile.name || 'Recruit'}'s fortress` },
     });
+    let announced = false;
     host.onStatus = (s) => {
       if (s.error) this.ui.toast(`Online hosting unavailable: ${s.error}. You can still play with bots.`, 8000);
       if (s.code) this.ui.toast(`Room code <b>${s.code}</b>${s.publicSlot !== undefined ? ' · listed publicly' : ''}`, 9000);
+      if (s.code && !announced) { announced = true; this.onJoined({ kind: 'p2p', code: s.code, mode }); onCode?.(s.code); }
     };
     try {
       await host.start();
@@ -164,6 +169,7 @@ class App {
     await c.connect(code);
     this.ui.closeSheet();
     this.beginGame(c, { label: `Room ${code}` });
+    this.onJoined({ kind: 'p2p', code });
   }
 
   async joinServer(ws, req) {
@@ -171,9 +177,73 @@ class App {
     if (res.t === 'error') throw new Error(res.reason);
     this.ui.closeSheet();
     this.beginGame(ws, { label: res.info?.room || 'Dedicated server' });
+    this.onJoined({ kind: 'ws', server: ws.url, room: res.room, mode: res.info?.mode, private: !!req.private });
+    return res;
+  }
+
+  // ---------------------------------------------------------------- friends & parties
+  // Where friends can find me, and where my party should follow.
+  onJoined(join) {
+    this.currentJoin = join;
+    this.social.setPresence('game', join.private ? null : join);
+    this.social.partyGo(join);
+  }
+
+  // The dedicated server address, if one is configured (the GitHub Pages site has none of its own).
+  serverUrl() {
+    if (this.settings.serverUrl) return this.settings.serverUrl;
+    if (/github\.io$/.test(location.hostname) || location.protocol === 'file:') return null;
+    return defaultServerUrl();
+  }
+
+  // Join a match from a friend / party / challenge description { kind: 'p2p', code } | { kind: 'ws', server, room }.
+  async joinFromInfo(join) {
+    if (this.game) this.leaveMatch();
+    if (join.kind === 'p2p') return this.joinPeer(join.code);
+    const ws = new WSClient(join.server);
+    await ws.open();
+    try { return await this.joinServer(ws, { action: 'join', room: join.room }); } catch (e) { ws.close(); throw e; }
+  }
+
+  // Start a 1v1 / 2v2 (or any mode) for me and my party: the dedicated server's matchmaking when one is
+  // configured, otherwise a peer-to-peer room hosted in this browser that the party joins by code.
+  async queueMode(mode) {
+    if (this.game) this.leaveMatch();
+    const url = this.serverUrl();
+    if (url) {
+      const ws = new WSClient(url);
+      try {
+        await ws.open();
+        return await this.joinServer(ws, { action: 'quick', mode, party: this.social.partySize() });
+      } catch (e) { ws.close(); this.ui.toast(`Dedicated server unavailable (${e.message || e}). Hosting the match in your browser instead.`, 7000); }
+    }
+    const duel = MODES[mode]?.duel;
+    return this.startHost({ mode, online: true, public: !this.social.party, roomName: `${this.profile.name || 'Recruit'}'s ${MODES[mode]?.short || ''}`.trim(), botFill: duel ? MODES[mode].maxPlayers : undefined });
+  }
+
+  // Challenge a friend to a 1v1: open a private duel room, join it, and send them the invite.
+  async challengeFriend(uid, name, mode = 'duel1') {
+    if (this.game) this.leaveMatch();
+    const url = this.serverUrl();
+    if (url) {
+      const ws = new WSClient(url);
+      try {
+        await ws.open();
+        const res = await this.joinServer(ws, { action: 'create', mode, private: true, name: `${this.profile.name} vs ${name}` });
+        await this.social.challenge(uid, { kind: 'ws', server: url, room: res.room, mode });
+        this.ui.toast(`Challenge sent to <b>${name}</b>. The duel starts when they join.`, 7000);
+        return;
+      } catch (e) { ws.close(); this.ui.toast(`Dedicated server unavailable (${e.message || e}). Hosting the duel in your browser instead.`, 7000); }
+    }
+    await this.startHost({
+      mode, online: true, public: false, botFill: 0, roomName: `${this.profile.name} vs ${name}`,
+      onCode: (code) => this.social.challenge(uid, { kind: 'p2p', code, mode }).then(() => this.ui.toast(`Challenge sent to <b>${name}</b>. The duel starts when they join.`, 7000)),
+    });
   }
 
   leaveMatch() {
+    this.currentJoin = null;
+    this.social?.setPresence('menu', null);
     if (this.game) { this.game.dispose(); this.game = null; }
     if (this.host) { this.host.stop(); this.host = null; }
     this.input.enabled = false;

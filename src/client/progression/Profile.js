@@ -65,15 +65,21 @@ export class Profile {
     delete D.cosmetics;
     // the crate/contract economy was removed; drop its leftover fields from older saves
     for (const k of ['crates', 'scrap', 'contracts', 'lastWinDay', 'milestones']) delete D[k];
+    for (const id of Object.keys(D.inventory)) if (!getItem(id)) delete D.inventory[id];
+    this.normalizeLoadouts();
+    D.weapons = sanitizeWeaponLoadouts(D.weapons);
+    D.keys = Math.max(0, Math.floor(+D.keys || 0));
+    if (!Array.isArray(D.crateLog)) D.crateLog = [];
+  }
+
+  // Equipped items must be owned and wearable (after trades, removed items fall back to the starter set).
+  normalizeLoadouts() {
+    const D = this.data;
     for (const c of CLASS_IDS) {
       const lo = { ...starterLoadout(), ...(D.loadouts[c] || {}) };
       for (const slot of SLOTS) { const it = getItem(lo[slot]); if (lo[slot] && (!it || !D.inventory[lo[slot]] || !canWear(it, c) || it.slot !== slot)) lo[slot] = starterLoadout()[slot]; }
       D.loadouts[c] = lo;
     }
-    for (const id of Object.keys(D.inventory)) if (!getItem(id)) delete D.inventory[id];
-    D.weapons = sanitizeWeaponLoadouts(D.weapons);
-    D.keys = Math.max(0, Math.floor(+D.keys || 0));
-    if (!Array.isArray(D.crateLog)) D.crateLog = [];
   }
 
   migrateLegacy(d) {

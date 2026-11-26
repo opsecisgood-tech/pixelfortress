@@ -11,7 +11,7 @@ import { WEAPONS } from '../src/shared/config/weapons.js';
 import { BTN, BASE_SPEED, MATCH_STATE, FLAG_STATE, PROTOCOL_VERSION } from '../src/shared/constants.js';
 import { ServerGame } from '../src/server/ServerGame.js';
 import { NetClient } from '../src/client/net/NetClient.js';
-import { getMap, MAP_IDS } from '../src/maps/index.js';
+import { getMap, MAP_IDS, TEAM_MAP_IDS } from '../src/maps/index.js';
 import { NavGraph } from '../src/shared/nav.js';
 import { dirFromAngles, anglesFromDir } from '../src/shared/math.js';
 
@@ -98,9 +98,10 @@ test('weapons: rotary cannon must spin up; spread pattern is deterministic', () 
   assert.deepEqual(shotDirections(0.3, 0.1, 0.07, 10, 1234), shotDirections(0.3, 0.1, 0.07, 10, 1234));
 });
 
-test('all six maps: spawns clear, both flags, and every spawn can path to the enemy flag', () => {
-  assert.equal(MAP_IDS.length, 4);
-  for (const id of MAP_IDS) {
+test('team maps: spawns clear, both flags, and every spawn can path to the enemy flag', () => {
+  assert.equal(TEAM_MAP_IDS.length, 4);
+  assert.equal(MAP_IDS.length, 5);
+  for (const id of TEAM_MAP_IDS) {
     const m = getMap(id);
     const w = new World(m.boxes, m.bounds);
     assert.ok(m.flags[0] && m.flags[1], `${id} flags`);
@@ -251,7 +252,7 @@ test('server: CTF pickup, carrier drop on death, and server-validated capture', 
 });
 
 test('server: full bot matches complete in both modes on every map without errors', () => {
-  for (const mapId of MAP_IDS) {
+  for (const mapId of TEAM_MAP_IDS) {
     for (const mode of ['tdm', 'ctf']) {
       const g = new ServerGame({ mapId, mode, botFill: 10, persistent: true, send: () => {} });
       g.balanceBots();

@@ -26,6 +26,8 @@ It builds on the accounts setup in [ACCOUNTS.md](ACCOUNTS.md). Finish that first
 
 ## Step 1: Update the Firestore security rules
 
+> **Using friends, parties or trading?** Publish the full rules from [SOCIAL.md](SOCIAL.md) instead. They include the rules below.
+
 1. Open the [Firebase console](https://console.firebase.google.com/) and pick your project.
 2. Go to **Build → Firestore Database → Rules**.
 3. Replace everything with the rules below, then click **Publish**:

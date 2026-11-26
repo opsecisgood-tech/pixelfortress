@@ -34,7 +34,45 @@ export const MODES = {
     flagPickupRadius: 1.3,
     captureRadius: 2.2,
   },
+  // Duels: round-based elimination on the arena maps. No respawns inside a round; the last team standing
+  // takes the round, first to scoreLimit rounds wins. A round that times out goes to the side with more
+  // health left. The match waits until both teams are full.
+  duel1: {
+    id: 'duel1',
+    name: '1v1 Duel',
+    short: '1V1',
+    description: 'One on one. Last player standing wins the round; first to 5 rounds takes the duel.',
+    duel: true,
+    teamSize: 1,
+    scoreLimit: 5,
+    duration: 10 * 60,
+    roundTime: 75,
+    roundBreak: 3.5,
+    respawnDelay: 1.5,
+    friendlyFire: false,
+    overtime: false,
+    maxPlayers: 2,
+    preRound: 4,
+  },
+  duel2: {
+    id: 'duel2',
+    name: '2v2 Duel',
+    short: '2V2',
+    description: 'Two on two. Wipe the other pair to win the round; first to 5 rounds takes the duel.',
+    duel: true,
+    teamSize: 2,
+    scoreLimit: 5,
+    duration: 12 * 60,
+    roundTime: 90,
+    roundBreak: 3.5,
+    respawnDelay: 1.5,
+    friendlyFire: false,
+    overtime: false,
+    maxPlayers: 4,
+    preRound: 4,
+  },
 };
+export const DUEL_MODES = ['duel1', 'duel2'];
 
 export const SCORE_VALUES = {
   kill: 2,

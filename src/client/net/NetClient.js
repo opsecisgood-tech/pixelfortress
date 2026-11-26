@@ -123,6 +123,7 @@ export class NetClient {
       this.ms = createMoveState();
       this.ws = createWeaponState(cls, 0, me.wp || cls.weapons);
       this.applyServerState(me);
+      this.ms.yaw = me.sy || 0; // face the way the spawn point faces (out of the spawn room)
       this.pending = this.pending.filter((c) => c.seq > me.ack);
       this.smooth = [0, 0, 0];
       this.desiredSlot = this.ws.slot;

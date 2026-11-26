@@ -9,9 +9,10 @@ import { ACHIEVEMENTS, levelFromXp } from '../../shared/config/progression.js';
 import { getItem } from '../../shared/config/cosmetics.js';
 import { Armory } from './Armory.js';
 import { CrateUI, KEY_SVG } from './Crates.js';
+import { SocialUI } from './SocialUI.js';
 import { bannerCSS } from '../render/ItemIcons.js';
 import { authErrorText } from '../auth/Auth.js';
-import { mapList, MAP_IDS, getMap } from '../../maps/index.js';
+import { mapList, MAP_IDS, getMap, mapSupports, mapsForMode } from '../../maps/index.js';
 import { TEAM_NAMES, GAME_VERSION } from '../../shared/constants.js';
 import { saveSettings, resolveQuality, KEY_LABELS, DEFAULT_KEYS, CROSSHAIRS } from '../settings.js';
 import { browsePublicRooms, WSClient, defaultServerUrl } from '../net/transports.js';
@@ -35,13 +36,17 @@ const SVG = (() => {
     key: w('<circle cx="10" cy="16" r="5.5"/><path d="M15.5 16H28M23 16v4.5M27 16v3"/>'),
     globe: w('<circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c4 4 4 20 0 24M16 4c-4 4-4 20 0 24"/>'),
     helmet: w('<path d="M5 20a11 11 0 0 1 22 0z"/><path d="M3 20h26v4H3zM16 9v11"/>'),
+    users: w('<circle cx="12" cy="11" r="4.5"/><path d="M3.5 26c1.2-5 4.2-7 8.5-7s7.3 2 8.5 7"/><circle cx="22.5" cy="9.5" r="3.5"/><path d="M21 16.5c4 0 6.6 1.8 7.5 6"/>'),
   };
 })();
 const GOOGLE_G = '<svg viewBox="0 0 48 48" width="22" height="22" aria-hidden="true"><path fill="#4285F4" d="M45 24.5c0-1.6-.1-2.8-.4-4.1H24v7.8h12c-.2 2-1.6 5-4.6 7l7.1 5.5C42.7 36.8 45 31.2 45 24.5z"/><path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.5c-1.9 1.3-4.4 2.2-7.5 2.2-5.8 0-10.6-3.8-12.4-9.1l-7.3 5.7C7.9 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.6 28.2c-.5-1.3-.7-2.7-.7-4.2s.3-2.9.7-4.2l-7.3-5.7C2.8 17.2 2 20.5 2 24s.8 6.8 2.3 9.9l7.3-5.7z"/><path fill="#EA4335" d="M24 10.7c4.1 0 6.9 1.8 8.5 3.3l6.2-6.1C35 4.5 30 2 24 2 15.4 2 7.9 6.9 4.3 14.1l7.3 5.7c1.8-5.3 6.6-9.1 12.4-9.1z"/></svg>';
 const MODE_ART = {
   tdm: 'repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 8px, transparent 8px 16px), linear-gradient(90deg, #d8473b 0 50%, #3f7fd6 50%)',
   ctf: 'repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 8px, transparent 8px 16px), linear-gradient(135deg, #d8473b 0 30%, #e9e2d0 30% 34%, #3a4048 34% 66%, #e9e2d0 66% 70%, #3f7fd6 70%)',
+  duel1: 'radial-gradient(circle at 30% 55%, #d8473b 0 18%, transparent 19%), radial-gradient(circle at 70% 55%, #3f7fd6 0 18%, transparent 19%), repeating-linear-gradient(45deg, rgba(0,0,0,.2) 0 6px, transparent 6px 12px), #3a3631',
+  duel2: 'radial-gradient(circle at 20% 55%, #d8473b 0 12%, transparent 13%), radial-gradient(circle at 36% 55%, #d8473b 0 12%, transparent 13%), radial-gradient(circle at 64% 55%, #3f7fd6 0 12%, transparent 13%), radial-gradient(circle at 80% 55%, #3f7fd6 0 12%, transparent 13%), repeating-linear-gradient(45deg, rgba(0,0,0,.2) 0 6px, transparent 6px 12px), #3a3631',
 };
+const modeGoal = (m) => (m.duel ? `First to ${m.scoreLimit} rounds` : m.id === 'tdm' ? `First to ${m.scoreLimit}` : `First to ${m.scoreLimit} captures`);
 const TIPS = [
   'Scouts can jump a second time in mid-air — and steer while doing it.',
   'Medical Beam healing builds Overcharge. Pop it with E when your patient is under fire.',
@@ -68,6 +73,7 @@ export class UI {
     this.previewTeam = 0;
     this.armory = new Armory(this);
     this.crates = new CrateUI(this);
+    this.social = new SocialUI(this);
   }
 
   sfx(kind) { if (kind === 'hover') this.app.audio.uiHover(); else this.app.audio.uiClick(); }
@@ -78,8 +84,9 @@ export class UI {
     });
   }
 
-  toast(html, ms = 4000) {
-    const t = h('div', 'toast plate', html);
+  toast(html, ms = 4000, onClick = null) {
+    const t = h('div', `toast plate${onClick ? ' click' : ''}`, html);
+    if (onClick) t.addEventListener('click', () => { t.remove(); onClick(); });
     this.toasts.appendChild(t);
     setTimeout(() => t.remove(), ms);
   }
@@ -102,6 +109,7 @@ export class UI {
         <button class="tm-gear" data-go="settings" aria-label="Settings" title="Settings">${SVG.gear}</button>
         <div class="tm-slots" role="toolbar" aria-label="Class select"></div>
         <span class="tm-grow"></span>
+        <button class="tm-icon tm-friends" data-go="friends" aria-label="Friends and party" title="Friends, party & trades">${SVG.users}<i class="tm-badge" style="display:none"></i></button>
         <button class="tm-icon" data-go="stats" aria-label="Statistics" title="Statistics & badges">${SVG.trophy}</button>
         <button class="tm-account" data-go="account" title="Account"></button>
         <button class="tm-find" data-go="play">${SVG.find}<span>Find game</span></button>
@@ -133,6 +141,7 @@ export class UI {
     this.renderRecent();
     this.renderShowcaseLabel();
     this.renderAccountButton();
+    this.social.updateBadge();
     if (!this.authHooked) { this.authHooked = true; this.app.auth.on(() => { this.renderAccountButton(); if (this.sheetKind === 'account') this.renderAccount(this.sheet.querySelector('.sheet-body')); }); }
     this.wireSounds(m);
     this.updateShowcase();
@@ -300,18 +309,19 @@ export class UI {
     if (kind === 'loadout') sheet.style.width = 'min(780px, 100%)';
     if (kind === 'account') sheet.style.width = 'min(520px, 100%)';
     if (kind === 'crates') sheet.style.width = 'min(980px, 100%)';
+    if (kind === 'friends' || kind === 'trade') sheet.style.width = 'min(940px, 100%)';
     wrap.appendChild(sheet);
     this.root.appendChild(wrap);
     this.sheet = wrap;
     this.sheetKind = kind;
     this.menuOpen = true;
     this.app.touch?.setActive(false);
-    const titles = { crates: 'Crates', account: 'Account', play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
+    const titles = { friends: 'Friends & party', trade: 'Trade', crates: 'Crates', account: 'Account', play: 'Play', class: 'Choose your class', loadout: 'Loadout', profile: 'Profile', stats: 'Statistics', settings: 'Settings', pause: 'Paused', team: 'Choose team' };
     sheet.innerHTML = `<div class="sheet-head"><h2>${titles[kind] || ''}</h2><button class="btn ghost close-x" aria-label="Close">✕</button></div><div class="sheet-body"></div>`;
     const body = sheet.querySelector('.sheet-body');
     sheet.querySelector('.close-x').addEventListener('click', () => this.closeSheet(true));
     wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) this.closeSheet(true); });
-    const fn = { crates: () => this.crates.render(body), account: () => this.renderAccount(body), play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
+    const fn = { friends: () => this.social.render(body), trade: () => this.social.renderTrade(body, opts.tid), crates: () => this.crates.render(body), account: () => this.renderAccount(body), play: () => this.renderPlay(body), class: () => this.renderClass(body, opts), loadout: () => this.armory.renderLoadout(body), profile: () => this.renderProfile(body), stats: () => this.renderStats(body), settings: () => this.renderSettings(body), pause: () => this.renderPause(body), team: () => this.renderTeam(body) }[kind];
     if (fn) fn();
     this.wireSounds(sheet);
     if (kind === 'loadout') this.updateShowcase(-1.6);
@@ -342,11 +352,13 @@ export class UI {
   // ---------------------------------------------------------------- PLAY
   renderPlay(body) {
     const st = this.app.settings;
-    const maps = mapList();
-    this.playSel = this.playSel || { mode: st.lastMode || 'tdm', map: st.lastMap || 'dusty_depot', tab: 'practice' };
+    this.playSel = this.playSel || { mode: MODES[st.lastMode] ? st.lastMode : 'tdm', map: st.lastMap || 'dusty_depot', tab: 'practice' };
     const sel = this.playSel;
+    // only the maps built for the chosen mode (team maps vs duel arenas)
+    if (!mapSupports(sel.map, sel.mode)) sel.map = mapsForMode(sel.mode)[0];
+    const maps = mapList().filter((m) => mapSupports(m.id, sel.mode));
     body.innerHTML = `
-      <div class="mode-grid">${Object.values(MODES).map((m) => `<button class="mode-card ${sel.mode === m.id ? 'sel' : ''}" data-mode="${m.id}"><div class="art" style="background:${MODE_ART[m.id]}"><b>${esc(m.name)}</b></div><div class="info">${esc(m.description)}<div class="meta"><span>Up to ${m.maxPlayers} players</span><span>${m.duration / 60} min</span><span>${m.id === 'tdm' ? `First to ${m.scoreLimit}` : `First to ${m.scoreLimit} captures`}</span><span style="color:var(--good)">Available</span></div></div></button>`).join('')}</div>
+      <div class="mode-grid">${Object.values(MODES).map((m) => `<button class="mode-card ${sel.mode === m.id ? 'sel' : ''}" data-mode="${m.id}"><div class="art" style="background:${MODE_ART[m.id]}"><b>${esc(m.name)}</b></div><div class="info">${esc(m.description)}<div class="meta"><span>${m.duel ? `${m.teamSize} vs ${m.teamSize}` : `Up to ${m.maxPlayers} players`}</span><span>${m.duration / 60} min</span><span>${modeGoal(m)}</span><span style="color:var(--good)">Available</span></div></div></button>`).join('')}</div>
       <h3 style="margin:18px 0 10px">Map</h3>
       <div class="map-grid">${maps.map((m) => `<button class="map-card ${sel.map === m.id ? 'sel' : ''}" data-map="${m.id}"><span class="sw">${m.preview.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span class="nm">${esc(m.name)}</span><span class="th">${esc(m.theme)}</span></button>`).join('')}</div>
       <div class="play-cols">
@@ -365,7 +377,7 @@ export class UI {
     const info = body.querySelector('.map-info');
     const renderInfo = () => {
       const m = getMap(sel.map);
-      info.innerHTML = `<h3>${esc(m.name)}</h3><p class="note" style="margin:8px 0 12px">${esc(m.description)}</p><div class="note">${m.spawns.length / 2} spawn points per team · ${m.pickups.length} supply pickups · ${MODES[sel.mode].name}: ${MODES[sel.mode].description}</div>`;
+      info.innerHTML = `<h3>${esc(m.name)}</h3><p class="note" style="margin:8px 0 12px">${esc(m.description)}</p><div class="note">${m.spawns.length / 2} spawn points per team · ${m.pickups.length} supply pickups · ${MODES[sel.mode].name}: ${MODES[sel.mode].description}</div>${MODES[sel.mode].duel ? `<p class="note" style="margin-top:10px">Practice fills the other slots with bots. Online, bots leave as real players join; on a dedicated server the duel waits for real opponents. Challenge a friend from the <b>Friends</b> panel.</p>` : ''}`;
     };
     renderInfo();
     body.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { sel.mode = b.dataset.mode; this.renderPlay(body); this.wireSounds(body); }));
@@ -449,7 +461,7 @@ export class UI {
           list.appendChild(row);
         }
       }));
-      tb.querySelector('.quick').addEventListener('click', () => withWs((ws) => this.app.joinServer(ws, { action: 'quick', mode: sel.mode, mapId: sel.map })));
+      tb.querySelector('.quick').addEventListener('click', () => withWs((ws) => this.app.joinServer(ws, { action: 'quick', mode: sel.mode, mapId: sel.map, party: this.app.social?.partySize?.() || 1 })));
       tb.querySelector('.create').addEventListener('click', () => withWs((ws) => this.app.joinServer(ws, { action: 'create', mode: sel.mode, mapId: sel.map, botFill: st.botFill, name: `${this.app.profile.name}'s room` })));
     }
   }
@@ -634,6 +646,7 @@ export class UI {
       <button class="btn cls">Change class</button>
       <button class="btn team">Change team</button>
       <button class="btn sb">Scoreboard</button>
+      <button class="btn fr">Friends & party${this.app.social?.requestCount() ? ` (${this.app.social.requestCount()})` : ''}</button>
       <button class="btn set">Settings</button>
       ${host ? `<div class="host-tools"><div class="note">Host controls</div>
         <div class="row-btns"><select class="input hm" style="flex:1">${MAP_IDS.map((id) => `<option value="${id}" ${id === g.net.mapId ? 'selected' : ''}>${esc(getMap(id).name)}</option>`).join('')}</select><select class="input hmo" style="width:120px">${Object.values(MODES).map((m) => `<option value="${m.id}" ${m.id === g.net.mode ? 'selected' : ''}>${m.short}</option>`).join('')}</select></div>
@@ -642,6 +655,7 @@ export class UI {
         <div class="row-btns"><button class="btn restart">Restart match</button><button class="btn end">End match now</button></div></div>` : ''}
       <button class="btn red leave">Leave match</button>`;
     body.querySelector('.resume').addEventListener('click', () => this.closeSheet(true));
+    body.querySelector('.fr').addEventListener('click', () => this.openSheet('friends'));
     body.querySelector('.cls').addEventListener('click', () => this.openClassMenu(true));
     body.querySelector('.team').addEventListener('click', () => this.openTeamMenu());
     body.querySelector('.sb').addEventListener('click', () => { this.closeSheet(); this.hud.showScoreboard(true); setTimeout(() => this.hud.showScoreboard(false), 4000); });
