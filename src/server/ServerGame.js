@@ -143,7 +143,7 @@ export class ServerGame {
     if (this.state === MATCH_STATE.ENDED) return;
     this.state = MATCH_STATE.ENDED;
     this.stateTime = MATCH_DEFAULTS.endScreenTime;
-    const list = [...this.players.values()].map((p) => ({ id: p.id, name: p.name, team: p.team, classId: p.classId, isBot: p.isBot, cosmetics: wornBy(p), stats: { ...p.stats, classKills: { ...p.stats.classKills } } }));
+    const list = [...this.players.values()].map((p) => ({ id: p.id, name: p.name, team: this.teamOf(p), classId: p.classId, isBot: p.isBot, cosmetics: wornBy(p), stats: { ...p.stats, classKills: { ...p.stats.classKills } } }));
     const awards = assignAwards(list, this.modeId);
     const mvps = [...list].sort((a, b) => mvpScore(b.stats) - mvpScore(a.stats)).slice(0, 3).map((p) => p.id);
     this.results = {
@@ -290,7 +290,7 @@ export class ServerGame {
   // Server-authoritative key rewards for this match (see shared/rewards.js).
   keyRewards(winner) {
     const end = this.time, start = this.matchStart ?? end;
-    const players = [...this.players.values()].map((p) => ({ id: p.id, team: p.team, isBot: p.isBot, presence: end - Math.max(p.joinedAt ?? start, start) }));
+    const players = [...this.players.values()].map((p) => ({ id: p.id, team: this.teamOf(p), isBot: p.isBot, presence: end - Math.max(p.joinedAt ?? start, start) }));
     const r = computeKeyRewards({ kills: this.humanKills || [], players, winner, duration: end - start });
     for (const [id, n] of Object.entries(r.keys)) {
       const p = this.players.get(+id);
@@ -350,6 +350,10 @@ export class ServerGame {
       this.state = MATCH_STATE.WARMUP;
     }
   }
+
+  // The team a player is shown on. A Soul-Stealer minion stays on its own team for everyone to see
+  // (colours, scoreboard, chat, results); only its loyalty in a fight goes to the holder (p.team).
+  teamOf(p) { return p.origTeam ?? p.team; }
 
   humanCount() {
     let n = 0;
@@ -473,7 +477,7 @@ export class ServerGame {
   teamCount(t) { let n = 0; for (const p of this.players.values()) if (p.team === t) n++; return n; }
 
   pickTeam(preferred) {
-    return chooseTeam([...this.players.values()].map((p) => ({ team: p.team, isBot: p.isBot, score: p.stats.score })), this.maxPerTeam(), preferred);
+    return chooseTeam([...this.players.values()].map((p) => ({ team: this.teamOf(p), isBot: p.isBot, score: p.stats.score })), this.maxPerTeam(), preferred);
   }
 
   // Bots give way to humans: if a class is at its team limit and a bot holds a slot, that bot switches.
@@ -617,8 +621,8 @@ export class ServerGame {
     p.lastChat = now;
     for (const q of this.players.values()) {
       if (q.connId === null) continue;
-      if (msg.team && q.team !== p.team) continue;
-      this.send(q.connId, { t: 'chat', from: p.name, team: p.team, teamOnly: !!msg.team, text, v: p.verified ? 1 : 0 });
+      if (msg.team && this.teamOf(q) !== this.teamOf(p)) continue;
+      this.send(q.connId, { t: 'chat', from: p.name, team: this.teamOf(p), teamOnly: !!msg.team, text, v: p.verified ? 1 : 0 });
     }
     this.opts.audit?.({ ev: 'chat', name: p.name, uid: p.uid || null, verified: !!p.verified, text, teamOnly: !!msg.team });
   }
@@ -1117,7 +1121,7 @@ export class ServerGame {
         adm: p.admin ? { ...p.admin } : null,
         sl: p.slowUntil > this.time ? round2(p.slowUntil - this.time) : 0,
         ck: p.classId === 'spy' ? [round2(p.cloak.meter), p.cloak.on ? 1 : 0, Math.max(0, round2(p.cloak.attackAt - this.time))] : null,
-        cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying, wp: p.weapons,
+        cls: p.classId, ncls: p.nextClassId, team: this.teamOf(p), carry: p.carrying, wp: p.weapons,
         ...this.minions.me(p),
       };
       this.send(p.connId, { ...common, p: plist, me });
@@ -1126,7 +1130,7 @@ export class ServerGame {
 
   sendRoster() {
     const list = [...this.players.values()].map((p) => ({
-      id: p.id, name: p.name, team: p.team, cls: p.classId, bot: p.isBot, k: p.stats.kills, d: p.stats.deaths,
+      id: p.id, name: p.name, team: this.teamOf(p), cls: p.classId, bot: p.isBot, k: p.stats.kills, d: p.stats.deaths,
       a: p.stats.assists, s: p.stats.score, cap: p.stats.captures, dmg: Math.round(p.stats.damage), heal: Math.round(p.stats.healing),
       ping: p.isBot ? 0 : p.ping, alive: p.alive, mn: p.minionOf ?? -1, v: p.verified ? 1 : 0, cos: wornBy(p), wp: p.weapons, host: p.connId !== null && p.connId === this.hostConn,
     }));

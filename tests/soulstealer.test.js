@@ -77,6 +77,12 @@ test('soul-stealer: a kill rises as a minion the holder can drive, cycle and fre
   assert.equal(foe.alive, true, 'rose again');
   assert.equal(foe.minionOf, me.id);
   assert.equal(foe.team, me.team, 'fights for the holder');
+  // ...but everyone still sees it on its own team: roster, its own snapshot, chat and results
+  g.sendRoster(); g.sendSnapshots();
+  const roster = msgs.filter(([, m]) => m.t === 'r').at(-1)[1];
+  assert.equal(roster.players.find((q) => q.id === foe.id).team, origTeam, 'roster keeps the original team');
+  assert.equal(msgs.filter(([c, m]) => c === 2 && m.t === 's').at(-1)[1].me.team, origTeam, 'the minion still sees itself on its team');
+  assert.equal(g.teamOf(foe), origTeam);
   assert.ok(Math.abs(foe.ms.z - 1.5) < 1.5, 'rose where it fell');
   assert.ok(g.playerFlags(foe) & PF.MINION);
   assert.deepEqual(me.soul.list, [foe.id]);

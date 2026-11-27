@@ -526,7 +526,8 @@ export class Game {
 
   removeRig(R) {
     this.mapObjects.remove(R.root);
-    if (R.nameTag) R.nameTag.material.map?.dispose();
+    // the name tag lives in the world, not on the rig: take it away too (or it is left floating there)
+    if (R.nameTag) { this.mapObjects.remove(R.nameTag); R.nameTag.material.map?.dispose(); R.nameTag.material.dispose(); R.nameTag = null; }
     R.rig.dispose();
   }
 
@@ -662,7 +663,7 @@ export class Game {
         this.glow.spawn({ x: s.x + (Math.random() - 0.5) * 0.7, y: s.y + 0.2 + Math.random() * 1.6, z: s.z + (Math.random() - 0.5) * 0.7, vy: 0.9 + Math.random() * 0.6, life: 0.7, size: 0.16, end: 0.1, color: [0xff8a2a, 0x8a1a10], drag: 1.5 });
       }
       let showName = false;
-      if (this.settings.showNames && id !== n.myId && id !== n.ctl) {
+      if (this.settings.showNames && id !== n.myId && id !== n.ctl && !(a[7] & PF.MINION)) {
         if (isMate) showName = true;
         else if (cloaked) showName = false;
         else {
