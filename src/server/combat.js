@@ -150,7 +150,7 @@ export class Combat {
     }
     pts.push([pos[0], pos[1], pos[2]]);
     const holes = holesNow.slice(0, def.holesPerShot || 24).map((h) => g.addHole(h.a, h.b, def.holeRadius || 0.35, h.na, h.nb || [dir[0], dir[1], dir[2]], dir));
-    g.event(['ab', p.id, pts.flat().map(round2), victims.map((q) => q.id), holes.flatMap((h) => [...h.a, ...h.b, ...h.na, ...h.nb].map(round2))]);
+    g.event(['agb', p.id, pts.flat().map(round2), victims.map((q) => q.id), holes.flatMap((h) => [...h.a, ...h.b, ...h.na, ...h.nb].map(round2))]);
     for (const q of victims) this.damage(q, def.damage, p, def.id, { raw: true, point: centre(q), knock: 6 });
   }
 

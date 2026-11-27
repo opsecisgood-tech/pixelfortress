@@ -73,7 +73,7 @@ test('admin gun: the beam bends toward an enemy, kills through protection, every
   place();
   holdFire(g, 30 * 6, () => { if (foe.alive) place(); });
   assert.equal(foe.alive, false, 'destroyed by the beam');
-  const beam = evs.filter(([, e]) => e[0] === 'ab');
+  const beam = evs.filter(([, e]) => e[0] === 'agb');
   assert.ok(beam.length >= 1);
   const [, e] = beam[0];
   assert.equal(e[1], me.id);
@@ -100,7 +100,7 @@ test('admin gun: pierces walls (burning round holes shots pass through) and hits
   };
   place();
   holdFire(g, 30 * 4, place, Math.PI / 2, 0); // yaw +90deg = facing -x
-  const ab = evs.find(([, e]) => e[0] === 'ab')[1];
+  const ab = evs.find(([, e]) => e[0] === 'agb')[1];
   assert.equal(ab[3].length, 2, 'both enemies were hit by one beam');
   assert.ok(!foe.alive && !foe2.alive);
   assert.ok(mate.alive, 'the teammate in its path is unharmed');

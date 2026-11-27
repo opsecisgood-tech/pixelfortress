@@ -1122,7 +1122,7 @@ export class Game {
         case 'h': if (e[1] === me && e[2] > 0) { this.audio.pickup('health'); this.ui.hud.healNumber(e[2]); } break;
         case 'pk': if (e[3] === me) this.audio.pickup(n.map.pickups[e[1]]?.kind || 'ammo'); break;
         case 'ann': this.onAnnounce(e); break;
-        case 'ab': this.onAdminBeam(e); break;
+        case 'agb': this.onAdminBeam(e); break;
         case 'agc': {
           const [, pid, on] = e;
           if (pid === me) break;
