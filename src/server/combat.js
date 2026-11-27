@@ -170,11 +170,13 @@ export class Combat {
         this.g.abilities.damageTurret(hit.target, hitscanDamage(def, { dist: hit.t }).damage, p);
       }
     }
-    this.g.event(['f', p.id, def.id, ev.shot, round2(eye[0]), round2(eye[1]), round2(eye[2]), ends], p.ms, p.id);
+    this.g.event(['f', p.id, def.id, ev.shot, round2(eye[0]), round2(eye[1]), round2(eye[2]), ends], p.ms, p.minionOf != null ? null : p.id);
     for (const [target, acc] of perTarget) {
       // knockback weapons push proportionally to how many pellets connected
       const knock = def.knockback ? def.knockback * (acc.n / def.pellets) : 0;
       this.damage(target, acc.dmg, p, def.id, { headshot: acc.headshot, point: acc.point, knock });
+      // burning pellets (Soul-Stealer Shotgun) set whatever they hit alight
+      if (def.burn && target.alive) this.ignite(target, p, def.burn.dps, def.burn.time, def.id);
       if (def.id === 'longshot' || def.scope) this.reveal(target, p);
     }
   }
@@ -211,10 +213,10 @@ export class Combat {
     }
   }
 
-  ignite(q, attacker, dps, time) {
+  ignite(q, attacker, dps, time, src = null) {
     const cls = getClass(q.classId);
     const mult = cls.passive.fireDamageMult || 1;
-    q.burn = { until: this.g.time + time * (mult < 1 ? 0.5 : 1), attacker: attacker ? attacker.id : -1, dps: dps * mult, acc: q.burn?.acc || 0 };
+    q.burn = { until: this.g.time + time * (mult < 1 ? 0.5 : 1), attacker: attacker ? attacker.id : -1, dps: dps * mult, acc: q.burn?.acc || 0, src };
   }
 
   fireRepair(p, def, ev, eye, lt) {
@@ -493,6 +495,7 @@ export class Combat {
     victim.hp = 0;
     victim.healTarget = -1;
     victim.disguise = null;
+    const burnSrc = victim.burn?.src || null;
     victim.burn = null;
     if (victim.cloak) victim.cloak.on = false;
     victim.rallyUntil = 0;
@@ -502,7 +505,7 @@ export class Combat {
     const respawn = g.state === MATCH_STATE.PREROUND ? 0.5 : g.modeCfg.respawnDelay;
     victim.respawnAt = g.time + respawn;
     g.mode.onPlayerDeath(victim, attacker);
-    if (silent) { g.abilities.onOwnerDeath(victim); return; }
+    if (silent) { g.abilities.onOwnerDeath(victim); g.minions?.onKill(null, victim, weaponId, null); return; }
     victim.stats.deaths++;
     victim.stats.streak = 0;
 
@@ -548,6 +551,8 @@ export class Combat {
       if (killer.bot) killer.bot.onKill(victim);
     }
     g.abilities.onOwnerDeath(victim);
+    // minions: a minion that dies is freed; a player killed by the Soul-Stealer becomes the killer's minion
+    g.minions?.onKill(killer, victim, weaponId, burnSrc);
     g.event(['k', killer ? killer.id : -1, victim.id, weaponId, flags, assister ? assister.id : -1, round2(victim.ms.x), round2(victim.ms.y), round2(victim.ms.z), victim.classId]);
   }
 }

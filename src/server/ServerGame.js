@@ -25,6 +25,7 @@ import { Abilities } from './abilities.js';
 import { TeamDeathmatch } from './modes/tdm.js';
 import { CaptureTheFlag } from './modes/ctf.js';
 import { Duel } from './modes/duel.js';
+import { Minions } from './minions.js';
 import { BotController, BOT_NAMES } from './bots/Bot.js';
 import { round2, round3, wrapAngle } from '../shared/math.js';
 
@@ -96,6 +97,8 @@ export class ServerGame {
     this.holes = []; this.holeVer = (this.holeVer || 0) + 1;
     if (!navCache.has(this.mapId)) navCache.set(this.mapId, new NavGraph(new World(this.map.boxes, this.map.bounds), this.map.bounds));
     this.nav = navCache.get(this.mapId);
+    this.minions?.reset();
+    this.minions = new Minions(this);
     this.combat = new Combat(this);
     this.projectiles = new Projectiles(this);
     this.abilities = new Abilities(this);
@@ -170,6 +173,7 @@ export class ServerGame {
     switch ((cmd || '').toLowerCase()) {
       case 'help':
         say('The Admin Gun: /admingun [PLAYER] gives it (or takes it back) in the primary slot.');
+        say('Soul-Stealer Shotgun: /adminshotgun [PLAYER] (secondary slot). Its kills become your minions: K / L take control, J frees.');
         say('Admin: /gift PLAYER ITEM · /allhats · /allwraps (skins + gloves) · /nocd (abilities + weapons). /keys N · /addkeys N · /items · /nocd · /god · /ammo · /speed X · /heal · /class NAME · /tp PLAYER · /kill PLAYER · /kick PLAYER · /bots N · /map ID [tdm|ctf] · /restart · /end · /admin (status)');
         return;
       case 'admin': say(`Admin status · nocd ${A.nocd ? 'on' : 'off'} · god ${A.god ? 'on' : 'off'} · ammo ${A.ammo ? 'on' : 'off'} · speed x${A.speed}`); return;
@@ -205,6 +209,17 @@ export class ServerGame {
         this.applyAdminGun(q);
         say(q.adminGun ? `${q === p ? 'You have' : `${q.name} has`} The Admin Gun (primary slot). Hold fire for 3 seconds to charge.` : `The Admin Gun was taken from ${q === p ? 'you' : q.name}.`);
         if (q !== p) this.send(q.connId, { t: 'notice', text: q.adminGun ? 'An admin gave you The Admin Gun (primary slot). Hold fire for 3 seconds to charge.' : 'The Admin Gun was taken back.' });
+        return;
+      }
+      case 'adminshotgun': {
+        // /adminshotgun [PLAYER]: toggle the Soul-Stealer Shotgun in that player's secondary slot
+        const q = args[0] ? findPlayer(args[0]) : p;
+        if (!q) { say(`No player called "${args[0]}" in this match.`); return; }
+        q.adminSoul = !q.adminSoul;
+        this.applyAdminGun(q);
+        const how = 'Whoever it kills becomes your minion: K / L take control, J frees.';
+        say(q.adminSoul ? `${q === p ? 'You have' : `${q.name} has`} the Soul-Stealer Shotgun (secondary slot). ${q === p ? how : ''}` : `The Soul-Stealer Shotgun was taken from ${q === p ? 'you' : q.name}.`);
+        if (q !== p) this.send(q.connId, { t: 'notice', text: q.adminSoul ? `An admin gave you the Soul-Stealer Shotgun (secondary slot). ${how}` : 'The Soul-Stealer Shotgun was taken back.' });
         return;
       }
       case 'nocd': toggle('nocd', 'No cooldowns (abilities and weapons)'); return;
@@ -249,10 +264,11 @@ export class ServerGame {
     return h;
   }
 
-  // Put The Admin Gun in (or take it out of) the primary slot right away, keeping position and facing.
+  // Put the admin weapons (The Admin Gun, primary; Soul-Stealer Shotgun, secondary) in or out right away,
+  // keeping position and facing.
   applyAdminGun(p) {
     const base = resolveWeapons(p.classId, p.weaponPicks?.[p.classId]);
-    p.weapons = p.adminGun ? ['admingun', base[1], base[2]] : base;
+    p.weapons = [p.adminGun ? 'admingun' : base[0], p.adminSoul ? 'soulstealer' : base[1], base[2]];
     p.ws = createWeaponState(getClass(p.classId), 0, p.weapons);
     p.ws.time = 0;
     this.rosterDirty = true;
@@ -319,6 +335,7 @@ export class ServerGame {
 
   removePlayer(p, allowReconnect) {
     this.mode.onPlayerLeave(p);
+    this.minions.onLeave(p);
     this.abilities.removeOwned(p.id);
     this.players.delete(p.id);
     if (allowReconnect && !p.isBot && p.token) {
@@ -354,6 +371,7 @@ export class ServerGame {
       case 'pong': if (p && p.pingSent && msg.n === p.pingN) { p.ping = Math.round((Date.now() - p.pingSent) / 1); p.pingSent = 0; } return;
       case 'cos': if (p) { p.loadouts = sanitizeLoadouts(msg.loadouts); this.sendRoster(); } return;
       case 'wpn': if (p) p.weaponPicks = sanitizeWeaponLoadouts(msg.weapons); return; // applied at the next spawn
+      case 'minion': if (p) this.minions.onMessage(p, msg); return;
       case 'host': if (connId === this.hostConn) this.onHostCommand(msg); return;
       default:
     }
@@ -562,7 +580,7 @@ export class ServerGame {
     p.nextClassId = classId;
     if (classId === p.classId) return;
     // Instant change inside own spawn room or while dead before respawn.
-    if (p.alive && this.inSpawnRoom(p, p.team)) {
+    if (p.alive && this.inSpawnRoom(p, p.team) && p.minionOf == null) {
       this.abilities.removeOwned(p.id);
       this.spawnPlayer(p, true);
     } else if (!p.alive) {
@@ -573,6 +591,7 @@ export class ServerGame {
 
   requestTeam(p, team) {
     if (this.state === MATCH_STATE.ENDED) return;
+    if (p.minionOf != null) { this.send(p.connId, { t: 'notice', text: 'Minions cannot change team.' }); return; }
     if (!canSwitchTeam([...this.players.values()], p.id, team, this.maxPerTeam())) {
       // allow if we can swap with a bot
       const bot = [...this.players.values()].find((q) => q.isBot && q.team === team);
@@ -618,6 +637,8 @@ export class ServerGame {
       if (!Array.isArray(c)) continue;
       const seq = c[0] | 0;
       if (seq <= p.lastSeq || p.cmdQueue.length > 90) continue;
+      // a minion's own input is ignored (only acknowledged, so it lines up again once they are freed)
+      if (p.minionOf != null) { p.lastSeq = seq; continue; }
       const cmd = {
         seq,
         dt: Math.min(Math.max(+c[1] || 0, 0), 0.05),
@@ -626,6 +647,7 @@ export class ServerGame {
         p: Math.max(-1.55, Math.min(1.55, +c[4] || 0)),
         w: c[5] === null || c[5] === undefined ? undefined : c[5] | 0,
         lt: +c[6] || 0,
+        c: Number.isInteger(c[7]) ? c[7] : -1, // which body the client meant it for (Soul-Stealer minions)
       };
       if (!Number.isFinite(cmd.y) || !Number.isFinite(cmd.p)) continue;
       p.cmdQueue.push(cmd);
@@ -675,7 +697,7 @@ export class ServerGame {
       const cmd = p.cmdQueue.shift();
       p.cmdBudget -= cmd.dt;
       processed++;
-      this.runCommand(p, cmd);
+      if (!this.minions.run(p, cmd)) this.runCommand(p, cmd);
       p.lastSeq = cmd.seq;
     }
     // an idle player can't bank time for a later burst
@@ -784,6 +806,7 @@ export class ServerGame {
     p.ms.grounded = true;
     p.weapons = resolveWeapons(p.classId, p.weaponPicks?.[p.classId]);
     if (p.adminGun) p.weapons[0] = 'admingun';
+    if (p.adminSoul) p.weapons[1] = 'soulstealer';
     p.ws = createWeaponState(cls, 0, p.weapons);
     this.rosterDirty = true;
     p.ws.time = 0;
@@ -825,7 +848,8 @@ export class ServerGame {
     this.updateMatchState(dt);
 
     // bots think -> generate commands
-    for (const p of this.players.values()) if (p.bot) p.bot.update(dt);
+    for (const p of this.players.values()) if (p.bot && !this.minions.isDriven(p)) p.bot.update(dt);
+    this.minions.think(dt);
 
     // commands
     for (const p of this.players.values()) { this.processCommands(p); if (p.admin) this.applyAdmin(p); }
@@ -836,6 +860,7 @@ export class ServerGame {
     this.projectiles.update(dt);
     this.abilities.update(dt);
     this.combat.updateBeams(dt);
+    this.minions.update(dt);
     this.mode.update(dt);
     this.updatePickups();
 
@@ -1042,6 +1067,7 @@ export class ServerGame {
     if (q.rallyUntil > this.time) f |= PF.RALLIED;
     if (q.cloak.on) f |= PF.CLOAKED;
     if (q.slowUntil > this.time) f |= PF.SLOWED;
+    if (q.minionOf != null) f |= PF.MINION;
     if (w && w.spin > 0) f |= PF.SPUN;
     if (q.healedBy.size && [...q.healedBy.values()].some((t) => this.time - t < 0.3)) f |= PF.HEALED;
     return f;
@@ -1092,6 +1118,7 @@ export class ServerGame {
         sl: p.slowUntil > this.time ? round2(p.slowUntil - this.time) : 0,
         ck: p.classId === 'spy' ? [round2(p.cloak.meter), p.cloak.on ? 1 : 0, Math.max(0, round2(p.cloak.attackAt - this.time))] : null,
         cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying, wp: p.weapons,
+        ...this.minions.me(p),
       };
       this.send(p.connId, { ...common, p: plist, me });
     }
@@ -1101,7 +1128,7 @@ export class ServerGame {
     const list = [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, team: p.team, cls: p.classId, bot: p.isBot, k: p.stats.kills, d: p.stats.deaths,
       a: p.stats.assists, s: p.stats.score, cap: p.stats.captures, dmg: Math.round(p.stats.damage), heal: Math.round(p.stats.healing),
-      ping: p.isBot ? 0 : p.ping, alive: p.alive, v: p.verified ? 1 : 0, cos: wornBy(p), wp: p.weapons, host: p.connId !== null && p.connId === this.hostConn,
+      ping: p.isBot ? 0 : p.ping, alive: p.alive, mn: p.minionOf ?? -1, v: p.verified ? 1 : 0, cos: wornBy(p), wp: p.weapons, host: p.connId !== null && p.connId === this.hostConn,
     }));
     this.broadcast({ t: 'r', players: list, room: this.roomName, mapId: this.mapId, mode: this.modeId, botFill: this.botFill });
   }

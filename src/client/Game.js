@@ -15,7 +15,7 @@ import { MODES } from '../shared/config/modes.js';
 import { PF, MATCH_STATE, TEAM_COLORS_HEX, TEAM_NAMES, FLAG_STATE, EYE_HEIGHT, CROUCH_EYE_HEIGHT, otherTeam } from '../shared/constants.js';
 import { shotDirections } from '../shared/weaponLogic.js';
 import { getItem } from '../shared/config/cosmetics.js';
-import { dirFromAngles, damp, clamp, wrapAngle } from '../shared/math.js';
+import { dirFromAngles, anglesFromDir, damp, clamp, wrapAngle } from '../shared/math.js';
 import { GlowParticles, BeamFX } from './render/GlowFX.js';
 import { patchHoles, setHoleUniforms, HoleRims } from './render/Holes.js';
 
@@ -108,6 +108,7 @@ export class Game {
       .on('notice', (m) => this.ui.hud.notify(m.text, m.short ? 'short' : 'info'))
       .on('admin', (m) => this.onAdmin(m))
       .on('gift', (m) => this.onGift(m))
+      .on('mctl', (m) => this.onMinionCtl(m))
       .on('spawned', (me) => this.onSpawned(me))
       .on('died', () => this.onDied())
       .on('matchstate', (st, prev) => this.onMatchState(st, prev))
@@ -274,7 +275,9 @@ export class Game {
     this.recoilYaw = damp(this.recoilYaw, 0, 9, dt);
     const aimPitch = clamp(this.pitch + this.recoil, -1.55, 1.55);
     const aimYaw = this.yaw + this.recoilYaw;
-    const outs = n.update(dt, { buttons, yaw: aimYaw, pitch: aimPitch });
+    // driving a minion from behind its shoulder: aim its gun at whatever is under the crosshair
+    const drive = n.ctl >= 0 && this.minionAim ? this.minionAim : null;
+    const outs = n.update(dt, { buttons, yaw: drive ? drive.yaw : aimYaw, pitch: drive ? drive.pitch : aimPitch });
     for (const o of outs) this.handleLocalStep(o);
     if (n.ws && n.ws.slot !== this.prevSlot) { this.lastSlot = this.prevSlot; this.prevSlot = n.ws.slot; this.updateViewmodel(true); }
     if (!this.map) return;
@@ -301,7 +304,7 @@ export class Game {
     if (ws && me && me.alive) {
       const w = ws.w[ws.slot];
       const def = WEAPONS[w.id];
-      this.r.vm.visible = !ui.thirdPerson;
+      this.r.vm.visible = !ui.thirdPerson && !n.locked();
       const selfCloak = !!me.ck?.[1];
       if (selfCloak || this.vmCloaked) { this.vmCloaked = selfCloak; applyCloak(this.r.vm.rig, selfCloak ? 'self' : null); }
       const side = (Math.cos(this.yaw) * n.ms.vx - Math.sin(this.yaw) * n.ms.vz) / 7;
@@ -313,7 +316,7 @@ export class Game {
       });
     }
     ui.hud.update(this.hudState());
-    this.r.renderGame(!!(me && me.alive) && !scoped);
+    this.r.renderGame(!!(me && me.alive) && !scoped && !n.locked());
   }
 
   handleAction(a) {
@@ -321,6 +324,7 @@ export class Game {
     switch (a.type) {
       case 'slot': n.selectSlot(a.slot); break;
       case 'lastslot': n.selectSlot(this.lastSlot); break;
+      case 'minion': n.minion(a.a); break;
       case 'cycle': if (n.ws) n.selectSlot((n.desiredSlot + (a.dir > 0 ? 1 : 2)) % 3); break;
       case 'scoreboard': this.ui.hud.showScoreboard(a.toggle ? !this.ui.hud.sbVisible : a.on); break;
       case 'pause': this.ui.openPause(); break;
@@ -378,7 +382,16 @@ export class Game {
     const cam = this.r.camera;
     const muzzle = this.r.vm.muzzleWorld(cam, new THREE.Vector3());
     const eye = [n.ms.x, n.ms.y + (n.ms.crouch ? CROUCH_EYE_HEIGHT : EYE_HEIGHT), n.ms.z];
-    if (def.type === 'hitscan' || def.type === 'repair') {
+    if (def.fireTrail) {
+      // burning pellets: work out where each one lands, then draw fire contrails from the muzzle
+      const ends = shotDirections(ev.y, ev.p, ev.spread, def.pellets, ev.seed).map((d) => {
+        const h = n.world.raycast(eye[0], eye[1], eye[2], d[0], d[1], d[2], def.range);
+        const t = h ? h.t : def.range;
+        return [eye[0] + d[0] * t, eye[1] + d[1] * t, eye[2] + d[2] * t, h ? 0 : 2, h?.normal];
+      });
+      this.fireTrail([muzzle.x, muzzle.y, muzzle.z], ends, dirFromAngles(ev.y, ev.p));
+      this.shake = Math.max(this.shake, 0.25);
+    } else if (def.type === 'hitscan' || def.type === 'repair') {
       const dirs = shotDirections(ev.y, ev.p, ev.spread, def.pellets, ev.seed);
       for (const d of dirs) {
         const range = def.type === 'repair' ? def.repair.range : def.range;
@@ -436,7 +449,9 @@ export class Game {
     const cam = this.r.camera;
     const me = n.me;
     const alive = me && me.alive;
-    if (alive) {
+    if (this.minionCamera(dt, aimYaw, aimPitch)) {
+      this.deathCam = null;
+    } else if (alive) {
       const p = n.renderPos();
       const targetEye = n.ms.crouch ? CROUCH_EYE_HEIGHT : EYE_HEIGHT;
       this.eye = damp(this.eye, targetEye, 14, dt);
@@ -555,8 +570,10 @@ export class Game {
     const myTeam = n.me ? n.me.team : 0;
     const cam = this.r.camera;
     const camFwd = cam.getWorldDirection(tmpV2);
+    const locked = n.locked();
     for (const [id] of n.history) {
-      if (id === n.myId) continue;
+      // your own body is only drawn while you watch it from outside (a minion, or driving one)
+      if (id === n.myId && !locked) continue;
       const s = n.sample(id);
       if (!s) continue;
       const entry = n.roster.get(id);
@@ -642,8 +659,12 @@ export class Game {
       const oc = !!(a[7] & PF.OVERCHARGED);
       if (oc !== R.oc) { R.oc = oc; for (const m of R.rig.materials) m.emissive.setHex(oc ? (entry.team ? 0x1a3a8a : 0x8a1a1a) : 0); }
       // name tags: teammates always; enemies only when aimed at and close
+      // soul-stolen minions trail embers
+      if ((a[7] & PF.MINION) && Math.random() < dt * 14) {
+        this.glow.spawn({ x: s.x + (Math.random() - 0.5) * 0.7, y: s.y + 0.2 + Math.random() * 1.6, z: s.z + (Math.random() - 0.5) * 0.7, vy: 0.9 + Math.random() * 0.6, life: 0.7, size: 0.16, end: 0.1, color: [0xff8a2a, 0x8a1a10], drag: 1.5 });
+      }
       let showName = false;
-      if (this.settings.showNames) {
+      if (this.settings.showNames && id !== n.myId && id !== n.ctl) {
         if (isMate) showName = true;
         else if (cloaked) showName = false;
         else {
@@ -1048,13 +1069,14 @@ export class Game {
       switch (e[0]) {
         case 'f': {
           const [, pid, wid, , ox, oy, oz, ends] = e;
-          if (pid === me) break;
+          if (pid === me && !n.locked()) break;
           const def = WEAPONS[wid];
           const R = this.rigs.get(pid);
           const m = R && R.root.visible ? R.rig.muzzleWorld(new THREE.Vector3()) : new THREE.Vector3(ox, oy - 0.2, oz);
           if (R) R.rig.onFire();
           this.audio.weaponFire(wid, [m.x, m.y, m.z], false);
           if (def.type === 'repair') break;
+          if (def.fireTrail) { this.fireTrail([m.x, m.y, m.z], ends); break; }
           this.effects.muzzle(m, null, def.type);
           for (const end of ends) {
             if (def.pellets === 1 || Math.random() < 0.5) this.effects.tracer([m.x, m.y, m.z], end, def.tracer, 0.02);
@@ -1064,6 +1086,8 @@ export class Game {
           }
           break;
         }
+        case 'ss': this.onSoulSteal(e); break;
+        case 'sm': this.onMinionChange(e); break;
         case 'sw': { const R = this.rigs.get(e[1]); if (R) { R.rig.onSwing(); this.audio.swing(this.rigPos(e[1]), false, WEAPONS[e[2]]?.damage >= 55); } break; }
         case 'mh': {
           const [, pid, kind, x, y, z] = e;
@@ -1137,6 +1161,103 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- the Admin Gun
+  // ---------------------------------------------------------------- Soul-Stealer Shotgun
+  // Fire contrails: an orange tracer per pellet wrapped in rising flame particles, embers where they land.
+  fireTrail(m, ends, dir = null) {
+    this.effects.muzzle({ x: m[0], y: m[1], z: m[2] }, dir, 'hitscan', 0xff7a1a);
+    this.glow.burst(m[0], m[1], m[2], 6, { color: [0xffd070, 0xff4a10], speed: 1.6, life: 0.25, size: 0.16, end: 0.2, drag: 4 });
+    const lowFx = (this.r.quality?.particles ?? 1) < 1;
+    for (const end of ends) {
+      this.effects.tracer(m, end, 0xff7a1a, 0.05, 0.16);
+      this.effects.tracer(m, end, 0xffe0a0, 0.018, 0.08);
+      const dx = end[0] - m[0], dy = end[1] - m[1], dz = end[2] - m[2];
+      const len = Math.hypot(dx, dy, dz);
+      const n = Math.min(lowFx ? 5 : 10, Math.ceil(len / 1.1));
+      for (let i = 0; i < n; i++) {
+        const k = (i + Math.random()) / n;
+        this.glow.spawn({
+          x: m[0] + dx * k, y: m[1] + dy * k, z: m[2] + dz * k,
+          vx: (Math.random() - 0.5) * 0.4, vy: 0.5 + Math.random() * 0.8, vz: (Math.random() - 0.5) * 0.4,
+          life: 0.35 + Math.random() * 0.4, size: 0.16 + 0.16 * (1 - k), end: 0.15, color: [0xffc050, 0xff3a0a], drag: 2,
+        });
+      }
+      if (end[3] === 2) continue; // flew off into the distance
+      this.effects.burst(end[0], end[1], end[2], 3, { color: [0xffb040, 0xff5a10, 0xffe0a0], speed: 2.4, life: 0.4, size: 0.05, g: 8, dir: end[4] || null, cone: 1, up: 0.4 });
+      this.glow.spawn({ x: end[0], y: end[1], z: end[2], vy: 0.6, life: 0.3, size: 0.3, end: 0.1, color: [0xffa030, 0xff2a00] });
+    }
+  }
+
+  // A soul torn out of a fallen player streams to the shotgun's holder.
+  onSoulSteal(e) {
+    const [, holder, , x, y, z] = e;
+    const to = this.muzzleOf(holder) || this.rigPos(holder);
+    this.glow.burst(x, y, z, 24, { color: [0xffb050, 0xa01a10], speed: 2.2, life: 0.8, size: 0.22, end: 0.1, drag: 2, up: 1 });
+    if (to) {
+      for (let i = 0; i < 26; i++) {
+        const life = 0.45 + Math.random() * 0.35;
+        const jx = (Math.random() - 0.5) * 0.5, jy = (Math.random() - 0.5) * 0.5, jz = (Math.random() - 0.5) * 0.5;
+        this.glow.spawn({ x: x + jx, y: y + jy, z: z + jz, vx: (to[0] - x) / life, vy: (to[1] - y) / life, vz: (to[2] - z) / life, life, size: 0.18, end: 0.4, color: [0xffe0a0, 0xff5a10], drag: 0 });
+      }
+    }
+    this.audio.soulSteal?.([x, y, z]);
+  }
+
+  // A minion rises (on = 1) or is freed (on = 0).
+  onMinionChange(e) {
+    const [, , , on, x, y, z] = e;
+    this.glow.burst(x, y, z, on ? 30 : 16, { color: on ? [0xff8a2a, 0x7a0a08] : [0xffffff, 0xffc080], speed: on ? 2.6 : 1.8, life: 0.9, size: 0.24, end: 0.1, drag: 2, up: on ? 1.5 : 0.5 });
+    this.effects.flashLight(x, y, z, on ? 0xff5a20 : 0xffe0b0, 4, 8, 0.25);
+  }
+
+  // The server confirmed which body we drive: take on its facing and held weapon so nothing jumps.
+  onMinionCtl(m) {
+    this.yaw = m.y; this.pitch = m.p;
+    this.recoil = 0; this.recoilYaw = 0;
+    this.minionAim = null;
+    this.mcam = null;
+    if (m.s >= 0 && m.s <= 2) this.net.desiredSlot = m.s;
+    if (m.c < 0) this.updateViewmodel(true);
+  }
+
+  // Third-person camera over the shoulder of a minion: the one you drive (you look around freely), or your
+  // own puppeted body when someone else drives you (you watch what it watches).
+  minionCamera(dt, aimYaw, aimPitch) {
+    const n = this.net, me = n.me;
+    if (!me || !me.alive || !n.locked()) { this.minionAim = null; return false; }
+    const id = n.ctl >= 0 ? n.ctl : me.mb != null ? n.myId : -1;
+    const s = id >= 0 ? n.sample(id) : null;
+    if (!s) return false;
+    const cam = this.r.camera;
+    const driving = n.ctl >= 0;
+    const yaw = driving ? aimYaw : s.yaw, pitch = driving ? aimPitch : s.pitch;
+    const crouch = !!(s.a[7] & PF.CROUCH);
+    const eye = [s.x, s.y + (crouch ? CROUCH_EYE_HEIGHT : EYE_HEIGHT), s.z];
+    const d = dirFromAngles(yaw, pitch);
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    // pivot over the right shoulder, then pull back (closer if a wall is in the way)
+    const piv = [eye[0] + rx * 0.85, eye[1] + 0.3, eye[2] + rz * 0.85];
+    const ps = n.world.raycast(eye[0], eye[1], eye[2], rx, 0, rz, 0.9);
+    if (ps) { const k = Math.max(0, ps.t - 0.15); piv[0] = eye[0] + rx * k; piv[2] = eye[2] + rz * k; }
+    let back = 2.5;
+    const hb = n.world.raycast(piv[0], piv[1], piv[2], -d[0], -d[1], -d[2], back + 0.25);
+    if (hb) back = Math.max(0.3, hb.t - 0.25);
+    const target = [piv[0] - d[0] * back, piv[1] - d[1] * back, piv[2] - d[2] * back];
+    if (!this.mcam) this.mcam = target.slice();
+    const k = 1 - Math.exp(-dt * 18);
+    for (let i = 0; i < 3; i++) this.mcam[i] += (target[i] - this.mcam[i]) * k;
+    cam.position.set(this.mcam[0], this.mcam[1], this.mcam[2]);
+    cam.rotation.set(pitch, yaw, 0);
+    if (driving) {
+      // the minion's gun fires from its own eye: aim it at the point under the crosshair
+      const hc = n.world.raycast(this.mcam[0], this.mcam[1], this.mcam[2], d[0], d[1], d[2], 90);
+      const t = hc ? hc.t : 90;
+      const px = this.mcam[0] + d[0] * t - eye[0], py = this.mcam[1] + d[1] * t - eye[1], pz = this.mcam[2] + d[2] * t - eye[2];
+      const a = Math.hypot(px, py, pz) > 1.5 ? anglesFromDir(px, py, pz) : { yaw, pitch };
+      this.minionAim = { yaw: a.yaw, pitch: clamp(a.pitch, -1.55, 1.55) };
+    } else this.minionAim = null;
+    return true;
+  }
+
   muzzleOf(pid) {
     if (pid === this.net.myId) { const v = this.r.vm.muzzleWorld(this.r.camera, new THREE.Vector3()); return [v.x, v.y, v.z]; }
     const R = this.rigs.get(pid);
@@ -1456,11 +1577,20 @@ export class Game {
       const def = WEAPONS[w.id];
       weapon = { id: w.id, def, clip: w.clip, reserve: w.reserve, reloading: w.rel > 0, charge: w.charge, spin: def.spinUp ? w.spin / def.spinUp : 0, slot: ws.slot, scoped: ws.scoped, slots: ws.w.map((x) => ({ id: x.id, clip: x.clip, reserve: x.reserve })) };
     }
+    // driving a minion: the weapon panel shows the minion's gun and ammo
+    const drv = n.ctl >= 0 && me?.mn ? me.mn.l.find((x) => x[0] === n.ctl) : null;
+    if (drv) {
+      const wid = n.roster.get(n.ctl)?.wp?.[drv[4]];
+      if (wid && WEAPONS[wid]) {
+        const def = WEAPONS[wid];
+        weapon = { id: wid, def, clip: drv[5], reserve: drv[6] ?? 0, reloading: false, charge: 0, spin: 0, slot: drv[4], scoped: false, slots: (n.roster.get(n.ctl).wp || []).map((id) => ({ id, clip: 0, reserve: 0 })) };
+      }
+    }
     const turret = me && me.cls === 'mechanic' ? [...this.turrets.values()].find((t) => t.owner === n.myId) : null;
     return {
       me, weapon, snap, myId: n.myId, mode: n.mode, roster: n.roster, ms: n.ms, yaw: this.yaw,
       ping: n.roster.get(n.myId)?.ping ?? 0, turret, camera: this.r.camera, flags: snap?.fl, map: this.map,
-      rigs: this.rigs,
+      rigs: this.rigs, minions: me?.mn || null, minionOf: me?.mb ?? null, driving: n.ctl,
     };
   }
 

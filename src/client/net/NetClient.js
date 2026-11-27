@@ -33,6 +33,7 @@ export class NetClient {
     this.handlers = {};
     this.stats = { rtt: 0, snaps: 0, bytesIn: 0, lastSnapAt: 0 };
     this.results = null;
+    this.ctl = -1;                // Soul-Stealer: the minion this client is driving (-1 = own body)
     t_bind(this);
   }
 
@@ -63,6 +64,7 @@ export class NetClient {
         this.pending = [];
         this.spawnCount = -1;
         this.results = null;
+        this.ctl = -1;
         this.connected = true;
         try { sessionStorage.setItem('pf_token', m.token); } catch { /* ignore */ }
         this.emit(m.t === 'welcome' ? 'welcome' : 'mapchange', m);
@@ -80,6 +82,7 @@ export class NetClient {
       case 'notice': this.emit('notice', m); break;
       case 'admin': this.emit('admin', m); break;
       case 'gift': this.emit('gift', m); break;
+      case 'mctl': this.ctl = m.c | 0; this.emit('mctl', m); break;
       case 'ping': this.t.send({ t: 'pong', n: m.n }); break;
       case 'error': this.emit('error', m.reason); break;
       default:
@@ -134,8 +137,8 @@ export class NetClient {
     const before = [this.ms.x, this.ms.y, this.ms.z];
     this.applyServerState(me);
     this.pending = this.pending.filter((c) => c.seq > me.ack);
-    if (me.alive) {
-      for (const cmd of this.pending) this.predict(cmd, true);
+    if (me.alive && !this.locked()) {
+      for (const cmd of this.pending) if (!cmd.locked) this.predict(cmd, true);
       const ex = before[0] - this.ms.x, ey = before[1] - this.ms.y, ez = before[2] - this.ms.z;
       const err = Math.hypot(ex, ey, ez);
       if (err > 3) this.smooth = [0, 0, 0];
@@ -186,6 +189,9 @@ export class NetClient {
     };
   }
 
+  // No say over our own character: we are someone's minion, or we are driving one of ours.
+  locked() { return this.ctl >= 0 || !!this.me?.lock; }
+
   predict(cmd, replay) {
     if (!this.world || !this.ws) return [];
     stepMovement(this.ms, cmd, this.world, this.moveParams());
@@ -203,11 +209,12 @@ export class NetClient {
     this.cmdAcc += Math.min(dt, 0.1);
     while (this.cmdAcc >= CMD_DT) {
       this.cmdAcc -= CMD_DT;
-      const cmd = { seq: ++this.seq, dt: CMD_DT, b: input.buttons, y: input.yaw, p: input.pitch, w: this.desiredSlot, lt: this.renderTime() };
+      const locked = this.locked();
+      const cmd = { seq: ++this.seq, dt: CMD_DT, b: input.buttons, y: input.yaw, p: input.pitch, w: this.desiredSlot, lt: this.renderTime(), locked };
       this.pending.push(cmd);
       if (this.pending.length > 240) this.pending.shift();
-      this.outbox.push([cmd.seq, cmd.dt, cmd.b, +cmd.y.toFixed(4), +cmd.p.toFixed(4), cmd.w, +cmd.lt.toFixed(3)]);
-      const alive = !!this.me?.alive;
+      this.outbox.push([cmd.seq, cmd.dt, cmd.b, +cmd.y.toFixed(4), +cmd.p.toFixed(4), cmd.w, +cmd.lt.toFixed(3), this.ctl]);
+      const alive = !!this.me?.alive && !locked;
       const events = alive ? this.predict(cmd, false) : [];
       out.push({ cmd, events, jumped: this.ms.jumped, doubleJumped: this.ms.doubleJumped, impact: this.ms.lastImpact, stepUp: this.ms.stepUp });
       if (this.outbox.length >= 2) this.flush();
@@ -255,6 +262,7 @@ export class NetClient {
   send(obj) { this.t.send(obj); }
   requestClass(classId) { if (CLASS_IDS.includes(classId)) this.t.send({ t: 'class', classId }); }
   requestTeam(team) { this.t.send({ t: 'team', team }); }
+  minion(a) { this.t.send({ t: 'minion', a }); }
   chat(text, team) { this.t.send({ t: 'chat', text, team }); }
   host(action, extra = {}) { this.t.send({ t: 'host', action, ...extra }); }
   close() { try { this.t.close(); } catch { /* ignore */ } }

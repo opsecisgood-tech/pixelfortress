@@ -15,8 +15,10 @@ const BASE = {
   cyan: 0x52f0ff, fire: 0xffa23a, brass: 0xd0a446, black: 0x222326, steel: 0xc8cdd2, gunmetal: 0x52575f, khaki: 0xb08a54,
   // the Admin Gun's pale chrome-cyan shell and its white-hot emitter
   ice: 0x9fd4e4, iceD: 0x4d8aa2, iceL: 0xe6f8fd, wglow: 0xffffff, aqua: 0x8ff6ff,
+  // the Soul-Stealer Shotgun's blood-red camo and its ember-lit bores
+  crim: 0x8c2219, crimD: 0x561410, crimL: 0xb8392a, ember: 0xff7a1a,
 };
-const GLOW = new Set(['glow', 'cyan', 'fire', 'wglow', 'aqua']);
+const GLOW = new Set(['glow', 'cyan', 'fire', 'wglow', 'aqua', 'ember']);
 
 // Weapon skins come from the cosmetics catalog: a pattern drawn across the sprite in a 3-colour palette.
 // Pattern colours replace the body keys (metal, wood, polymer...) and keep their light/dark tone.

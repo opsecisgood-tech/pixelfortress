@@ -6,6 +6,7 @@
 const WEAPON_SOUNDS = {
   scattershot: { kind: 'shotgun', f: 900, dur: 0.32, thump: 70, vol: 1.0 },
   breacher: { kind: 'shotgun', f: 700, dur: 0.38, thump: 60, vol: 1.05 },
+  soulstealer: { kind: 'shotgun', f: 600, dur: 0.42, thump: 50, vol: 1.15 },
   sidekick: { kind: 'pistol', f: 2200, dur: 0.12, thump: 140, vol: 0.7 },
   silencedpistol: { kind: 'silenced', f: 1400, dur: 0.1, thump: 0, vol: 0.45 },
   revolver: { kind: 'pistol', f: 1500, dur: 0.28, thump: 90, vol: 1.0 },
@@ -516,6 +517,15 @@ export class AudioEngine {
     this.tone(d, t, 0.9, { type: 'sine', f: 90, f2: 28, vol: 0.7 });
     this.noise(d, t + 0.02, 1.2, { type: 'lowpass', f: 1800, f2: 120, vol: 0.8 });
     if (hitPlayer) this.tone(d, t + 0.05, 0.6, { type: 'square', f: 880, f2: 1760, vol: 0.08 });
+  }
+
+  // Soul-Stealer: a breathy rising whoosh as a soul streams to the shotgun's holder.
+  soulSteal(pos) {
+    if (!this.ready()) return;
+    const d = this.out(pos, 0.9), t = this.ctx.currentTime;
+    this.noise(d, t, 0.9, { type: 'bandpass', f: 400, f2: 2400, q: 3, vol: 0.5 });
+    this.tone(d, t, 0.8, { type: 'sine', f: 180, f2: 720, vol: 0.25 });
+    this.tone(d, t + 0.1, 0.7, { type: 'triangle', f: 360, f2: 1080, vol: 0.12 });
   }
 
   announce(text) {

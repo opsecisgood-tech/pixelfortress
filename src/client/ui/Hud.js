@@ -161,6 +161,7 @@ export class Hud {
     const snap = s.snap;
     const me = s.me;
     if (!snap || !me) return;
+    this.setMinions(s);
     el.s0.textContent = snap.sc[0];
     el.s1.textContent = snap.sc[1];
     if (el.b0) { el.b0.style.width = `${Math.min(100, snap.sc[0] / this.scoreLimit * 100)}%`; el.b1.style.width = `${Math.min(100, snap.sc[1] / this.scoreLimit * 100)}%`; }
@@ -422,6 +423,29 @@ export class Hud {
 
   setScope(on) { this.el.scope.classList.toggle('hidden', !on); }
   // Admin Gun charge meter under the crosshair (0..1; 0 hides it)
+  // Soul-Stealer minions: who you hold, who you're driving (K / L cycle, J frees), or who holds you.
+  setMinions(s) {
+    const mn = s.minions, mb = s.minionOf;
+    let html = '';
+    if (mb != null) {
+      const h = s.roster.get(mb);
+      html = `<b>SOUL STOLEN</b><div class="mn-sub">${esc(h?.name || 'Someone')} controls you. You get your character back when they free you or you die.</div>`;
+    } else if (mn && mn.l.length) {
+      const rows = [`<div class="mn-row${mn.c < 0 ? ' on' : ''}"><span>You</span></div>`];
+      for (const [id, hp, max, alive, , clip] of mn.l) {
+        const e = s.roster.get(id);
+        const pct = Math.max(0, Math.min(100, Math.round(hp / Math.max(1, max) * 100)));
+        rows.push(`<div class="mn-row${mn.c === id ? ' on' : ''}${alive ? '' : ' dead'}"><span>${esc(e?.name || '?')}</span><i style="width:${pct}%"></i>${mn.c === id ? `<em>${clip >= 0 ? clip : ''}</em>` : ''}</div>`);
+      }
+      html = `<b>MINIONS</b>${rows.join('')}<div class="mn-sub">K / L switch · J ${mn.c >= 0 ? 'free this one' : 'free all'}</div>`;
+    }
+    if (html === this.mnHtml) return;
+    this.mnHtml = html;
+    if (!this.mnEl) { this.mnEl = document.createElement('div'); this.mnEl.className = 'minion-panel'; this.root.appendChild(this.mnEl); }
+    this.mnEl.style.display = html ? '' : 'none';
+    this.mnEl.innerHTML = html;
+  }
+
   setCharge(k) {
     if (!this.chargeEl) {
       this.chargeEl = document.createElement('div');

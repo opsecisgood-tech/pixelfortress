@@ -108,7 +108,8 @@ The signed-in account that owns the verified username **owner** gets admin comma
 | Command | What it does |
 | --- | --- |
 | `/help` | List all commands |
-| `/admingun [PLAYER]` | Give (or take back) The Admin Gun in the primary slot. Hold fire for 5 seconds to charge; the heat-seeking beam destroys anything it touches. |
+| `/admingun [PLAYER]` | Give (or take back) The Admin Gun in the primary slot. Hold fire for 3 seconds to charge; the heat-seeking beam destroys anything it touches. |
+| `/adminshotgun [PLAYER]` | Give (or take back) the Soul-Stealer Shotgun in the secondary slot: burning pellets, no damage falloff. Anyone it kills rises as your minion. **K** / **L** cycle backward / forward through yourself and your minions to take direct control (move, jump, shoot, switch weapons); **J** frees the minion you're driving (or all of them). Minions are freed when they die or when you die, leave or lose the shotgun. |
 | `/admin` | Show which toggles are on |
 | `/nocd` | No cooldowns for abilities and weapons (rapid fire, instant reloads) |
 | `/god` | Take no damage |

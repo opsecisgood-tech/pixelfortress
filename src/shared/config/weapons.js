@@ -90,6 +90,17 @@ def('admingun', {
   seek: { cone: 0.55, range: 90, turn: 0.07, step: 0.5 },
   recoil: { pitch: 0.12, yaw: 0.02 }, kick: 2.2, tracer: 0xfff0a0, botRange: 40, adminOnly: true,
 });
+// Admin-only (/adminshotgun): a four-barrel shotgun firing burning pellets with no damage falloff.
+// Anyone it kills has their soul stolen: they come back as the holder's minion, which the holder can
+// take direct control of (K / L cycle, J releases).
+def('soulstealer', {
+  name: 'Soul-Stealer Shotgun', slot: 1, type: 'hitscan', category: 'Admin',
+  description: 'Burning pellets with no falloff. Whoever it kills becomes your minion.',
+  damage: 14, pellets: 10, fireInterval: 0.7, clip: 4, reserve: 48, reloadTime: 1.7,
+  spread: 0.055, spreadMove: 0.01, spreadAir: 0.02, range: 70, effectiveRange: 70, minFalloff: 1,
+  burn: { dps: 12, time: 4 }, fireTrail: true, soulSteal: true,
+  recoil: { pitch: 0.1, yaw: 0.025 }, kick: 2.0, tracer: 0xff7a1a, botRange: 14, adminOnly: true,
+});
 def('shadowblade', {
   name: 'Knife', slot: 2, type: 'melee', category: 'Melee',
   description: 'Balanced blade. Strikes to the back are lethal to most classes.',

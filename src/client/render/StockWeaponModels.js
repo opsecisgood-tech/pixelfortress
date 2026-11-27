@@ -302,6 +302,51 @@ export const STOCK_MODELS = {
     },
     fp: { pos: [0.2, -0.21, -0.44], scale: 1.05 },
   },
+  // Soul-Stealer Shotgun: a stubby four-barrel shotgun (two stacked pairs) in dark gunmetal with
+  // blood-red camo, a vented top shroud, a black rail, ember-lit round bores, a ribbed vertical foregrip,
+  // a textured rear grip and a carabiner loop hanging off the back.
+  soulstealer: {
+    w: 46, h: 24, px: 0.0165, grip: [9, 16], muzzle: [45, 8],
+    draw(S) {
+      // short rear stock block and receiver
+      S.poly([[0, 5], [2, 3], [8, 3], [8, 12], [1, 12], [0, 10]], 'gunmetal', 5);
+      S.rect(6, 2, 16, 11, 'gunmetal', 7);
+      S.line(1, 4, 21, 4, 'metal', 7); S.line(1, 12, 21, 12, 'dark', 7);
+      // two stacked barrel pairs (thick in depth so the 2x2 block reads from any angle)
+      S.rect(20, 2, 24, 6, 'dark', 9); S.rect(20, 9, 24, 5, 'dark', 9);
+      S.line(20, 8, 43, 8, 'black', 9);
+      S.line(20, 3, 43, 3, 'metal', 9); S.line(20, 10, 43, 10, 'metal', 9);
+      // top shroud with three slanted vents and a black rail
+      S.rect(20, 1, 20, 2, 'gunmetal', 9);
+      S.rect(7, 0, 31, 1, 'black', 5);
+      for (const x of [26, 31, 36]) { S.line(x, 2, x + 2, 6, 'black', 9); S.line(x + 1, 2, x + 3, 6, 'dark', 9); }
+      // muzzle face: steel rings around ember-lit bores
+      S.rect(44, 2, 2, 12, 'steel', 9);
+      S.rect(45, 3, 1, 3, 'black', 5); S.px(45, 4, 'ember', 3);
+      S.rect(45, 10, 1, 3, 'black', 5); S.px(45, 11, 'ember', 3);
+      // blood-red camo blotches over the stock, receiver, shroud and lower barrels
+      const blobs = [
+        [[1, 6, 4, 3], [2, 9, 3, 2]], [[8, 3, 6, 3], [10, 6, 4, 2]], [[13, 8, 6, 3], [15, 7, 3, 1]], [[17, 3, 4, 3]],
+        [[22, 1, 7, 2], [24, 3, 2, 1]], [[33, 1, 5, 2]], [[23, 11, 6, 2], [25, 10, 3, 1]], [[36, 11, 5, 2], [38, 10, 2, 1]], [[29, 4, 3, 2]],
+      ];
+      for (const parts of blobs) for (const [x, y, w, h] of parts) S.rect(x, y, w, h, 'crim', y >= 9 && x >= 20 ? 9 : 7);
+      for (const [x, y, d] of [[1, 8, 7], [9, 5, 7], [13, 6, 7], [16, 10, 7], [18, 5, 7], [27, 2, 9], [26, 12, 9], [39, 12, 9], [35, 2, 9]]) S.px(x, y, 'crimD', d);
+      for (const [x, y, d] of [[3, 6, 7], [11, 3, 7], [14, 8, 7], [23, 1, 9], [24, 11, 9], [37, 11, 9]]) S.px(x, y, 'crimL', d);
+      // trigger and guard
+      S.line(12, 13, 12, 16, 'dark', 1); S.line(12, 16, 17, 16, 'dark', 1); S.line(17, 13, 17, 16, 'dark', 1); S.px(14, 14, 'steel', 1);
+      // textured rear grip
+      S.poly([[6, 12], [12, 12], [12, 20], [10, 23], [5, 23], [4, 20]], 'black', 5);
+      for (let y = 14; y < 22; y += 2) S.line(6, y, 10, y + 1, 'dark', 5);
+      S.rect(5, 22, 6, 1, 'crimD', 5);
+      // vertical foregrip with ribs
+      S.rect(29, 14, 4, 9, 'black', 5); S.rect(28, 14, 6, 1, 'dark', 5);
+      for (let y = 16; y < 22; y += 2) S.line(29, y, 32, y, 'dark', 5);
+      S.rect(29, 22, 4, 1, 'crim', 5);
+      // carabiner loop hanging off the rear
+      S.line(0, 12, 0, 17, 'steel', 1); S.line(3, 13, 3, 17, 'steel', 1); S.line(0, 17, 3, 17, 'steel', 1); S.line(1, 12, 2, 12, 'light', 1);
+    },
+    fp: { pos: [0.2, -0.22, -0.44], scale: 1.05 },
+  },
   // ---------------- SPY
   revolver: {
     w: 28, h: 16, px: 0.0145, grip: [5, 11], muzzle: [27, 4],

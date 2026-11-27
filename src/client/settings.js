@@ -4,12 +4,14 @@ export const DEFAULT_KEYS = {
   forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', sprint: 'ShiftLeft', crouch: 'KeyC',
   reload: 'KeyR', primary: 'Digit1', secondary: 'Digit2', melee: 'Digit3', ability: 'KeyE', scoreboard: 'Tab',
   classmenu: 'KeyM', chat: 'KeyT', teamchat: 'KeyY', lastweapon: 'KeyQ',
+  minionPrev: 'KeyK', minionNext: 'KeyL', minionFree: 'KeyJ',
 };
 
 export const KEY_LABELS = {
   forward: 'Move forward', back: 'Move back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump', sprint: 'Sprint',
   crouch: 'Crouch', reload: 'Reload', primary: 'Primary weapon', secondary: 'Secondary weapon', melee: 'Melee weapon',
   ability: 'Class ability', scoreboard: 'Scoreboard', classmenu: 'Change class', chat: 'Chat', teamchat: 'Team chat', lastweapon: 'Last weapon',
+  minionPrev: 'Minion: previous', minionNext: 'Minion: next', minionFree: 'Minion: free',
 };
 
 export const MOBILE_BUTTONS = ['fire', 'jump', 'reload', 'ability', 'crouch', 'weapon', 'alt', 'sprint'];

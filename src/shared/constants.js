@@ -81,6 +81,7 @@ export const PF = {
   RALLIED: 65536,       // boosted by a Soldier's Rally Cry
   CLOAKED: 131072,      // Spy invisibility watch active
   SLOWED: 262144,       // slowed by a Ground Slam
+  MINION: 524288,       // soul stolen by the Soul-Stealer Shotgun (someone else's minion)
 };
 
 export const MATCH_STATE = {

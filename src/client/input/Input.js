@@ -37,6 +37,10 @@ export class Input {
       else if (e.code === k.chat) { e.preventDefault(); this.actions.push({ type: 'chat', team: false }); }
       else if (e.code === k.teamchat) { e.preventDefault(); this.actions.push({ type: 'chat', team: true }); }
       else if (e.code === 'Comma') this.actions.push({ type: 'teammenu' });
+      // Soul-Stealer minions: K back, L forward, J free
+      else if (e.code === (k.minionPrev || 'KeyK')) this.actions.push({ type: 'minion', a: 'prev' });
+      else if (e.code === (k.minionNext || 'KeyL')) this.actions.push({ type: 'minion', a: 'next' });
+      else if (e.code === (k.minionFree || 'KeyJ')) this.actions.push({ type: 'minion', a: 'free' });
     });
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
