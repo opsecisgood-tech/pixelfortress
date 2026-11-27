@@ -16,8 +16,9 @@ import { PF, MATCH_STATE, TEAM_COLORS_HEX, TEAM_NAMES, FLAG_STATE, EYE_HEIGHT, C
 import { shotDirections } from '../shared/weaponLogic.js';
 import { getItem } from '../shared/config/cosmetics.js';
 import { dirFromAngles, damp, clamp, wrapAngle } from '../shared/math.js';
+import { TitanClient } from './titan/TitanClient.js';
 
-const CLASS_BY_INDEX = CLASS_IDS.reduce((a, id) => { a[CLASSES[id].index] = id; return a; }, {});
+const CLASS_BY_INDEX = [...CLASS_IDS, 'titan'].reduce((a, id) => { a[CLASSES[id].index] = id; return a; }, {});
 const tmpV = new THREE.Vector3();
 const shadeHex = (c, f) => (Math.min(255, ((c >> 16) & 255) * f) << 16) | (Math.min(255, ((c >> 8) & 255) * f) << 8) | Math.min(255, (c & 255) * f);
 const tmpV2 = new THREE.Vector3();
@@ -84,6 +85,7 @@ export class Game {
     this.running = true;
     this.mapObjects = new THREE.Group();
     this.r.scene.add(this.mapObjects);
+    this.titan = new TitanClient(this);
     this.bindNet();
   }
 
@@ -271,6 +273,7 @@ export class Game {
 
     this.updateCamera(dt, aimYaw, aimPitch);
     this.updateRemotePlayers(dt);
+    this.titan.update(dt);
     this.updateProjectiles(dt);
     this.updateTurrets(dt);
     this.updateFlags(dt);
@@ -302,9 +305,10 @@ export class Game {
   handleAction(a) {
     const n = this.net;
     switch (a.type) {
-      case 'slot': n.selectSlot(a.slot); break;
-      case 'lastslot': n.selectSlot(this.lastSlot); break;
-      case 'cycle': if (n.ws) n.selectSlot((n.desiredSlot + (a.dir > 0 ? 1 : 2)) % 3); break;
+      // the Titan's number keys are gem powers, not weapon slots
+      case 'slot': if (n.me?.cls !== 'titan') n.selectSlot(a.slot); break;
+      case 'lastslot': if (n.me?.cls !== 'titan') n.selectSlot(this.lastSlot); break;
+      case 'cycle': if (n.ws && n.me?.cls !== 'titan') n.selectSlot((n.desiredSlot + (a.dir > 0 ? 1 : 2)) % 3); break;
       case 'scoreboard': this.ui.hud.showScoreboard(a.toggle ? !this.ui.hud.sbVisible : a.on); break;
       case 'pause': this.ui.openPause(); break;
       case 'classmenu': this.ui.openClassMenu(true); break;
@@ -415,7 +419,9 @@ export class Game {
     const cam = this.r.camera;
     const me = n.me;
     const alive = me && me.alive;
-    if (alive) {
+    if (alive && this.titan?.cameraOverride(cam, aimYaw, aimPitch, dt)) {
+      this.deathCam = null;
+    } else if (alive) {
       const p = n.renderPos();
       const targetEye = n.ms.crouch ? CROUCH_EYE_HEIGHT : EYE_HEIGHT;
       this.eye = damp(this.eye, targetEye, 14, dt);
@@ -547,6 +553,7 @@ export class Game {
       const R = this.ensureRig(id, ap, entry);
       R.fakeId = a[12];
       R.flags = a[7];
+      R.tfx = a[13] || 0; R.ts = a[14] ?? 100; R.tm = a[15] || 0;
       R.realTeam = entry.team;
       R.hp = a[6];
       if (!alive || s.stale > 1.5) {
@@ -596,7 +603,7 @@ export class Game {
       if (grounded && R.wasAir > 0.35) R.rig.onLand(Math.min(1, R.wasAir / 1.2));
       R.wasAir = grounded ? 0 : R.airT;
       R.lastPos = [s.x, s.y, s.z];
-      R.rig.update(dt, {
+      R.rig.update(dt * (R.ts / 100), {
         speed: R.speed, grounded, crouch: !!(a[7] & PF.CROUCH), pitch: s.pitch,
         firing: !!(a[7] & PF.FIRING), reloading: !!(a[7] & PF.RELOADING), spun: !!(a[7] & PF.SPUN), vy: R.vy || 0,
         fwd: R.fwd, side: R.side, turn: R.turn,
@@ -1101,6 +1108,7 @@ export class Game {
         case 'h': if (e[1] === me && e[2] > 0) { this.audio.pickup('health'); this.ui.hud.healNumber(e[2]); } break;
         case 'pk': if (e[3] === me) this.audio.pickup(n.map.pickups[e[1]]?.kind || 'ammo'); break;
         case 'ann': this.onAnnounce(e); break;
+        case 'ti': this.titan.onEvent(e); break;
         case 'beam': break;
         default:
       }
@@ -1150,10 +1158,11 @@ export class Game {
       assister: aEntry ? { name: aEntry.name, team: aEntry.team } : null,
       weaponId, flags, involvesMe: killer === me || victim === me || assister === me,
     });
-    // gibs
+    // gibs (Snap victims crumble to dust instead)
     const R = this.rigs.get(victim);
     const effect = kEntry?.cos?.elimEffect || 'pixels';
-    if (R && R.root.visible) {
+    if (weaponId === 'snap') this.titan.dust(victim, x, y, z);
+    else if (R && R.root.visible) {
       const vel = R.lastPos ? [0, 0, 0] : [0, 0, 0];
       this.effects.gib(R.rig.partMeshes(), vel, effect, R.team);
       R.root.visible = false;
@@ -1322,6 +1331,7 @@ export class Game {
     this.audio.stopLoops();
     if (this.effects) this.effects.clear();
     this.r.scene.remove(this.mapObjects);
+    this.titan?.dispose();
   }
 }
 

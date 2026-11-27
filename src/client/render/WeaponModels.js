@@ -535,6 +535,7 @@ Object.assign(WEAPON_MODELS, {
 for (const [id, m] of Object.entries(STOCK_MODELS)) WEAPON_MODELS[id] = { ...m, fp: m.fp || WEAPON_MODELS[id]?.fp };
 WEAPON_MODELS.pumpgun.fp = WEAPON_MODELS.breacher.fp;
 WEAPON_MODELS.fists.fp = WEAPON_MODELS.foundryhammer.fp;
+WEAPON_MODELS.titanfist.fp = WEAPON_MODELS.foundryhammer.fp;
 // Alternates inherit first-person placement from the default weapon in the same class slot.
 const ALT_FP_FROM = {
   kickback: 'scattershot', peashooter: 'sidekick', slugger: 'streetbat', derringer: 'silencedpistol', longsix: 'revolver', stiletto: 'shadowblade',

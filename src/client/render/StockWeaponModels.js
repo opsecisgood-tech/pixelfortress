@@ -186,6 +186,18 @@ export const STOCK_MODELS = {
       S.poly([[6, 10], [12, 11], [12, 15], [6, 14]], 'khaki', 7); S.line(6, 10, 12, 11, 'woodDark'); S.line(7, 3, 14, 2, 'hl');
     },
   },
+  // The Titan's gauntlet (icon only; the hands themselves are the model): gold glove with six gem sockets.
+  titanfist: {
+    w: 22, h: 18, px: 0.0165, grip: [4, 9], melee: true, fists: true,
+    draw(S) {
+      S.rect(0, 6, 6, 8, 'brass', 7); S.line(1, 7, 1, 12, 'yellow');
+      S.poly([[6, 3], [16, 2], [21, 5], [21, 13], [17, 16], [7, 15], [6, 12]], 'brass', 7);
+      for (const y of [5, 8, 11]) S.line(15, y, 20, y, 'khaki');
+      S.px(18, 4, 'cyan', 7); S.px(18, 7, 'red', 7); S.px(18, 10, 'fire', 7); S.px(18, 13, 'glow', 7);
+      S.poly([[7, 11], [13, 12], [13, 16], [7, 15]], 'brass', 7); S.px(10, 13, 'yellow', 7);
+      S.rect(10, 6, 3, 3, 'yellow', 7); S.line(7, 3, 15, 2, 'white');
+    },
+  },
   // ---------------- MECHANIC
   pumpgun: null, // same art as the Shotgun (filled in below)
   wrench: {

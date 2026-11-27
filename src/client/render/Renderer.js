@@ -99,13 +99,13 @@ export class Renderer {
     const prevClear = this.gl.getClearAlpha();
     this.gl.setClearColor(0x000000, 0);
     for (const team of [0, 1]) {
-      for (const id of CLASS_IDS) {
+      for (const id of [...CLASS_IDS, 'titan']) {
         const rig = new CharacterRig(id, team);
         rig.setWeapon(getClass(id).weapons[0]);
         rig.update(0.016, { speed: 0, grounded: true, pitch: 0 });
         rig.root.rotation.y = -0.45;
         scene.add(rig.root);
-        const hgt = id === 'juggernaut' ? 1.9 : 1.75;
+        const hgt = id === 'titan' ? 2.25 : id === 'juggernaut' ? 1.9 : 1.75;
         cam.position.set(0, hgt, -2.1);
         cam.lookAt(0, hgt - 0.12, 0);
         this.gl.setRenderTarget(rt);
