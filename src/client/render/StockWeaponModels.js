@@ -271,6 +271,37 @@ export const STOCK_MODELS = {
     },
     fp: { pos: [0.23, -0.24, -0.38], scale: 1.15, rot: [-0.8, 0.12, -0.22] },
   },
+  // ---------------- ADMIN
+  // The Admin Gun: pale chrome-cyan pistol with an oversized boxy barrel housing, a glowing cyan core
+  // channel along the side, black top strip, red pinstripe, black chevron vents near the muzzle, a
+  // crosshair emblem on the rear block, a textured black grip and a white-hot emitter in the muzzle.
+  admingun: {
+    w: 50, h: 24, px: 0.0165, grip: [11, 15], muzzle: [49, 7],
+    draw(S) {
+      // rear block with the crosshair emblem
+      S.poly([[0, 3], [3, 1], [22, 1], [22, 12], [2, 12], [0, 10]], 'ice', 5);
+      S.line(1, 2, 21, 2, 'iceL', 5); S.line(0, 11, 21, 11, 'iceD', 5);
+      S.rect(4, 2, 18, 1, 'black', 5); S.line(14, 3, 20, 3, 'black', 5);
+      S.rect(3, 4, 5, 5, 'steel', 7); S.rect(4, 5, 3, 3, 'iceD', 7); S.px(5, 6, 'steel', 7); S.line(5, 4, 5, 8, 'light', 7); S.line(3, 6, 7, 6, 'light', 7);
+      // glowing core channel along the body
+      S.rect(10, 6, 28, 2, 'aqua', 7); S.line(11, 6, 36, 6, 'wglow', 7);
+      S.line(9, 5, 37, 5, 'black', 7); S.line(9, 8, 37, 8, 'iceD', 7);
+      // barrel housing: upper and lower halves with a dark split, red pinstripe, black chevron vents
+      S.rect(22, 0, 26, 6, 'ice', 7); S.line(22, 0, 47, 0, 'iceL', 7); S.line(22, 2, 47, 2, 'red', 7); S.line(22, 3, 47, 3, 'black', 7);
+      S.rect(22, 9, 26, 6, 'ice', 7); S.line(22, 14, 47, 14, 'iceD', 7); S.line(22, 9, 47, 9, 'black', 7);
+      S.rect(48, 0, 1, 15, 'iceD', 7);
+      for (const x of [38, 41, 44]) { S.line(x, 0, x + 1, 5, 'black', 7); S.line(x, 9, x + 1, 14, 'black', 7); }
+      // muzzle: dark frame around a white-hot emitter
+      S.rect(49, 1, 1, 13, 'black', 7); S.rect(49, 3, 1, 9, 'wglow', 5);
+      // grip: textured black, pale base with a red line; three cyan dots above it; thin trigger guard
+      S.poly([[8, 12], [15, 12], [16, 20], [15, 22], [7, 22], [6, 20]], 'black', 5);
+      for (let y = 14; y < 20; y += 2) S.line(8, y, 13, y + 1, 'dark', 5);
+      S.rect(6, 21, 10, 2, 'ice', 5); S.line(6, 23, 15, 23, 'red', 5);
+      for (const x of [14, 16, 18]) S.px(x, 12, 'cyan', 5);
+      S.line(17, 13, 21, 15, 'iceL', 1); S.line(21, 15, 24, 15, 'iceL', 1); S.line(18, 13, 19, 13, 'dark', 1);
+    },
+    fp: { pos: [0.2, -0.21, -0.44], scale: 1.05 },
+  },
   // ---------------- SPY
   revolver: {
     w: 28, h: 16, px: 0.0145, grip: [5, 11], muzzle: [27, 4],

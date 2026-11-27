@@ -13,8 +13,10 @@ const BASE = {
   metal: 0x7c838c, dark: 0x34373d, light: 0xd7dbe0, wood: 0x9a6232, woodDark: 0x6e4220, grip: 0x3d2b20, tape: 0xe6e2d6,
   orange: 0xe8892c, yellow: 0xe8b32a, red: 0xcc3b2c, green: 0x5aa04a, white: 0xeef0f2, olive: 0x66733d, glow: 0x86ffb8,
   cyan: 0x52f0ff, fire: 0xffa23a, brass: 0xd0a446, black: 0x222326, steel: 0xc8cdd2, gunmetal: 0x52575f, khaki: 0xb08a54,
+  // the Admin Gun's pale chrome-cyan shell and its white-hot emitter
+  ice: 0x9fd4e4, iceD: 0x4d8aa2, iceL: 0xe6f8fd, wglow: 0xffffff, aqua: 0x8ff6ff,
 };
-const GLOW = new Set(['glow', 'cyan', 'fire']);
+const GLOW = new Set(['glow', 'cyan', 'fire', 'wglow', 'aqua']);
 
 // Weapon skins come from the cosmetics catalog: a pattern drawn across the sprite in a 3-colour palette.
 // Pattern colours replace the body keys (metal, wood, polymer...) and keep their light/dark tone.

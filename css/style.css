@@ -1017,3 +1017,8 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .tr-flag { margin-top: 8px; }
 .tr-flag .good { color: var(--good); }
 .tr-btns { margin-top: 14px; }
+
+/* The Admin Gun charge meter */
+.ag-charge { position: fixed; left: 50%; top: calc(50% + 34px); transform: translateX(-50%); width: 160px; height: 8px; border-radius: 4px; background: rgba(0,0,0,.45); box-shadow: 0 0 0 1px rgba(255,240,180,.35); z-index: 5; pointer-events: none; }
+.ag-charge i { display: block; height: 100%; width: 0; border-radius: 4px; background: linear-gradient(90deg, #ffc21a, #fff6d0, #ffffff); box-shadow: 0 0 12px #ffe070, 0 0 24px #fff6c0; }
+.ag-charge span { position: absolute; top: 12px; left: 0; right: 0; text-align: center; font: 700 12px var(--verdana); color: #fff6d0; text-shadow: 0 0 6px #ffcc40, 0 1px 2px #000; letter-spacing: .08em; }

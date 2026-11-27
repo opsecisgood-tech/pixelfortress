@@ -421,6 +421,21 @@ export class Hud {
   }
 
   setScope(on) { this.el.scope.classList.toggle('hidden', !on); }
+  // Admin Gun charge meter under the crosshair (0..1; 0 hides it)
+  setCharge(k) {
+    if (!this.chargeEl) {
+      this.chargeEl = document.createElement('div');
+      this.chargeEl.className = 'ag-charge';
+      this.chargeEl.innerHTML = '<i></i><span></span>';
+      this.root.appendChild(this.chargeEl);
+    }
+    const on = k > 0.001;
+    if (on !== this.chargeOn) { this.chargeOn = on; this.chargeEl.style.display = on ? '' : 'none'; }
+    if (!on) return;
+    this.chargeEl.firstChild.style.width = `${Math.round(k * 100)}%`;
+    const txt = k >= 0.999 ? 'FIRE' : `${Math.round(k * 100)}%`;
+    if (this.chargeEl.lastChild.textContent !== txt) this.chargeEl.lastChild.textContent = txt;
+  }
 
   setHealTarget(rig, entry) {
     if (!rig || !entry) { this.el.healT.classList.add('hidden'); return; }

@@ -478,6 +478,46 @@ export class AudioEngine {
     for (const [f, o] of seqs[kind] || []) this.tone(d, t + o, 0.22, { type: kind === 'defeat' ? 'triangle' : 'square', f, vol: 0.1 });
   }
 
+  // The Admin Gun: a rising whine while it charges (key = who is charging), and the blast.
+  adminCharge(key, pos, on, chargeTime = 5) {
+    if (!this.ready()) return;
+    this.agLoops ||= new Map();
+    const old = this.agLoops.get(key);
+    if (old) {
+      const t = this.ctx.currentTime;
+      old.g.gain.cancelScheduledValues(t); old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0.0001, t + 0.12);
+      for (const o of old.nodes) { try { o.stop(t + 0.15); } catch { /* stopped */ } }
+      this.agLoops.delete(key);
+    }
+    if (!on) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.3);
+    g.connect(this.out(pos, 1));
+    const nodes = [];
+    for (const [type, f0, f1, vol] of [['sawtooth', 70, 640, 0.18], ['sine', 140, 1280, 0.22], ['square', 35, 160, 0.06]]) {
+      const o = ctx.createOscillator(); o.type = type;
+      o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + chargeTime);
+      const og = ctx.createGain(); og.gain.value = vol;
+      o.connect(og); og.connect(g); o.start(t); nodes.push(o);
+    }
+    // a tremolo that speeds up as the charge builds
+    const lfo = ctx.createOscillator(); lfo.frequency.setValueAtTime(4, t); lfo.frequency.exponentialRampToValueAtTime(28, t + chargeTime);
+    const lg = ctx.createGain(); lg.gain.value = 0.12; lfo.connect(lg); lg.connect(g.gain); lfo.start(t); nodes.push(lfo);
+    this.agLoops.set(key, { g, nodes });
+    setTimeout(() => { if (this.agLoops.get(key)?.g === g) this.adminCharge(key, null, false); }, (chargeTime + 1.5) * 1000);
+  }
+  adminBlast(pos, hitPlayer) {
+    if (!this.ready()) return;
+    const d = this.out(pos, 1.1), t = this.ctx.currentTime;
+    this.noise(d, t, 0.08, { type: 'highpass', f: 2500, vol: 1.0, attack: 0.001 });
+    this.tone(d, t, 0.5, { type: 'sawtooth', f: 2400, f2: 180, vol: 0.3 });
+    this.tone(d, t, 0.9, { type: 'sine', f: 90, f2: 28, vol: 0.7 });
+    this.noise(d, t + 0.02, 1.2, { type: 'lowpass', f: 1800, f2: 120, vol: 0.8 });
+    if (hitPlayer) this.tone(d, t + 0.05, 0.6, { type: 'square', f: 880, f2: 1760, vol: 0.08 });
+  }
+
   announce(text) {
     if (!this.settings.announcer || typeof speechSynthesis === 'undefined') return;
     try {

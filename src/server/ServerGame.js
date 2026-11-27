@@ -168,6 +168,7 @@ export class ServerGame {
     this.opts.audit?.({ ev: 'admin', name: p.name, uid: p.uid || null, verified: !!p.verified, text });
     switch ((cmd || '').toLowerCase()) {
       case 'help':
+        say('The Admin Gun: /admingun [PLAYER] gives it (or takes it back) in the primary slot.');
         say('Admin: /gift PLAYER ITEM · /allhats · /allwraps (skins + gloves) · /nocd (abilities + weapons). /keys N · /addkeys N · /items · /nocd · /god · /ammo · /speed X · /heal · /class NAME · /tp PLAYER · /kill PLAYER · /kick PLAYER · /bots N · /map ID [tdm|ctf] · /restart · /end · /admin (status)');
         return;
       case 'admin': say(`Admin status · nocd ${A.nocd ? 'on' : 'off'} · god ${A.god ? 'on' : 'off'} · ammo ${A.ammo ? 'on' : 'off'} · speed x${A.speed}`); return;
@@ -193,6 +194,16 @@ export class ServerGame {
         this.send(q.connId, { t: 'gift', item: it.id, from: p.name });
         say(`Gifted ${it.name} (${SLOT_NAMES[it.slot] || it.slot}) to ${q.name}.`);
         this.opts.audit?.({ ev: 'gift', name: p.name, uid: p.uid || null, verified: !!p.verified, to: q.name, toUid: q.uid || null, item: it.id });
+        return;
+      }
+      case 'admingun': {
+        // /admingun [PLAYER]: toggle The Admin Gun in that player's primary slot (default: yourself)
+        const q = args[0] ? findPlayer(args[0]) : p;
+        if (!q) { say(`No player called "${args[0]}" in this match.`); return; }
+        q.adminGun = !q.adminGun;
+        this.applyAdminGun(q);
+        say(q.adminGun ? `${q === p ? 'You have' : `${q.name} has`} The Admin Gun (primary slot). Hold fire for 5 seconds to charge.` : `The Admin Gun was taken from ${q === p ? 'you' : q.name}.`);
+        if (q !== p) this.send(q.connId, { t: 'notice', text: q.adminGun ? 'An admin gave you The Admin Gun (primary slot). Hold fire for 5 seconds to charge.' : 'The Admin Gun was taken back.' });
         return;
       }
       case 'nocd': toggle('nocd', 'No cooldowns (abilities and weapons)'); return;
@@ -225,6 +236,16 @@ export class ServerGame {
       case 'end': this.endMatch(this.scores[0] === this.scores[1] ? -1 : this.scores[0] > this.scores[1] ? 0 : 1, 'admin'); return;
       default: say(`Unknown command /${cmd}. Type /help.`);
     }
+  }
+
+  // Put The Admin Gun in (or take it out of) the primary slot right away, keeping position and facing.
+  applyAdminGun(p) {
+    const base = resolveWeapons(p.classId, p.weaponPicks?.[p.classId]);
+    p.weapons = p.adminGun ? ['admingun', base[1], base[2]] : base;
+    p.ws = createWeaponState(getClass(p.classId), 0, p.weapons);
+    p.ws.time = 0;
+    this.rosterDirty = true;
+    if (p.alive) { p.spawnCount++; p.spawnYaw = p.ms.yaw; p.cmdQueue = []; }
   }
 
   // keep admin toggles applied every tick
@@ -704,6 +725,8 @@ export class ServerGame {
       case 'reload_start': this.event(['rl', p.id], p.ms, p.id); break;
       case 'switch': p.healTarget = -1; this.event(['ws', p.id, ev.slot], p.ms, p.id); break;
       case 'spinup': this.event(['spin', p.id, 1], p.ms, p.id); break;
+      case 'chargestart': this.event(['agc', p.id, 1], p.ms, p.id); break;
+      case 'chargestop': if (!ev.fired) this.event(['agc', p.id, 0], p.ms, p.id); break;
       case 'spindown': this.event(['spin', p.id, 0], p.ms, p.id); break;
       default:
     }
@@ -749,6 +772,7 @@ export class ServerGame {
     p.spawnYaw = sp.yaw;
     p.ms.grounded = true;
     p.weapons = resolveWeapons(p.classId, p.weaponPicks?.[p.classId]);
+    if (p.adminGun) p.weapons[0] = 'admingun';
     p.ws = createWeaponState(cls, 0, p.weapons);
     this.rosterDirty = true;
     p.ws.time = 0;

@@ -61,12 +61,76 @@ export class Combat {
     const def = WEAPONS[ev.weaponId];
     const eye = this.g.eyePos(p);
     switch (def.type) {
-      case 'hitscan': return this.fireHitscan(p, def, ev, eye, lt);
+      case 'hitscan': return def.adminBeam ? this.fireAdminBeam(p, def, ev, eye, lt) : this.fireHitscan(p, def, ev, eye, lt);
       case 'projectile': return this.g.projectiles.spawnFromWeapon(p, def, ev, eye);
       case 'flame': return this.fireFlame(p, def, ev, eye);
       case 'repair': return this.fireRepair(p, def, ev, eye, lt);
       default:
     }
+  }
+
+  // The Admin Gun: a beam that marches forward in short steps, bending toward the enemy it locked onto,
+  // until it touches a player, a turret or the world. Anything it touches is destroyed (1000 damage,
+  // ignoring protections). Every client gets the path to draw, and a light screen shake on contact.
+  fireAdminBeam(p, def, ev, eye, lt) {
+    const g = this.g, S = def.seek;
+    let dir = dirFromAngles(ev.y, ev.p);
+    // lock the enemy closest to the aim line within the seek cone (line of sight from the eye)
+    let target = null, best = Infinity;
+    const centre = (q) => { const pos = g.positionAt(q, lt); return [pos.x, pos.y + 1.05, pos.z]; };
+    for (const q of g.players.values()) {
+      if (q === p || !q.alive || q.team === p.team) continue;
+      const c = centre(q);
+      const v = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
+      const d = Math.hypot(...v);
+      if (d > S.range || d < 0.5) continue;
+      const ang = Math.acos(Math.min(1, (v[0] * dir[0] + v[1] * dir[1] + v[2] * dir[2]) / d));
+      if (ang > S.cone || !g.world.los(eye, c)) continue;
+      const score = ang * 30 + d * 0.05;
+      if (score < best) { best = score; target = q; }
+    }
+    const pts = [[eye[0], eye[1], eye[2]]];
+    let pos = [eye[0], eye[1], eye[2]], travelled = 0, hit = null, sinceMark = 0;
+    while (travelled < def.range && !hit) {
+      if (target && target.alive) {
+        const c = centre(target);
+        const v = [c[0] - pos[0], c[1] - pos[1], c[2] - pos[2]];
+        const l = Math.hypot(...v) || 1;
+        const want = [v[0] / l, v[1] / l, v[2] / l];
+        const dot = Math.max(-1, Math.min(1, dir[0] * want[0] + dir[1] * want[1] + dir[2] * want[2]));
+        const ang = Math.acos(dot);
+        if (ang > 1e-4) {
+          const k = Math.min(1, S.turn / ang);
+          dir = [dir[0] + (want[0] - dir[0]) * k, dir[1] + (want[1] - dir[1]) * k, dir[2] + (want[2] - dir[2]) * k];
+          const dl = Math.hypot(...dir) || 1; dir = [dir[0] / dl, dir[1] / dl, dir[2] / dl];
+        }
+      }
+      let seg = Math.min(S.step, def.range - travelled);
+      const wh = g.world.raycast(pos[0], pos[1], pos[2], dir[0], dir[1], dir[2], seg);
+      if (wh) { seg = wh.t; hit = { kind: 'world' }; }
+      for (const q of g.players.values()) {
+        if (q === p || !q.alive || q.team === p.team) continue;
+        const boxes = this.hitboxes(q, g.positionAt(q, lt));
+        for (const bx of [boxes.head, boxes.body]) {
+          const th = rayAabb(pos[0], pos[1], pos[2], dir[0], dir[1], dir[2], bx[0] - 0.12, bx[1] - 0.12, bx[2] - 0.12, bx[3] + 0.12, bx[4] + 0.12, bx[5] + 0.12, seg);
+          if (th >= 0 && th <= seg) { seg = th; hit = { kind: 'player', target: q }; }
+        }
+      }
+      for (const tu of g.abilities.turrets.values()) {
+        if (tu.team === p.team) continue;
+        const th = rayAabb(pos[0], pos[1], pos[2], dir[0], dir[1], dir[2], tu.x - 0.5, tu.y, tu.z - 0.5, tu.x + 0.5, tu.y + 1.2, tu.z + 0.5, seg);
+        if (th >= 0 && th <= seg) { seg = th; hit = { kind: 'turret', target: tu }; }
+      }
+      pos = [pos[0] + dir[0] * seg, pos[1] + dir[1] * seg, pos[2] + dir[2] * seg];
+      travelled += seg;
+      sinceMark += seg;
+      if (sinceMark >= 1 || hit) { pts.push([pos[0], pos[1], pos[2]]); sinceMark = 0; }
+    }
+    if (pts.length === 1) pts.push(pos);
+    const kind = hit ? { world: 0, player: 1, turret: 3 }[hit.kind] : 2;
+    g.event(['ab', p.id, pts.flat().map(round2), kind, hit?.kind === 'player' ? hit.target.id : -1]);
+    if (hit?.kind === 'player') this.damage(hit.target, def.damage, p, def.id, { raw: true, point: pos, knock: 6 });
+    else if (hit?.kind === 'turret') this.g.abilities.damageTurret(hit.target, def.damage, p);
   }
 
   fireHitscan(p, def, ev, eye, lt) {

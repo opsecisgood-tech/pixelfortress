@@ -16,6 +16,7 @@ import { PF, MATCH_STATE, TEAM_COLORS_HEX, TEAM_NAMES, FLAG_STATE, EYE_HEIGHT, C
 import { shotDirections } from '../shared/weaponLogic.js';
 import { getItem } from '../shared/config/cosmetics.js';
 import { dirFromAngles, damp, clamp, wrapAngle } from '../shared/math.js';
+import { GlowParticles, BeamFX } from './render/GlowFX.js';
 
 const CLASS_BY_INDEX = CLASS_IDS.reduce((a, id) => { a[CLASSES[id].index] = id; return a; }, {});
 const tmpV = new THREE.Vector3();
@@ -84,6 +85,10 @@ export class Game {
     this.running = true;
     this.mapObjects = new THREE.Group();
     this.r.scene.add(this.mapObjects);
+    // soft light particles and Admin Gun beams
+    this.glow = new GlowParticles(this.r.scene);
+    this.beams = new BeamFX(this.r.scene, this.glow);
+    this.agCharging = new Map(); // remote players charging the Admin Gun: id -> start time
     this.bindNet();
   }
 
@@ -277,6 +282,10 @@ export class Game {
     this.updatePickups(dt);
     this.updateBeamsAndLoops(dt);
     this.effects.update(dt);
+    this.updateAdminGun(dt);
+    this.glow.setPixelScale(this.r.gl.domElement.height || window.innerHeight);
+    this.glow.update(dt);
+    this.beams.update(dt);
     this.mapRenderer.update(dt, this.r.camera.position);
     this.updateAudioListener();
     // viewmodel
@@ -339,6 +348,8 @@ export class Game {
         case 'empty': this.audio.dryFire(true); break;
         case 'scope': this.ui.hud.setScope(ev.on); break;
         case 'spinup': this.audio.loop('localspin', 'spin', null, true); break;
+        case 'chargestart': this.audio.adminCharge('local', null, true, WEAPONS[ev.weaponId]?.chargeShot); break;
+        case 'chargestop': this.audio.adminCharge('local', null, false); break;
         case 'spindown': this.audio.loop('localspin', 'spin', null, false); break;
         default:
       }
@@ -353,6 +364,8 @@ export class Game {
     this.recoil += rp.pitch * supp;
     this.recoilYaw += (Math.random() - 0.5) * rp.yaw * 2 * supp;
     if (def.type === 'flame' || def.type === 'beam') return;
+    // the Admin Gun's beam is drawn from the server's path (it bends toward its target)
+    if (def.adminBeam) { this.shake = Math.max(this.shake, 0.9); return; }
     this.audio.weaponFire(def.id, null, true);
     const cam = this.r.camera;
     const muzzle = this.r.vm.muzzleWorld(cam, new THREE.Vector3());
@@ -1101,10 +1114,85 @@ export class Game {
         case 'h': if (e[1] === me && e[2] > 0) { this.audio.pickup('health'); this.ui.hud.healNumber(e[2]); } break;
         case 'pk': if (e[3] === me) this.audio.pickup(n.map.pickups[e[1]]?.kind || 'ammo'); break;
         case 'ann': this.onAnnounce(e); break;
+        case 'ab': this.onAdminBeam(e); break;
+        case 'agc': {
+          const [, pid, on] = e;
+          if (pid === me) break;
+          if (on) this.agCharging.set(pid, this.time); else this.agCharging.delete(pid);
+          this.audio.adminCharge(`r${pid}`, this.rigPos(pid), !!on, WEAPONS.admingun.chargeShot);
+          break;
+        }
         case 'beam': break;
         default:
       }
     }
+  }
+
+  // ---------------------------------------------------------------- the Admin Gun
+  muzzleOf(pid) {
+    if (pid === this.net.myId) { const v = this.r.vm.muzzleWorld(this.r.camera, new THREE.Vector3()); return [v.x, v.y, v.z]; }
+    const R = this.rigs.get(pid);
+    if (R && R.root.visible) { const v = R.rig.muzzleWorld(new THREE.Vector3()); return [v.x, v.y, v.z]; }
+    return null;
+  }
+
+  onAdminBeam(e) {
+    const [, pid, pts, kind, victim] = e;
+    this.agCharging.delete(pid);
+    this.audio.adminCharge(pid === this.net.myId ? 'local' : `r${pid}`, null, false);
+    const path = pts.slice();
+    const m = this.muzzleOf(pid);
+    if (m) { path[0] = m[0]; path[1] = m[1]; path[2] = m[2]; }
+    this.beams.fire(path);
+    const n = path.length;
+    const end = [path[n - 3], path[n - 2], path[n - 1]];
+    const big = kind === 1;
+    // impact: a white-hot flash, a ball of light and sparks, a light pulse
+    this.glow.burst(end[0], end[1], end[2], big ? 160 : 110, { color: [0xffffff, 0xffb020], speed: big ? 7 : 5, life: 0.9, size: 0.32, end: 0.05, drag: 2.5 });
+    this.glow.burst(end[0], end[1], end[2], 40, { color: [0xfff4c0, 0xff8a10], speed: 1.2, life: 1.3, size: 0.7, end: 0.2, drag: 1 });
+    for (let i = 0; i < 3; i++) this.glow.spawn({ x: end[0], y: end[1], z: end[2], life: 0.35 + i * 0.15, size: 2.2 + i * 1.4, end: 1.6, color: [0xffffff, 0xffc040], alpha: 0.9 - i * 0.25 });
+    this.effects.burst(end[0], end[1], end[2], big ? 24 : 14, { color: [0xffffff, 0xffe070, 0xffb030], speed: 7, life: 0.6, size: 0.06 });
+    this.effects.flashLight(end[0], end[1], end[2], 0xfff0b0, 16, 18, 0.45);
+    if (m) { this.effects.flashLight(m[0], m[1], m[2], 0xffe890, 10, 10, 0.25); this.glow.burst(m[0], m[1], m[2], 30, { color: [0xffffff, 0xffd040], speed: 3, life: 0.35, size: 0.2, drag: 3 }); }
+    this.audio.adminBlast(end, big);
+    if (m && pid !== this.net.myId) this.audio.adminBlast(m, false);
+    // a light shake for everyone when the beam strikes
+    this.shake = Math.max(this.shake, pid === this.net.myId ? 0.9 : 0.35);
+    void victim;
+  }
+
+  // charging: light gathers into the muzzle (yours and other players'), your screen shakes harder as it builds
+  updateAdminGun(dt) {
+    const n = this.net;
+    const ws = n.ws, me = n.me;
+    const w = ws && ws.w[ws.slot];
+    const def = w && WEAPONS[w.id];
+    const local = def?.chargeShot && me?.alive ? w.charge : 0;
+    this.agLocalCharge = local;
+    if (local > 0) {
+      this.shake = Math.max(this.shake, 0.06 + local * local * 0.55);
+      const m = this.muzzleOf(n.myId);
+      if (m) this.gatherLight(m, local, dt, true);
+    }
+    for (const [pid, t0] of this.agCharging) {
+      const k = Math.min(1, (this.time - t0) / (WEAPONS.admingun.chargeShot || 5));
+      if (this.time - t0 > 7) { this.agCharging.delete(pid); continue; }
+      const m = this.muzzleOf(pid);
+      if (m) this.gatherLight(m, k, dt, false);
+    }
+    this.ui.hud.setCharge?.(local);
+  }
+  gatherLight(m, k, dt, local) {
+    const rate = (local ? 40 : 30) * (0.3 + k);
+    for (let i = 0, c = Math.round(rate * dt + Math.random()); i < c; i++) {
+      const r = 0.25 + Math.random() * (local ? 0.35 : 0.8);
+      const th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI;
+      const ox = Math.sin(ph) * Math.cos(th) * r, oy = Math.cos(ph) * r, oz = Math.sin(ph) * Math.sin(th) * r;
+      const life = 0.35;
+      this.glow.spawn({ x: m[0] + ox, y: m[1] + oy, z: m[2] + oz, vx: -ox / life, vy: -oy / life, vz: -oz / life, life, size: (local ? 0.05 : 0.1) + k * (local ? 0.08 : 0.14), end: 0.3, color: [0xffe070, 0xffffff], drag: 0 });
+    }
+    // the glowing orb in the muzzle grows with the charge
+    this.glow.spawn({ x: m[0], y: m[1], z: m[2], life: 0.06, size: (local ? 0.1 : 0.2) + k * (local ? 0.45 : 0.7), end: 1, color: [0xffffff, 0xfff0a0], alpha: 0.6 + k * 0.4 });
   }
 
   onDamageEvent(e) {
@@ -1322,6 +1410,9 @@ export class Game {
     this.audio.stopLoops();
     if (this.effects) this.effects.clear();
     this.r.scene.remove(this.mapObjects);
+    this.beams?.clear();
+    this.glow?.dispose();
+    this.audio.adminCharge?.('local', null, false);
   }
 }
 

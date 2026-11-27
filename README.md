@@ -108,6 +108,7 @@ The signed-in account that owns the verified username **owner** gets admin comma
 | Command | What it does |
 | --- | --- |
 | `/help` | List all commands |
+| `/admingun [PLAYER]` | Give (or take back) The Admin Gun in the primary slot. Hold fire for 5 seconds to charge; the heat-seeking beam destroys anything it touches. |
 | `/admin` | Show which toggles are on |
 | `/nocd` | No cooldowns for abilities and weapons (rapid fire, instant reloads) |
 | `/god` | Take no damage |

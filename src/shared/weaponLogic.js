@@ -233,6 +233,24 @@ export function stepWeapons(ws, cmd, ctx) {
       ws.lastFire = t;
       events.push({ type: 'swing', weaponId: w.id, slot: ws.slot });
     }
+  } else if (def.chargeShot) {
+    // charge weapon (the Admin Gun): hold fire to charge; at full charge it fires by itself. Letting go
+    // early drains the charge.
+    if (fireHeld && ready && t >= w.next) {
+      if (w.charge === 0) events.push({ type: 'chargestart', weaponId: w.id });
+      w.charge = Math.min(1, w.charge + dt / (nocd ? 0.4 : def.chargeShot));
+      if (w.charge >= 1) {
+        w.charge = 0;
+        w.next = t + interval;
+        ws.shots++;
+        ws.lastFire = t;
+        events.push({ type: 'fire', weaponId: w.id, slot: ws.slot, shot: ws.shots, seed: hashInts(ctx.pid | 0, ws.shots), spread: 0, charge: 1, scoped: 0, y: cmd.y, p: cmd.p });
+        events.push({ type: 'chargestop', weaponId: w.id, fired: true });
+      }
+    } else if (w.charge > 0) {
+      w.charge = Math.max(0, w.charge - dt * 1.5);
+      if (w.charge === 0) events.push({ type: 'chargestop', weaponId: w.id, fired: false });
+    }
   } else if (def.type === 'beam') {
     if (fireHeld && ready) {
       if (t >= w.next) { w.next = t + interval; events.push({ type: 'beam', weaponId: w.id, slot: ws.slot }); }
