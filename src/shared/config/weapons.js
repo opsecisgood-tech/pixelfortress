@@ -80,12 +80,12 @@ def('revolver', {
   range: 90, effectiveRange: 24, minFalloff: 0.55,
   recoil: { pitch: 0.06, yaw: 0.012 }, kick: 1.3, botRange: 18,
 });
-// Admin-only (/admingun): hold fire for 5 seconds to charge, then a heat-seeking beam of light kills
-// whatever it touches. Never part of a class arsenal.
+// Admin-only (/admingun): hold fire for 3 seconds to charge, then a heat-seeking, piercing beam of light
+// destroys every enemy it touches and burns round holes through whatever it passes. Never part of a class arsenal.
 def('admingun', {
   name: 'The Admin Gun', slot: 0, type: 'hitscan', category: 'Admin',
-  description: 'Charge for five seconds, then release a heat-seeking beam that destroys anything it touches.',
-  damage: 1000, fireInterval: 0.9, clip: -1, chargeShot: 5, adminBeam: true,
+  description: 'Charge for three seconds, then release a heat-seeking beam that pierces everything, destroys every enemy it touches and burns holes through walls.',
+  damage: 1000, fireInterval: 0.9, clip: -1, chargeShot: 3, adminBeam: true, holeRadius: 0.35, holesPerShot: 24,
   range: 160, effectiveRange: 160, minFalloff: 1,
   seek: { cone: 0.55, range: 90, turn: 0.07, step: 0.5 },
   recoil: { pitch: 0.12, yaw: 0.02 }, kick: 2.2, tracer: 0xfff0a0, botRange: 40, adminOnly: true,

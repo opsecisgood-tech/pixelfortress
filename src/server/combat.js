@@ -69,68 +69,89 @@ export class Combat {
     }
   }
 
-  // The Admin Gun: a beam that marches forward in short steps, bending toward the enemy it locked onto,
-  // until it touches a player, a turret or the world. Anything it touches is destroyed (1000 damage,
-  // ignoring protections). Every client gets the path to draw, and a light screen shake on contact.
+  // The Admin Gun: a beam that marches forward in short steps and pierces everything. It bends toward an
+  // enemy, destroys every enemy and turret it touches (1000 damage, through any protection), then turns
+  // toward the next enemy in front of it. Every surface it passes through gets a perfectly round hole
+  // burnt through it (which shots and sight then pass through). Teammates are never hurt.
   fireAdminBeam(p, def, ev, eye, lt) {
     const g = this.g, S = def.seek;
     let dir = dirFromAngles(ev.y, ev.p);
-    // lock the enemy closest to the aim line within the seek cone (line of sight from the eye)
-    let target = null, best = Infinity;
+    const hit = new Set();
     const centre = (q) => { const pos = g.positionAt(q, lt); return [pos.x, pos.y + 1.05, pos.z]; };
-    for (const q of g.players.values()) {
-      if (q === p || !q.alive || q.team === p.team) continue;
-      const c = centre(q);
-      const v = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
-      const d = Math.hypot(...v);
-      if (d > S.range || d < 0.5) continue;
-      const ang = Math.acos(Math.min(1, (v[0] * dir[0] + v[1] * dir[1] + v[2] * dir[2]) / d));
-      if (ang > S.cone || !g.world.los(eye, c)) continue;
-      const score = ang * 30 + d * 0.05;
-      if (score < best) { best = score; target = q; }
-    }
+    const pick = (from, d) => {
+      let best = null, bestScore = Infinity;
+      for (const q of g.players.values()) {
+        if (q === p || !q.alive || q.team === p.team || hit.has(q)) continue;
+        const c = centre(q);
+        const v = [c[0] - from[0], c[1] - from[1], c[2] - from[2]];
+        const dist = Math.hypot(...v);
+        if (dist > S.range || dist < 0.3) continue;
+        const ang = Math.acos(Math.min(1, (v[0] * d[0] + v[1] * d[1] + v[2] * d[2]) / dist));
+        if (ang > S.cone || !g.world.los(from, c)) continue;
+        const score = ang * 30 + dist * 0.05;
+        if (score < bestScore) { bestScore = score; best = q; }
+      }
+      return best;
+    };
+    let target = pick(eye, dir);
+    const b = g.map.bounds;
     const pts = [[eye[0], eye[1], eye[2]]];
-    let pos = [eye[0], eye[1], eye[2]], travelled = 0, hit = null, sinceMark = 0;
-    while (travelled < def.range && !hit) {
-      if (target && target.alive) {
+    const victims = [], holesNow = [], open = new Map(); // box -> hole being burnt this shot
+    let pos = [eye[0], eye[1], eye[2]], travelled = 0, sinceMark = 0;
+    while (travelled < def.range) {
+      if (target && target.alive && !hit.has(target)) {
         const c = centre(target);
         const v = [c[0] - pos[0], c[1] - pos[1], c[2] - pos[2]];
         const l = Math.hypot(...v) || 1;
         const want = [v[0] / l, v[1] / l, v[2] / l];
-        const dot = Math.max(-1, Math.min(1, dir[0] * want[0] + dir[1] * want[1] + dir[2] * want[2]));
-        const ang = Math.acos(dot);
+        const ang = Math.acos(Math.max(-1, Math.min(1, dir[0] * want[0] + dir[1] * want[1] + dir[2] * want[2])));
         if (ang > 1e-4) {
           const k = Math.min(1, S.turn / ang);
           dir = [dir[0] + (want[0] - dir[0]) * k, dir[1] + (want[1] - dir[1]) * k, dir[2] + (want[2] - dir[2]) * k];
           const dl = Math.hypot(...dir) || 1; dir = [dir[0] / dl, dir[1] / dl, dir[2] / dl];
         }
       }
-      let seg = Math.min(S.step, def.range - travelled);
-      const wh = g.world.raycast(pos[0], pos[1], pos[2], dir[0], dir[1], dir[2], seg);
-      if (wh) { seg = wh.t; hit = { kind: 'world' }; }
+      const seg = Math.min(S.step, def.range - travelled);
+      // enemies and turrets on this stretch are destroyed; the beam carries on and finds the next one
       for (const q of g.players.values()) {
-        if (q === p || !q.alive || q.team === p.team) continue;
-        const boxes = this.hitboxes(q, g.positionAt(q, lt));
-        for (const bx of [boxes.head, boxes.body]) {
-          const th = rayAabb(pos[0], pos[1], pos[2], dir[0], dir[1], dir[2], bx[0] - 0.12, bx[1] - 0.12, bx[2] - 0.12, bx[3] + 0.12, bx[4] + 0.12, bx[5] + 0.12, seg);
-          if (th >= 0 && th <= seg) { seg = th; hit = { kind: 'player', target: q }; }
+        if (q === p || !q.alive || q.team === p.team || hit.has(q)) continue;
+        const bx = this.hitboxes(q, g.positionAt(q, lt));
+        for (const h of [bx.head, bx.body]) {
+          const th = rayAabb(pos[0], pos[1], pos[2], dir[0], dir[1], dir[2], h[0] - 0.12, h[1] - 0.12, h[2] - 0.12, h[3] + 0.12, h[4] + 0.12, h[5] + 0.12, seg);
+          if (th >= 0 && th <= seg) { hit.add(q); victims.push(q); break; }
         }
       }
       for (const tu of g.abilities.turrets.values()) {
-        if (tu.team === p.team) continue;
+        if (tu.team === p.team || hit.has(tu)) continue;
         const th = rayAabb(pos[0], pos[1], pos[2], dir[0], dir[1], dir[2], tu.x - 0.5, tu.y, tu.z - 0.5, tu.x + 0.5, tu.y + 1.2, tu.z + 0.5, seg);
-        if (th >= 0 && th <= seg) { seg = th; hit = { kind: 'turret', target: tu }; }
+        if (th >= 0 && th <= seg) { hit.add(tu); g.abilities.damageTurret(tu, def.damage, p); }
       }
-      pos = [pos[0] + dir[0] * seg, pos[1] + dir[1] * seg, pos[2] + dir[2] * seg];
+      if (target && hit.has(target)) target = pick(pos, dir);
+      // burn through every surface on this stretch
+      const end = [pos[0] + dir[0] * seg, pos[1] + dir[1] * seg, pos[2] + dir[2] * seg];
+      const seen = new Set();
+      g.world.query(Math.min(pos[0], end[0]), Math.min(pos[1], end[1]), Math.min(pos[2], end[2]), Math.max(pos[0], end[0]), Math.max(pos[1], end[1]), Math.max(pos[2], end[2]), (bx) => {
+        if (!bx.shot || seen.has(bx)) return false;
+        seen.add(bx);
+        const r = segBox(pos, dir, seg, bx);
+        if (!r) return false;
+        const a = [pos[0] + dir[0] * r.t0, pos[1] + dir[1] * r.t0, pos[2] + dir[2] * r.t0];
+        const z = [pos[0] + dir[0] * r.t1, pos[1] + dir[1] * r.t1, pos[2] + dir[2] * r.t1];
+        let hole = open.get(bx);
+        if (!hole) { hole = { a, b: z, na: r.n0 || [-dir[0], -dir[1], -dir[2]], nb: r.n1 }; open.set(bx, hole); holesNow.push(hole); }
+        else { hole.b = z; if (r.n1) hole.nb = r.n1; }
+        return false;
+      });
+      pos = end;
       travelled += seg;
       sinceMark += seg;
-      if (sinceMark >= 1 || hit) { pts.push([pos[0], pos[1], pos[2]]); sinceMark = 0; }
+      if (sinceMark >= 1) { pts.push([pos[0], pos[1], pos[2]]); sinceMark = 0; }
+      if (pos[1] < (g.map.killY ?? -20) || pos[1] > 80 || pos[0] < b.minX - 12 || pos[0] > b.maxX + 12 || pos[2] < b.minZ - 12 || pos[2] > b.maxZ + 12) break;
     }
-    if (pts.length === 1) pts.push(pos);
-    const kind = hit ? { world: 0, player: 1, turret: 3 }[hit.kind] : 2;
-    g.event(['ab', p.id, pts.flat().map(round2), kind, hit?.kind === 'player' ? hit.target.id : -1]);
-    if (hit?.kind === 'player') this.damage(hit.target, def.damage, p, def.id, { raw: true, point: pos, knock: 6 });
-    else if (hit?.kind === 'turret') this.g.abilities.damageTurret(hit.target, def.damage, p);
+    pts.push([pos[0], pos[1], pos[2]]);
+    const holes = holesNow.slice(0, def.holesPerShot || 24).map((h) => g.addHole(h.a, h.b, def.holeRadius || 0.35, h.na, h.nb || [dir[0], dir[1], dir[2]], dir));
+    g.event(['ab', p.id, pts.flat().map(round2), victims.map((q) => q.id), holes.flatMap((h) => [...h.a, ...h.b, ...h.na, ...h.nb].map(round2))]);
+    for (const q of victims) this.damage(q, def.damage, p, def.id, { raw: true, point: centre(q), knock: 6 });
   }
 
   fireHitscan(p, def, ev, eye, lt) {
@@ -529,6 +550,24 @@ export class Combat {
     g.abilities.onOwnerDeath(victim);
     g.event(['k', killer ? killer.id : -1, victim.id, weaponId, flags, assister ? assister.id : -1, round2(victim.ms.x), round2(victim.ms.y), round2(victim.ms.z), victim.classId]);
   }
+}
+
+// Segment vs box: where a straight stretch (origin o, unit dir d, length len) enters and leaves box b.
+// Returns { t0, t1, n0, n1 } with the outward face normals at entry (null if it started inside) and exit
+// (null if it ends inside), or null if it misses.
+function segBox(o, d, len, b) {
+  let t0 = 0, t1 = len, a0 = -1, s0 = 0, a1 = -1, s1 = 0;
+  const mins = [b.minX, b.minY, b.minZ], maxs = [b.maxX, b.maxY, b.maxZ];
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(d[i]) < 1e-9) { if (o[i] < mins[i] || o[i] > maxs[i]) return null; continue; }
+    let ta = (mins[i] - o[i]) / d[i], tb = (maxs[i] - o[i]) / d[i], na = -1, nb = 1;
+    if (ta > tb) { [ta, tb] = [tb, ta]; na = 1; nb = -1; }
+    if (ta > t0) { t0 = ta; a0 = i; s0 = na; }
+    if (tb < t1) { t1 = tb; a1 = i; s1 = nb; }
+    if (t0 > t1) return null;
+  }
+  const n = (axis, sg) => { if (axis < 0) return null; const v = [0, 0, 0]; v[axis] = sg; return v; };
+  return { t0, t1, n0: t0 > 0 ? n(a0, s0) : null, n1: t1 < len ? n(a1, s1) : null };
 }
 
 export { ABILITY_SOURCES, eyeHeight };

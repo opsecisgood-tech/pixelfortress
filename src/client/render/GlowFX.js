@@ -113,27 +113,68 @@ export class GlowParticles {
   dispose() { this.scene.remove(this.points); this.points.geometry.dispose(); this.mat.dispose(); }
 }
 
-// The Admin Gun's beam: layered glowing tubes along the (possibly curved) path, yellow at the gun turning
-// white-hot toward the end, fading out over a moment while sparks stream off it.
-const beamVS = `
-  varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+// The Admin Gun's beam: camera-facing ribbons along the (possibly curved) path, so it reads as a solid
+// bar of light from any angle, including straight down the barrel. A hard white-hot core inside a
+// yellow body (yellow at the gun, white toward the end), plus a wide additive glow, sparks shed along its
+// length, and a quick flare before it thins and fades.
+const ribbonVS = `
+  attribute vec3 aTan; attribute float aSide; attribute float aU;
+  uniform float width;
+  varying float vSide; varying float vU;
   void main() {
-    vUv = uv;
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz);
-    gl_Position = projectionMatrix * mv;
+    vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz;
+    vec3 toCam = normalize(cameraPosition - wp);
+    vec3 s = cross(aTan, toCam);
+    float sl = length(s);
+    s = sl > 1e-4 ? s / sl : normalize(cross(aTan, vec3(0.0, 1.0, 0.0)) + vec3(1e-4));
+    // keep a minimum on-screen width when looking straight along the beam, taper right at the muzzle
+    float taper = 0.35 + 0.65 * smoothstep(0.0, 0.03, aU);
+    float w = width * taper * (1.0 + 0.6 * (1.0 - sl));
+    wp += s * aSide * w;
+    vSide = aSide; vU = aU;
+    gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
   }`;
-const beamFS = `
-  uniform vec3 c0; uniform vec3 c1; uniform float fade; uniform float core; uniform float time;
-  varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+const ribbonFS = `
+  uniform vec3 c0; uniform vec3 c1; uniform float fade; uniform float time; uniform float glowOnly;
+  varying float vSide; varying float vU;
   void main() {
-    float rim = abs(dot(vN, vV));                       // 1 at the centre line, 0 at the edges
-    float edge = pow(rim, core);
-    vec3 col = mix(c0, c1, smoothstep(0.0, 1.0, vUv.x)); // yellow at the gun -> white at the end
-    float flicker = 0.85 + 0.15 * sin(vUv.x * 60.0 - time * 40.0);
-    gl_FragColor = vec4(min(col * (1.0 + edge * 0.8), vec3(1.0)), clamp(edge * fade * flicker, 0.0, 1.0));
+    float d = abs(vSide);
+    vec3 col = mix(c0, c1, smoothstep(0.0, 1.0, vU));
+    float flicker = 0.9 + 0.1 * sin(vU * 140.0 - time * 50.0);
+    if (glowOnly > 0.5) {
+      float g = pow(1.0 - d, 2.2);
+      gl_FragColor = vec4(col * g * fade * flicker, 1.0);
+    } else {
+      float core = 1.0 - smoothstep(0.16, 0.3, d);
+      float body = 1.0 - smoothstep(0.55, 0.85, d);
+      vec3 c = mix(col, vec3(1.0), core);
+      gl_FragColor = vec4(c, body * fade);
+    }
     #include <colorspace_fragment>
   }`;
+
+function ribbonGeometry(curve, segs) {
+  const n = segs + 1;
+  const pos = new Float32Array(n * 2 * 3), tan = new Float32Array(n * 2 * 3), side = new Float32Array(n * 2), u = new Float32Array(n * 2);
+  const idx = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / segs;
+    const p = curve.getPointAt(t), tg = curve.getTangentAt(t);
+    for (let k = 0; k < 2; k++) {
+      const j = i * 2 + k;
+      pos.set([p.x, p.y, p.z], j * 3); tan.set([tg.x, tg.y, tg.z], j * 3);
+      side[j] = k ? 1 : -1; u[j] = t;
+    }
+    if (i < segs) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aTan', new THREE.BufferAttribute(tan, 3));
+  g.setAttribute('aSide', new THREE.BufferAttribute(side, 1));
+  g.setAttribute('aU', new THREE.BufferAttribute(u, 1));
+  g.setIndex(idx);
+  return g;
+}
 
 export class BeamFX {
   constructor(scene, glow) {
@@ -142,45 +183,43 @@ export class BeamFX {
     this.beams = [];
   }
 
-  fire(points, life = 0.8) {
+  fire(points, life = 0.9) {
     const v = [];
     for (let i = 0; i < points.length; i += 3) v.push(new THREE.Vector3(points[i], points[i + 1], points[i + 2]));
-    if (v.length < 2) return;
+    if (v.length < 2) return null;
     const curve = new THREE.CatmullRomCurve3(v, false, 'centripetal');
     const len = curve.getLength();
-    const segs = Math.max(8, Math.min(240, Math.round(len * 3)));
+    const segs = Math.max(8, Math.min(400, Math.round(len * 4)));
+    const geo = ribbonGeometry(curve, segs);
     const group = new THREE.Group();
-    // outer halo (additive glow), a solid yellow-to-white body with a hard edge, and a white-hot core
     const layers = [
-      { r: 0.55, core: 1.6, c0: 0xffa810, c1: 0xffe890, a: 0.55, add: true },
-      { r: 0.2, core: 0.25, c0: 0xffd02a, c1: 0xffffff, a: 1.0, add: false },
-      { r: 0.085, core: 0.15, c0: 0xfffbe8, c1: 0xffffff, a: 1.0, add: false },
+      { width: 0.85, glowOnly: 1, c0: 0xffa008, c1: 0xfff0a0, blend: THREE.AdditiveBlending, a: 0.9 },
+      { width: 0.22, glowOnly: 0, c0: 0xffcc1a, c1: 0xffffff, blend: THREE.NormalBlending, a: 1 },
     ];
     const mats = [];
     for (const L of layers) {
-      const geo = new THREE.TubeGeometry(curve, segs, L.r, 10, false);
       const mat = new THREE.ShaderMaterial({
-        uniforms: { c0: { value: new THREE.Color(L.c0) }, c1: { value: new THREE.Color(L.c1) }, fade: { value: L.a }, core: { value: L.core }, time: { value: 0 } },
-        vertexShader: beamVS, fragmentShader: beamFS, transparent: true, depthWrite: false, blending: L.add ? THREE.AdditiveBlending : THREE.NormalBlending, side: L.add ? THREE.DoubleSide : THREE.FrontSide, toneMapped: false,
+        uniforms: { c0: { value: new THREE.Color(L.c0) }, c1: { value: new THREE.Color(L.c1) }, fade: { value: L.a }, time: { value: 0 }, width: { value: L.width }, glowOnly: { value: L.glowOnly } },
+        vertexShader: ribbonVS, fragmentShader: ribbonFS, transparent: true, depthWrite: false, blending: L.blend, side: THREE.DoubleSide, toneMapped: false,
       });
-      mats.push({ mat, a: L.a, core: L.core });
+      mats.push({ mat, a: L.a, w: L.width });
       const m = new THREE.Mesh(geo, mat);
       m.frustumCulled = false;
-      m.renderOrder = 6;
+      m.renderOrder = L.glowOnly ? 6 : 7;
       group.add(m);
     }
     this.scene.add(group);
-    // particle emitters along the whole beam: drifting embers and bright sparks shed off the light
-    const n = Math.min(400, Math.round(len * 6));
+    // particle emitters along the whole beam: embers and bright sparks shed off the light
+    const n = Math.min(450, Math.round(len * 6));
     for (let i = 0; i < n; i++) {
       const t = Math.random();
       const p = curve.getPointAt(t);
       const tan = curve.getTangentAt(t);
       const r = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).cross(tan).normalize();
-      const sp = 0.6 + Math.random() * 2.2;
+      const sp = 0.6 + Math.random() * 2.4;
       this.glow.spawn({ x: p.x, y: p.y, z: p.z, vx: r.x * sp + tan.x * 0.6, vy: r.y * sp + 0.3, vz: r.z * sp + tan.z * 0.6, life: 0.5 + Math.random() * 0.9, size: 0.12 + Math.random() * 0.22, end: 0.1, color: [t < 0.5 ? 0xffd040 : 0xfff6c8, 0xff9a20], drag: 2.2, g: -0.4 });
     }
-    this.beams.push({ group, mats, t: 0, life, curve, len, emitT: 0 });
+    this.beams.push({ group, geo, mats, t: 0, life, curve, len, emitT: 0 });
     return curve;
   }
 
@@ -190,14 +229,13 @@ export class BeamFX {
       b.t += dt;
       const k = b.t / b.life;
       // a quick flare, then the beam thins and fades
-      const flare = k < 0.08 ? 1 + (1 - k / 0.08) * 0.6 : 1;
-      const thin = Math.max(0.05, 1 - k * k);
-      b.mats.forEach((m, j) => {
-        m.mat.uniforms.fade.value = m.a * (1 - k) * flare;
+      const flare = k < 0.1 ? 1.35 - k * 3.5 : 1;
+      const thin = Math.max(0.15, 1 - k * k);
+      for (const m of b.mats) {
+        m.mat.uniforms.fade.value = m.a * Math.min(1, (1 - k) * 1.6);
+        m.mat.uniforms.width.value = m.w * thin * flare;
         m.mat.uniforms.time.value += dt;
-        m.mat.uniforms.core.value = m.core / thin; // the light narrows as it fades
-      });
-      // keep shedding sparks while it lasts
+      }
       b.emitT += dt;
       while (b.emitT > 0.012 && k < 0.7) {
         b.emitT -= 0.012;
@@ -205,13 +243,16 @@ export class BeamFX {
         const p = b.curve.getPointAt(t);
         this.glow.spawn({ x: p.x, y: p.y, z: p.z, vx: (Math.random() - 0.5) * 2, vy: Math.random() * 1.5, vz: (Math.random() - 0.5) * 2, life: 0.4 + Math.random() * 0.5, size: 0.1 + Math.random() * 0.15, end: 0.05, color: [0xffffff, 0xffb030], drag: 2 });
       }
-      if (k >= 1) {
-        this.scene.remove(b.group);
-        for (const c of b.group.children) { c.geometry.dispose(); c.material.dispose(); }
-        this.beams.splice(i, 1);
-      }
+      if (k >= 1) this.remove(i);
     }
   }
 
-  clear() { for (const b of this.beams) { this.scene.remove(b.group); for (const c of b.group.children) { c.geometry.dispose(); c.material.dispose(); } } this.beams.length = 0; }
+  remove(i) {
+    const b = this.beams[i];
+    this.scene.remove(b.group);
+    b.geo.dispose();
+    for (const m of b.mats) m.mat.dispose();
+    this.beams.splice(i, 1);
+  }
+  clear() { while (this.beams.length) this.remove(this.beams.length - 1); }
 }

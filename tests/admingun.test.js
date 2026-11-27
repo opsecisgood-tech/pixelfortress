@@ -1,4 +1,5 @@
-// The Admin Gun: admin-only, 5 s charge, heat-seeking beam that destroys whatever it touches.
+// The Admin Gun: admin-only, 3 s charge, heat-seeking piercing beam that destroys every enemy it touches
+// and burns round holes through the world.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ServerGame } from '../src/server/ServerGame.js';
@@ -7,23 +8,23 @@ import { WEAPONS } from '../src/shared/config/weapons.js';
 import { getClass } from '../src/shared/config/classes.js';
 import { createWeaponState, stepWeapons } from '../src/shared/weaponLogic.js';
 
-test('admin gun: charges for 5 seconds, fires by itself when full, drains if released', () => {
+test('admin gun: charges for 3 seconds, fires by itself when full, drains if released', () => {
   const def = WEAPONS.admingun;
-  assert.equal(def.chargeShot, 5);
+  assert.equal(def.chargeShot, 3);
   assert.equal(def.damage, 1000);
   const ws = createWeaponState(getClass('soldier'), 0, ['admingun', 'breacher', 'shovel']);
   const ctx = { alive: true, pid: 1, grounded: true };
   const step = (b, n) => { const out = []; for (let i = 0; i < n; i++) out.push(...stepWeapons(ws, { b, dt: 1 / 60, w: 0, y: 0, p: 0 }, ctx)); return out; };
   step(0, 30); // deploy
-  let evs = step(BTN.FIRE, 60 * 4.5);
+  let evs = step(BTN.FIRE, 60 * 2.7);
   assert.ok(evs.some((e) => e.type === 'chargestart'));
   assert.ok(!evs.some((e) => e.type === 'fire'), 'no shot before the charge completes');
   assert.ok(ws.w[0].charge > 0.85 && ws.w[0].charge < 1);
   evs = step(0, 60);
   assert.ok(evs.some((e) => e.type === 'chargestop' && !e.fired), 'releasing early drains the charge');
   assert.equal(ws.w[0].charge, 0);
-  evs = step(BTN.FIRE, 60 * 5 + 2);
-  assert.equal(evs.filter((e) => e.type === 'fire').length, 1, 'one blast after five seconds');
+  evs = step(BTN.FIRE, 60 * 3 + 2);
+  assert.equal(evs.filter((e) => e.type === 'fire').length, 1, 'one blast after three seconds');
 });
 
 function setup() {
@@ -76,25 +77,40 @@ test('admin gun: the beam bends toward an enemy, kills through protection, every
   assert.ok(beam.length >= 1);
   const [, e] = beam[0];
   assert.equal(e[1], me.id);
-  assert.equal(e[3], 1, 'hit a player');
-  assert.equal(e[4], foe.id);
+  assert.deepEqual(e[3], [foe.id], 'hit the enemy');
   const pts = e[2];
-  assert.ok(Math.abs(pts.at(-3) - 30) < 0.8, 'the path curved toward the target');
+  const near = []; for (let i = 0; i < pts.length; i += 3) near.push(Math.hypot(pts[i] - 29.8, pts[i + 2] + 3.5));
+  assert.ok(Math.min(...near) < 1, 'the path curved through the target');
   // the impact event reaches every connected player (for the screen shake)
   assert.deepEqual([...new Set(beam.map(([c]) => c))].sort(), [1, 2, 3]);
   assert.ok(evs.some(([c, x]) => c === 2 && x[0] === 'agc' && x[1] === me.id && x[2] === 1), 'others see and hear the charge');
 });
 
-test('admin gun: teammates are safe; the beam stops at walls', () => {
-  const { g, evs, me, mate } = setup();
+test('admin gun: pierces walls (burning round holes shots pass through) and hits several enemies; teammates are safe', () => {
+  const { g, evs, me, foe, mate } = setup();
+  const foe2 = g.createPlayer({ name: 'Foe2', team: foe.team, classId: 'scout', isBot: false, connId: null, token: 'x' });
+  g.spawnPlayer(foe2);
   g.handleMessage(1, { t: 'chat', text: '/admingun' });
+  // shoot west down the road at two enemies in a line, with a teammate between them off to the side
   const place = () => {
-    me.ms.x = 32; me.ms.z = 4; me.ms.y = 0.03;
-    mate.ms.x = 32; mate.ms.z = 0; mate.ms.y = 0.03; mate.team = me.team;
+    me.ms.x = 36; me.ms.z = 0; me.ms.y = 0.03; me.ms.vx = me.ms.vz = 0;
+    if (foe.alive) { foe.ms.x = 31; foe.ms.z = 0; foe.ms.y = 0.03; foe.spawnProtectUntil = 0; }
+    if (foe2.alive) { foe2.ms.x = 28; foe2.ms.z = 0.3; foe2.ms.y = 0.03; foe2.spawnProtectUntil = 0; }
+    mate.team = me.team; mate.ms.x = 33; mate.ms.z = 0; mate.ms.y = 0.03;
   };
   place();
-  holdFire(g, 30 * 6, place, Math.PI / 2, 0); // face -x, toward the warehouse
-  assert.ok(mate.alive);
+  holdFire(g, 30 * 4, place, Math.PI / 2, 0); // yaw +90deg = facing -x
   const ab = evs.find(([, e]) => e[0] === 'ab')[1];
-  assert.equal(ab[3], 0, 'ended on the world');
+  assert.equal(ab[3].length, 2, 'both enemies were hit by one beam');
+  assert.ok(!foe.alive && !foe2.alive);
+  assert.ok(mate.alive, 'the teammate in its path is unharmed');
+  assert.ok(g.holes.length >= 1, 'holes were burnt through the warehouse');
+  assert.ok(ab[4].length >= 12, 'hole entries/exits sent for the rim effects');
+  // a shot along the beam's line now passes through the first hole it made
+  const h = g.holes[0];
+  const d = [h.b[0] - h.a[0], h.b[1] - h.a[1], h.b[2] - h.a[2]];
+  const l = Math.hypot(...d);
+  const o = [h.a[0] - d[0] / l, h.a[1] - d[1] / l, h.a[2] - d[2] / l];
+  const r = g.world.raycast(o[0], o[1], o[2], d[0] / l, d[1] / l, d[2] / l, l + 2);
+  assert.ok(!r || r.t > l + 0.5, 'shots fly through the hole');
 });

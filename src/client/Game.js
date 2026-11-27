@@ -17,6 +17,7 @@ import { shotDirections } from '../shared/weaponLogic.js';
 import { getItem } from '../shared/config/cosmetics.js';
 import { dirFromAngles, damp, clamp, wrapAngle } from '../shared/math.js';
 import { GlowParticles, BeamFX } from './render/GlowFX.js';
+import { patchHoles, setHoleUniforms, HoleRims } from './render/Holes.js';
 
 const CLASS_BY_INDEX = CLASS_IDS.reduce((a, id) => { a[CLASSES[id].index] = id; return a; }, {});
 const tmpV = new THREE.Vector3();
@@ -89,6 +90,10 @@ export class Game {
     this.glow = new GlowParticles(this.r.scene);
     this.beams = new BeamFX(this.r.scene, this.glow);
     this.agCharging = new Map(); // remote players charging the Admin Gun: id -> start time
+    this.rims = new HoleRims(this.r.scene);
+    this.holeFx = [];             // molten glow and sparks from fresh holes
+    this.holeVer = -1;
+    setHoleUniforms([]);
     this.bindNet();
   }
 
@@ -283,6 +288,9 @@ export class Game {
     this.updateBeamsAndLoops(dt);
     this.effects.update(dt);
     this.updateAdminGun(dt);
+    this.syncHoles();
+    this.updateHoleFx(dt);
+    this.rims.update(dt);
     this.glow.setPixelScale(this.r.gl.domElement.height || window.innerHeight);
     this.glow.update(dt);
     this.beams.update(dt);
@@ -1137,7 +1145,7 @@ export class Game {
   }
 
   onAdminBeam(e) {
-    const [, pid, pts, kind, victim] = e;
+    const [, pid, pts, victims = [], holes = []] = e;
     this.agCharging.delete(pid);
     this.audio.adminCharge(pid === this.net.myId ? 'local' : `r${pid}`, null, false);
     const path = pts.slice();
@@ -1146,19 +1154,75 @@ export class Game {
     this.beams.fire(path);
     const n = path.length;
     const end = [path[n - 3], path[n - 2], path[n - 1]];
-    const big = kind === 1;
-    // impact: a white-hot flash, a ball of light and sparks, a light pulse
-    this.glow.burst(end[0], end[1], end[2], big ? 160 : 110, { color: [0xffffff, 0xffb020], speed: big ? 7 : 5, life: 0.9, size: 0.32, end: 0.05, drag: 2.5 });
-    this.glow.burst(end[0], end[1], end[2], 40, { color: [0xfff4c0, 0xff8a10], speed: 1.2, life: 1.3, size: 0.7, end: 0.2, drag: 1 });
-    for (let i = 0; i < 3; i++) this.glow.spawn({ x: end[0], y: end[1], z: end[2], life: 0.35 + i * 0.15, size: 2.2 + i * 1.4, end: 1.6, color: [0xffffff, 0xffc040], alpha: 0.9 - i * 0.25 });
-    this.effects.burst(end[0], end[1], end[2], big ? 24 : 14, { color: [0xffffff, 0xffe070, 0xffb030], speed: 7, life: 0.6, size: 0.06 });
-    this.effects.flashLight(end[0], end[1], end[2], 0xfff0b0, 16, 18, 0.45);
-    if (m) { this.effects.flashLight(m[0], m[1], m[2], 0xffe890, 10, 10, 0.25); this.glow.burst(m[0], m[1], m[2], 30, { color: [0xffffff, 0xffd040], speed: 3, life: 0.35, size: 0.2, drag: 3 }); }
-    this.audio.adminBlast(end, big);
-    if (m && pid !== this.net.myId) this.audio.adminBlast(m, false);
+    // muzzle blast
+    if (m) {
+      this.effects.flashLight(m[0], m[1], m[2], 0xffe890, 10, 10, 0.25);
+      this.glow.burst(m[0], m[1], m[2], 30, { color: [0xffffff, 0xffd040], speed: 3, life: 0.35, size: 0.2, drag: 3 });
+      this.audio.adminBlast(m, false);
+    }
+    // every enemy it passed through: a white-hot flash where they stood
+    for (const id of victims) {
+      const p = this.rigPos(id);
+      if (!p) continue;
+      this.glow.burst(p[0], p[1] + 1, p[2], 120, { color: [0xffffff, 0xffb020], speed: 6, life: 0.9, size: 0.3, end: 0.05, drag: 2.5 });
+      for (let i = 0; i < 2; i++) this.glow.spawn({ x: p[0], y: p[1] + 1, z: p[2], life: 0.35 + i * 0.2, size: 2 + i * 1.5, end: 1.6, color: [0xffffff, 0xffc040], alpha: 0.85 - i * 0.3 });
+      this.effects.flashLight(p[0], p[1] + 1, p[2], 0xfff0b0, 14, 14, 0.4);
+      this.audio.adminBlast(p, true);
+    }
+    // holes: glowing rims at every entry and exit, molten sparks and drips
+    const dir = [path[n - 3] - path[0], path[n - 2] - path[1], path[n - 1] - path[2]];
+    const dl = Math.hypot(...dir) || 1;
+    for (let i = 0; i + 11 < holes.length; i += 12) {
+      const a = holes.slice(i, i + 3), b = holes.slice(i + 3, i + 6), na = holes.slice(i + 6, i + 9), nb = holes.slice(i + 9, i + 12);
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const l = Math.hypot(...d);
+      const hd = l > 1e-3 ? d.map((x) => x / l) : dir.map((x) => x / dl);
+      const r = WEAPONS.admingun.holeRadius || 0.35;
+      this.rims.add(a, na, hd, r);
+      this.rims.add(b, nb, hd, r);
+      this.holeFx.push({ p: a, n: na, t: 0 }, { p: b, n: nb, t: 0 });
+      this.effects.flashLight(a[0], a[1], a[2], 0xffc060, 6, 6, 0.3);
+    }
+    // the far end of the beam
+    this.glow.burst(end[0], end[1], end[2], 60, { color: [0xffffff, 0xffb020], speed: 4, life: 0.7, size: 0.28, end: 0.05, drag: 2.5 });
+    this.audio.adminBlast(end, victims.length > 0);
     // a light shake for everyone when the beam strikes
     this.shake = Math.max(this.shake, pid === this.net.myId ? 0.9 : 0.35);
-    void victim;
+  }
+
+  // holes from the server (also sent to players who join later): cut them into the map and the local world
+  syncHoles() {
+    const ho = this.net.latest?.ho;
+    const ver = ho ? ho.v : 0;
+    // (re)patch map materials whenever holes exist and the map meshes were (re)built
+    if (ho && this.mapRenderer && !this.mapRenderer.root.userData.holesPatched) { patchHoles(this.mapRenderer.root); this.mapRenderer.root.userData.holesPatched = true; }
+    if (ver === this.holeVer) return;
+    this.holeVer = ver;
+    const list = [];
+    if (ho) for (let i = 0; i + 6 < ho.h.length + 1; i += 7) list.push({ a: ho.h.slice(i, i + 3), b: ho.h.slice(i + 3, i + 6), r: ho.h[i + 6] });
+    if (!list.length) this.rims.clear();
+    setHoleUniforms(list);
+    this.net.world?.setHoles(list);
+  }
+
+  updateHoleFx(dt) {
+    for (let i = this.holeFx.length - 1; i >= 0; i--) {
+      const h = this.holeFx[i];
+      h.t += dt;
+      if (h.t > 1.6) { this.holeFx.splice(i, 1); continue; }
+      const k = 1 - h.t / 1.6;
+      if (Math.random() < dt * 40 * k) {
+        const a = Math.random() * Math.PI * 2, r = 0.32;
+        const [nx, ny, nz] = h.n;
+        // a point on the rim: any direction perpendicular to the normal
+        const t1 = Math.abs(ny) < 0.9 ? [nz, 0, -nx] : [0, -nz, ny];
+        const tl = Math.hypot(...t1) || 1; const u = t1.map((x) => x / tl);
+        const v = [ny * u[2] - nz * u[1], nz * u[0] - nx * u[2], nx * u[1] - ny * u[0]];
+        const x = h.p[0] + (u[0] * Math.cos(a) + v[0] * Math.sin(a)) * r, y = h.p[1] + (u[1] * Math.cos(a) + v[1] * Math.sin(a)) * r, z = h.p[2] + (u[2] * Math.cos(a) + v[2] * Math.sin(a)) * r;
+        const drip = Math.random() < 0.4;
+        this.glow.spawn({ x, y, z, vx: nx * (drip ? 0.2 : 1.5) + (Math.random() - 0.5), vy: ny * (drip ? 0.2 : 1.5) + (drip ? 0 : Math.random()), vz: nz * (drip ? 0.2 : 1.5) + (Math.random() - 0.5), life: drip ? 0.9 : 0.5, size: drip ? 0.08 : 0.06, end: 0.3, color: [0xfff2c0, 0xff6a10], g: drip ? 9 : 2, drag: 0.8 });
+      }
+    }
   }
 
   // charging: light gathers into the muzzle (yours and other players'), your screen shakes harder as it builds
@@ -1411,6 +1475,8 @@ export class Game {
     if (this.effects) this.effects.clear();
     this.r.scene.remove(this.mapObjects);
     this.beams?.clear();
+    this.rims?.clear();
+    setHoleUniforms([]);
     this.glow?.dispose();
     this.audio.adminCharge?.('local', null, false);
   }

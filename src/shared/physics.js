@@ -12,6 +12,21 @@ export class World {
     this.cells = new Map();
     for (const b of boxes) this.addBox(b);
     this._normal = [0, 0, 0];
+    this.holes = []; // round holes burnt through geometry (Admin Gun): { a:[x,y,z], b:[x,y,z], r }
+  }
+
+  setHoles(list) { this.holes = list || []; }
+  // Is this point inside a hole (within its radius of the hole's axis segment)?
+  inHole(x, y, z, pad = 0) {
+    for (const h of this.holes) {
+      const ax = h.a[0], ay = h.a[1], az = h.a[2];
+      const bx = h.b[0] - ax, by = h.b[1] - ay, bz = h.b[2] - az;
+      const l2 = bx * bx + by * by + bz * bz || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * bx + (y - ay) * by + (z - az) * bz) / l2));
+      const dx = x - (ax + bx * t), dy = y - (ay + by * t), dz = z - (az + bz * t);
+      if (dx * dx + dy * dy + dz * dz < (h.r - pad) * (h.r - pad)) return true;
+    }
+    return false;
   }
 
   addBox(src) {
@@ -70,8 +85,23 @@ export class World {
     return this.query(minX, minY, minZ, maxX, maxY, maxZ, (b) => b.col);
   }
 
-  // Ray cast against shot-blocking boxes. Returns { t, normal:[x,y,z], box } or null.
+  // Ray cast against shot-blocking boxes. Returns { t, normal:[x,y,z], box } or null. Shots (not
+  // player-collision rays) fly through holes burnt into the geometry.
   raycast(ox, oy, oz, dx, dy, dz, maxDist, forPlayers = false) {
+    if (forPlayers || !this.holes.length) return this._raycast(ox, oy, oz, dx, dy, dz, maxDist, false);
+    let off = 0;
+    for (let i = 0; i < 12; i++) {
+      const h = this._raycast(ox + dx * off, oy + dy * off, oz + dz * off, dx, dy, dz, maxDist - off, false);
+      if (!h) return null;
+      const t = off + h.t;
+      if (!this.inHole(ox + dx * t, oy + dy * t, oz + dz * t, 0.02)) return { ...h, t };
+      off = t + 0.05; // passes through the hole: keep going
+      if (off >= maxDist) return null;
+    }
+    return null;
+  }
+
+  _raycast(ox, oy, oz, dx, dy, dz, maxDist, forPlayers = false) {
     // 2D DDA across XZ cells.
     let cx = Math.floor(ox / CELL), cz = Math.floor(oz / CELL);
     const stepX = dx > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;

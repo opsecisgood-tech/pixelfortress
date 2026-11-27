@@ -93,6 +93,7 @@ export class ServerGame {
     else if (this.baseMaxPlayers) { this.maxPlayers = this.baseMaxPlayers; this.botFill = this.baseBotFill; }
     this.map = getMap(this.mapId);
     this.world = new World(this.map.boxes, this.map.bounds);
+    this.holes = []; this.holeVer = (this.holeVer || 0) + 1;
     if (!navCache.has(this.mapId)) navCache.set(this.mapId, new NavGraph(new World(this.map.boxes, this.map.bounds), this.map.bounds));
     this.nav = navCache.get(this.mapId);
     this.combat = new Combat(this);
@@ -202,8 +203,8 @@ export class ServerGame {
         if (!q) { say(`No player called "${args[0]}" in this match.`); return; }
         q.adminGun = !q.adminGun;
         this.applyAdminGun(q);
-        say(q.adminGun ? `${q === p ? 'You have' : `${q.name} has`} The Admin Gun (primary slot). Hold fire for 5 seconds to charge.` : `The Admin Gun was taken from ${q === p ? 'you' : q.name}.`);
-        if (q !== p) this.send(q.connId, { t: 'notice', text: q.adminGun ? 'An admin gave you The Admin Gun (primary slot). Hold fire for 5 seconds to charge.' : 'The Admin Gun was taken back.' });
+        say(q.adminGun ? `${q === p ? 'You have' : `${q.name} has`} The Admin Gun (primary slot). Hold fire for 3 seconds to charge.` : `The Admin Gun was taken from ${q === p ? 'you' : q.name}.`);
+        if (q !== p) this.send(q.connId, { t: 'notice', text: q.adminGun ? 'An admin gave you The Admin Gun (primary slot). Hold fire for 3 seconds to charge.' : 'The Admin Gun was taken back.' });
         return;
       }
       case 'nocd': toggle('nocd', 'No cooldowns (abilities and weapons)'); return;
@@ -236,6 +237,16 @@ export class ServerGame {
       case 'end': this.endMatch(this.scores[0] === this.scores[1] ? -1 : this.scores[0] > this.scores[1] ? 0 : 1, 'admin'); return;
       default: say(`Unknown command /${cmd}. Type /help.`);
     }
+  }
+
+  // A round hole burnt through the world by the Admin Gun (kept for the rest of the map, oldest first out).
+  addHole(a, b, r, na, nb, dir) {
+    const h = { a: a.map(round2), b: b.map(round2), r, na, nb, dir };
+    this.holes.push(h);
+    if (this.holes.length > 48) this.holes.splice(0, this.holes.length - 48);
+    this.holeVer++;
+    this.world.setHoles(this.holes);
+    return h;
   }
 
   // Put The Admin Gun in (or take it out of) the primary slot right away, keeping position and facing.
@@ -1052,6 +1063,7 @@ export class ServerGame {
     const common = {
       t: 's', st: round3(this.time), ms: this.state, tl: Math.max(0, Math.round(this.timeLeft * 10) / 10),
       sc: this.scores, pr: proj, tu: turrets, ch: charges, fl: flags, pk: pickups,
+      ho: this.holes.length ? { v: this.holeVer, h: this.holes.flatMap((h) => [...h.a, ...h.b, h.r]) } : null,
       pt: this.state === MATCH_STATE.PREROUND ? Math.round(this.stateTime * 10) / 10 : 0,
     };
     const odd = this.tickCount % 2 === 0;
