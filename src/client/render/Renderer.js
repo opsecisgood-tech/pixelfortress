@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { Viewmodel } from './Viewmodel.js';
 import { CrateStage } from './CrateStage.js';
 import { CharacterRig } from './CharacterModel.js';
-import { buildWeapon } from './WeaponModels.js';
+import { buildWeapon, tickWeaponFx } from './WeaponModels.js';
 import { tickCosmeticFx } from './CosmeticModels.js';
 import { bx, colorMat } from './blocks.js';
 import { getPlainMaterial as getWorldMaterial } from './textures.js';
@@ -54,7 +54,7 @@ export class Renderer {
 
   renderGame(showViewmodel) {
     const gl = this.gl;
-    tickCosmeticFx(performance.now() / 1000);
+    tickCosmeticFx(performance.now() / 1000); tickWeaponFx(performance.now() / 1000);
     gl.setRenderTarget(null);
     gl.clear();
     gl.render(this.scene, this.camera);
@@ -65,7 +65,7 @@ export class Renderer {
   }
 
   renderMenu(dt) {
-    tickCosmeticFx(performance.now() / 1000);
+    tickCosmeticFx(performance.now() / 1000); tickWeaponFx(performance.now() / 1000);
     this.gl.setRenderTarget(null);
     this.gl.clear();
     if (this.crateStage.active) {

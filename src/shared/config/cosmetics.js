@@ -134,6 +134,18 @@ const SKIN_PALETTES = [
   ['candy', 'Candy', 2, [0xff7ab8, 0xf4f4f4, 0x7ae0ff]], ['blaze', 'Blaze', 2, [0xe83a1a, 0xffb020, 0x3a0a04]],
   ['royal', 'Royal', 3, [0x4b2a7a, 0xe6b53a, 0x1c1030]], ['neon', 'Neon', 3, [0x140d24, 0xff4fb0, 0x3ff2ff]],
 ];
+// Animated wraps: a repeating pattern that moves across the weapon (drawn by a shader each frame).
+// [key, name, base tier]; the pattern id is `anim_<key>`.
+export const ANIM_PATTERNS = [
+  ['flow', 'Flowstream', 3], ['pulse', 'Pulse Grid', 3], ['tide', 'Tidal', 3], ['scan', 'Scanline', 3],
+  ['plasma', 'Plasma', 4], ['hexwave', 'Hex Wave', 4], ['rain', 'Data Rain', 4], ['inferno', 'Inferno', 4],
+];
+// [key, name, tier bonus, [base, pattern, highlight]]
+const ANIM_PALETTES = [
+  ['ion', 'Ion', 0, [0x0b1630, 0x2fd8ff, 0xe4ffff]], ['toxic', 'Toxic', 0, [0x0c1808, 0x6aff2a, 0xeaffd0]],
+  ['ember', 'Ember', 1, [0x1a0604, 0xff5a12, 0xffe2a0]], ['void', 'Void', 1, [0x0b0418, 0xa83cff, 0xffd0ff]],
+  ['gilded', 'Gilded', 2, [0x221404, 0xffbe2a, 0xfffbe0]],
+];
 const CLASS_SKINS = [
   ['scout', 'sandlot', 'Sandlot', 2, 'stripes', [0xefefef, 0x2a4a8a, 0xb02a2a]], ['scout', 'speedster', 'Speedster', 3, 'chevron', [0xffd020, 0x222222, 0xff5a20]],
   ['spy', 'velvet', 'Velvet', 2, 'damascus', [0x3a0d1a, 0x8a1c3a, 0xe8b34a]], ['spy', 'noir', 'Noir', 3, 'carbon', [0x111111, 0x2a2a2a, 0xefefef]],
@@ -213,6 +225,11 @@ function build() {
   for (const [cls, key, name, tier, pattern, colors] of CLASS_SKINS) {
     add({ id: `weaponSkin:${cls}_${key}:classic`, slot: 'weaponSkin', shape: pattern, name, rarity: tier, colors, fx: null, classes: [cls] });
     add({ id: `weaponSkin:${cls}_${key}:prismatic`, slot: 'weaponSkin', shape: pattern, name: `Prismatic ${name}`, rarity: 6, colors, fx: 'rainbow', classes: [cls] });
+  }
+  for (const [pk, pn, pt] of ANIM_PATTERNS) {
+    for (const [ck, cn, ct, colors] of ANIM_PALETTES) {
+      add({ id: `weaponSkin:anim_${pk}:${ck}`, slot: 'weaponSkin', shape: `anim_${pk}`, name: `${cn} ${pn}`, rarity: clampR(pt + ct), colors, fx: 'animated', classes: null });
+    }
   }
   add({ id: 'weaponSkin:factory:classic', slot: 'weaponSkin', shape: 'none', name: 'Factory Finish', rarity: 0, colors: null, fx: null, classes: null, starter: true });
   for (const [gk, gn, gt, color] of GLOVE_COLORS) {

@@ -21,8 +21,8 @@ const FRAG_CUT = `
   for (int hi = 0; hi < ${MAX_HOLES}; hi++) {
     if (hi >= holeCount) break;
     vec3 ha = holeA[hi].xyz; vec3 hab = holeB[hi] - ha;
-    float ht = clamp(dot(vHoleW - ha, hab) / max(dot(hab, hab), 1e-5), 0.0, 1.0);
-    if (distance(vHoleW, ha + hab * ht) < holeA[hi].w) discard;
+    float ht = dot(vHoleW - ha, hab) / max(dot(hab, hab), 1e-5);
+    if (ht > -0.05 && ht < 1.05 && distance(vHoleW, ha + hab * ht) < holeA[hi].w) discard;
   }`;
 
 // Patch every standard map material under root (once per material).

@@ -1180,7 +1180,7 @@ export class Game {
       const r = WEAPONS.admingun.holeRadius || 0.35;
       this.rims.add(a, na, hd, r);
       this.rims.add(b, nb, hd, r);
-      this.holeFx.push({ p: a, n: na, t: 0 }, { p: b, n: nb, t: 0 });
+      this.holeFx.push({ p: a, n: na, t: 0, r }, { p: b, n: nb, t: 0, r });
       this.effects.flashLight(a[0], a[1], a[2], 0xffc060, 6, 6, 0.3);
     }
     // the far end of the beam
@@ -1199,7 +1199,7 @@ export class Game {
     if (ver === this.holeVer) return;
     this.holeVer = ver;
     const list = [];
-    if (ho) for (let i = 0; i + 6 < ho.h.length + 1; i += 7) list.push({ a: ho.h.slice(i, i + 3), b: ho.h.slice(i + 3, i + 6), r: ho.h[i + 6] });
+    if (ho) for (let i = 0; i + 7 < ho.h.length + 1; i += 8) list.push({ a: ho.h.slice(i, i + 3), b: ho.h.slice(i + 3, i + 6), r: ho.h[i + 6], box: ho.h[i + 7] >= 0 ? ho.h[i + 7] : undefined });
     if (!list.length) this.rims.clear();
     setHoleUniforms(list);
     this.net.world?.setHoles(list);
@@ -1212,7 +1212,7 @@ export class Game {
       if (h.t > 1.6) { this.holeFx.splice(i, 1); continue; }
       const k = 1 - h.t / 1.6;
       if (Math.random() < dt * 40 * k) {
-        const a = Math.random() * Math.PI * 2, r = 0.32;
+        const a = Math.random() * Math.PI * 2, r = h.r || 0.35;
         const [nx, ny, nz] = h.n;
         // a point on the rim: any direction perpendicular to the normal
         const t1 = Math.abs(ny) < 0.9 ? [nz, 0, -nx] : [0, -nz, ny];

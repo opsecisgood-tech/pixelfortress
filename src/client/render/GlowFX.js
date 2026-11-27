@@ -208,6 +208,14 @@ export class BeamFX {
       m.renderOrder = L.glowOnly ? 6 : 7;
       group.add(m);
     }
+    // a plain solid core tube (no custom shader) under the ribbons, so the beam is always drawn even on
+    // devices or drivers where the ribbon shader would struggle
+    const baseGeo = new THREE.TubeGeometry(curve, Math.max(8, Math.min(160, Math.round(len * 1.5))), 0.07, 6, false);
+    const baseMat = new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 1, depthWrite: false, toneMapped: false });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.frustumCulled = false;
+    base.renderOrder = 6;
+    group.add(base);
     this.scene.add(group);
     // particle emitters along the whole beam: embers and bright sparks shed off the light
     const n = Math.min(450, Math.round(len * 6));
@@ -219,18 +227,20 @@ export class BeamFX {
       const sp = 0.6 + Math.random() * 2.4;
       this.glow.spawn({ x: p.x, y: p.y, z: p.z, vx: r.x * sp + tan.x * 0.6, vy: r.y * sp + 0.3, vz: r.z * sp + tan.z * 0.6, life: 0.5 + Math.random() * 0.9, size: 0.12 + Math.random() * 0.22, end: 0.1, color: [t < 0.5 ? 0xffd040 : 0xfff6c8, 0xff9a20], drag: 2.2, g: -0.4 });
     }
-    this.beams.push({ group, geo, mats, t: 0, life, curve, len, emitT: 0 });
+    this.beams.push({ group, geo, mats, base, t: 0, life, curve, len, emitT: 0 });
     return curve;
   }
 
   update(dt) {
     for (let i = this.beams.length - 1; i >= 0; i--) {
       const b = this.beams[i];
-      b.t += dt;
+      b.t += Math.min(dt, 0.12); // a hitch on a slow device can't swallow the whole beam in one frame
       const k = b.t / b.life;
       // a quick flare, then the beam thins and fades
       const flare = k < 0.1 ? 1.35 - k * 3.5 : 1;
       const thin = Math.max(0.15, 1 - k * k);
+      b.base.material.opacity = Math.min(1, (1 - k) * 1.6);
+      b.base.scale.setScalar(1);
       for (const m of b.mats) {
         m.mat.uniforms.fade.value = m.a * Math.min(1, (1 - k) * 1.6);
         m.mat.uniforms.width.value = m.w * thin * flare;
@@ -252,6 +262,7 @@ export class BeamFX {
     this.scene.remove(b.group);
     b.geo.dispose();
     for (const m of b.mats) m.mat.dispose();
+    b.base.geometry.dispose(); b.base.material.dispose();
     this.beams.splice(i, 1);
   }
   clear() { while (this.beams.length) this.remove(this.beams.length - 1); }

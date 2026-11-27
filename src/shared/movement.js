@@ -67,11 +67,11 @@ function moveAxis(world, s, axis, delta, h, canStep) {
   }
   // Clamp flush against the blocking geometry.
   let limit = delta > 0 ? Infinity : -Infinity;
+  const q0 = Math.min(s.x, nx) - R, q1 = s.y + EPS, q2 = Math.min(s.z, nz) - R, q3 = Math.max(s.x, nx) + R, q4 = s.y + h - EPS, q5 = Math.max(s.z, nz) + R;
   world.query(
-    Math.min(s.x, nx) - R, s.y + EPS, Math.min(s.z, nz) - R,
-    Math.max(s.x, nx) + R, s.y + h - EPS, Math.max(s.z, nz) + R,
+    q0, q1, q2, q3, q4, q5,
     (b) => {
-      if (!b.col) return false;
+      if (!(world.solid ? world.solid(b, nx - R, s.y + EPS, nz - R, nx + R, s.y + h - EPS, nz + R) : b.col)) return false;
       if (axis === 0) {
         if (b.maxZ <= s.z - R || b.minZ >= s.z + R) return false;
         if (delta > 0 && b.minX >= s.x + R - EPS) limit = Math.min(limit, b.minX - R - EPS);
@@ -100,14 +100,14 @@ function moveVertical(world, s, delta, h) {
   if (delta < 0) {
     let top = -Infinity;
     world.query(s.x - R, ny, s.z - R, s.x + R, s.y + EPS, s.z + R, (b) => {
-      if (b.col && b.maxY > top && b.maxY <= s.y + EPS * 2) top = b.maxY;
+      if (b.col && b.maxY > top && b.maxY <= s.y + EPS * 2 && !(world.holeCovers && world.holeCovers(b, s.x - R, ny, s.z - R, s.x + R, s.y + EPS, s.z + R))) top = b.maxY;
     });
     s.y = Number.isFinite(top) ? Math.max(ny, top + EPS) : s.y;
     return -1; // landed
   }
   let bottom = Infinity;
   world.query(s.x - R, s.y + h - EPS, s.z - R, s.x + R, ny + h, s.z + R, (b) => {
-    if (b.col && b.minY < bottom && b.minY >= s.y + h - EPS * 2) bottom = b.minY;
+    if (b.col && b.minY < bottom && b.minY >= s.y + h - EPS * 2 && !(world.holeCovers && world.holeCovers(b, s.x - R, s.y + h - EPS, s.z - R, s.x + R, ny + h, s.z + R))) bottom = b.minY;
   });
   s.y = Number.isFinite(bottom) ? Math.min(ny, bottom - h - EPS) : s.y;
   return 1; // bonked ceiling

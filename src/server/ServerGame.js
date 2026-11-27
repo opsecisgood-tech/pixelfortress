@@ -240,8 +240,8 @@ export class ServerGame {
   }
 
   // A round hole burnt through the world by the Admin Gun (kept for the rest of the map, oldest first out).
-  addHole(a, b, r, na, nb, dir) {
-    const h = { a: a.map(round2), b: b.map(round2), r, na, nb, dir };
+  addHole(a, b, r, na, nb, dir, box) {
+    const h = { a: a.map(round2), b: b.map(round2), r, na, nb, dir, box };
     this.holes.push(h);
     if (this.holes.length > 48) this.holes.splice(0, this.holes.length - 48);
     this.holeVer++;
@@ -1063,7 +1063,7 @@ export class ServerGame {
     const common = {
       t: 's', st: round3(this.time), ms: this.state, tl: Math.max(0, Math.round(this.timeLeft * 10) / 10),
       sc: this.scores, pr: proj, tu: turrets, ch: charges, fl: flags, pk: pickups,
-      ho: this.holes.length ? { v: this.holeVer, h: this.holes.flatMap((h) => [...h.a, ...h.b, h.r]) } : null,
+      ho: this.holes.length ? { v: this.holeVer, h: this.holes.flatMap((h) => [...h.a, ...h.b, h.r, h.box ?? -1]) } : null,
       pt: this.state === MATCH_STATE.PREROUND ? Math.round(this.stateTime * 10) / 10 : 0,
     };
     const odd = this.tickCount % 2 === 0;

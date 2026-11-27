@@ -114,3 +114,23 @@ test('admin gun: pierces walls (burning round holes shots pass through) and hits
   const r = g.world.raycast(o[0], o[1], o[2], d[0] / l, d[1] / l, d[2] / l, l + 2);
   assert.ok(!r || r.t > l + 0.5, 'shots fly through the hole');
 });
+
+test('admin gun holes are real gaps: fall through a floor hole, crouch through a wall hole', async () => {
+  const { World } = await import('../src/shared/physics.js');
+  const { createMoveState, stepMovement, moveParamsFor } = await import('../src/shared/movement.js');
+  const w = new World([{ min: [-10, -1, -10], max: [10, 0, 10] }, { min: [-5, 0, -3], max: [5, 4, -2.5] }]);
+  const P = moveParamsFor(getClass('soldier'));
+  const r = WEAPONS.admingun.holeRadius;
+  w.setHoles([{ a: [0, 0.01, 0], b: [0, -1.01, 0], r, box: 0 }]);
+  let s = createMoveState(0, 0.001, 0, 0);
+  for (let i = 0; i < 60; i++) stepMovement(s, { b: 0, dt: 1 / 60, y: 0, p: 0 }, w, P);
+  assert.ok(s.y < -1, 'fell through the floor hole');
+  w.setHoles([{ a: [0, 0.65, -2.49], b: [0, 0.65, -3.01], r, box: 1 }]);
+  const walk = (crouch) => { const m = createMoveState(0, 0.001, 0, 0); for (let i = 0; i < 150; i++) stepMovement(m, { b: BTN.FORWARD | (crouch ? BTN.CROUCH : 0), dt: 1 / 60, y: 0, p: 0 }, w, P); return m; };
+  assert.ok(walk(false).z > -2.2, 'standing up you bump into the rim');
+  assert.ok(walk(true).z < -3.2, 'crouched you fit through');
+  // the floor right next to the wall hole is untouched
+  s = createMoveState(0, 0.001, -2.0, 0);
+  for (let i = 0; i < 60; i++) stepMovement(s, { b: 0, dt: 1 / 60, y: 0, p: 0 }, w, P);
+  assert.ok(s.y > -0.01, 'the floor beside the hole still holds you');
+});

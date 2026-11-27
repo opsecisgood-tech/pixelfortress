@@ -3,7 +3,7 @@
 // Guns: barrel points -Z, grip pixel at the origin. Melee: tip points +Y, grip at the origin.
 // Weapon skins recolour palette keys.
 import * as THREE from 'three';
-import { PixelSprite, voxelizeSprite, VOXEL_MATERIAL, VOXEL_GLOW_MATERIAL } from './voxel.js';
+import { PixelSprite, voxelizeSprite, VOXEL_MATERIAL, VOXEL_GLOW_MATERIAL, ANIM_BIT } from './voxel.js';
 import { colorMat, boxGeo } from './blocks.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 import { getItem } from '../../shared/config/cosmetics.js';
@@ -36,6 +36,8 @@ const GLOW_BIT = 0x1000000;
 function hsl(h, s, l) { return new THREE.Color().setHSL(h, s, l).getHex(); }
 function skinPattern(item) {
   if (!item || item.slot !== 'weaponSkin' || item.shape === 'none' || !item.colors) return null;
+  // animated wraps: the body voxels keep only their light/dark tone; the wrap shader paints the moving pattern
+  if (item.fx === 'animated') return (x, y, k) => { const f = SKINNABLE[k]; return f === undefined ? null : tone(0x808080, f) | ANIM_BIT; };
   const [A, B, C] = item.colors;
   const glowy = item.fx === 'glow', rainbow = item.fx === 'rainbow';
   return (x, y, k) => {
@@ -573,6 +575,73 @@ function buildGeometry(id, skin, team) {
   return g;
 }
 
+// ---------------------------------------------------------------- animated wraps
+// A repeating pattern that moves across the weapon's body: computed per pixel from the voxel's position
+// in the weapon (so it wraps around every face) and the time. Each wrap has a 3-colour palette
+// [base, pattern, highlight]; the bright parts glow.
+const WRAP_TIME = { value: 0 };
+export function tickWeaponFx(t) { WRAP_TIME.value = t; }
+const WRAP_PATTERNS = ['flow', 'pulse', 'tide', 'scan', 'plasma', 'hexwave', 'rain', 'inferno'];
+const WRAP_GLSL = `
+uniform vec3 wA; uniform vec3 wB; uniform vec3 wC; uniform float wT; uniform int wPat;
+varying vec3 vWrapP;
+float wH(float n) { return fract(sin(n) * 43758.5453); }
+vec3 wrapColor(out float glow) {
+  vec3 p = vWrapP * 9.0; float t = wT;
+  float u = p.y - p.z, v = p.y + p.z + p.x * 0.5;
+  float k = 0.0; glow = 0.0;
+  if (wPat == 0) {        // flow: bands streaming along the weapon
+    float s = fract(u * 0.35 - t * 0.9); k = smoothstep(0.0, 0.08, s) * smoothstep(0.5, 0.42, s); glow = k;
+  } else if (wPat == 1) { // pulse grid: a grid with light pulses racing along it
+    vec2 g = abs(fract(vec2(u, v) * 0.5) - 0.5); float line = 1.0 - smoothstep(0.03, 0.09, min(g.x, g.y));
+    float pulse = pow(0.5 + 0.5 * sin(u * 1.2 - t * 5.0), 6.0); k = line * (0.35 + 0.65 * pulse); glow = line * pulse;
+  } else if (wPat == 2) { // tide: rolling waves
+    float w = sin(u * 0.9 + sin(v * 0.7 + t * 1.3) * 1.6 - t * 2.2); k = smoothstep(0.2, 0.9, w); glow = smoothstep(0.75, 1.0, w);
+  } else if (wPat == 3) { // scanline: fine lines and a bright sweep
+    float lines = step(0.5, fract(v * 1.5)); float d = (fract(u * 0.08 - t * 0.35) - 0.5) * 14.0; float sweep = exp(-d * d);
+    k = 0.25 * lines + sweep; glow = sweep;
+  } else if (wPat == 4) { // plasma
+    float s = sin(u * 0.8 + t * 1.7) + sin(v * 0.9 - t * 1.3) + sin((u + v) * 0.5 + t * 2.1) + sin(length(vec2(u, v)) * 0.6 - t * 1.6);
+    k = 0.5 + 0.5 * sin(s * 1.4); glow = smoothstep(0.8, 1.0, k);
+  } else if (wPat == 5) { // hex wave: hex cells lighting up in a travelling wave
+    vec2 q = vec2(u, v * 1.1547); vec2 r = vec2(1.0, 1.732); vec2 h = r * 0.5;
+    vec2 a = mod(q, r) - h; vec2 b = mod(q - h, r) - h; vec2 gv = dot(a, a) < dot(b, b) ? a : b; vec2 id = q - gv;
+    float edge = smoothstep(0.42, 0.48, max(abs(gv.x) * 0.866 + abs(gv.y) * 0.5, abs(gv.y)));
+    float wave = pow(0.5 + 0.5 * sin(id.x * 0.6 - t * 3.0 + wH(id.x * 7.0 + id.y * 13.0) * 2.0), 4.0);
+    k = max(edge * 0.8, wave * 0.9); glow = wave * (1.0 - edge) * 0.9 + edge * 0.3;
+  } else if (wPat == 6) { // data rain
+    float col = floor(v * 1.2); float sp = 0.6 + wH(col) * 1.2; float y = fract(u * 0.12 + t * sp * 0.5 + wH(col * 3.1));
+    float head = smoothstep(0.92, 1.0, y); float trail = smoothstep(0.4, 1.0, y) * step(fract(v * 1.2), 0.7);
+    k = trail * 0.7 + head; glow = head + trail * 0.3;
+  } else {                // inferno: licking flames
+    float f = fract(v * 0.25 - t * 0.9 + sin(u * 0.8 + t * 2.0) * 0.15); float n = sin(u * 1.3 + t * 3.0) * 0.5 + 0.5;
+    k = smoothstep(0.2, 0.9, f * n + f * 0.4); glow = smoothstep(0.6, 1.0, k);
+  }
+  k = clamp(k, 0.0, 1.0);
+  vec3 c = mix(wA, wB, smoothstep(0.0, 0.6, k));
+  return mix(c, wC, smoothstep(0.75, 1.0, k));
+}
+`;
+const wrapMats = new Map();
+function wrapMaterial(item) {
+  const key = item?.id || 'none';
+  if (wrapMats.has(key)) return wrapMats.get(key);
+  const [A, B, C] = item?.colors || [0x222222, 0x888888, 0xffffff];
+  const pat = Math.max(0, WRAP_PATTERNS.indexOf(String(item?.shape || '').replace('anim_', '')));
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const uniforms = { wA: { value: new THREE.Color(A) }, wB: { value: new THREE.Color(B) }, wC: { value: new THREE.Color(C) }, wT: WRAP_TIME, wPat: { value: pat } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.vertexShader = 'varying vec3 vWrapP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWrapP = position;');
+    sh.fragmentShader = WRAP_GLSL + sh.fragmentShader
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  float wGlow; vec3 wCol = wrapColor(wGlow);\n  diffuseColor.rgb = wCol * (vColor.r * 2.0);')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += wCol * wGlow * 0.9;');
+  };
+  m.customProgramCacheKey = () => 'weaponwrap';
+  wrapMats.set(key, m);
+  return m;
+}
+
 /**
  * Build a THREE.Group for a weapon.
  * opts: { skin, team, scale, shadow }
@@ -586,6 +655,7 @@ export function buildWeapon(id, opts = {}) {
   solid.castShadow = opts.shadow !== false;
   g.add(solid);
   if (geo.glow) g.add(new THREE.Mesh(geo.glow, VOXEL_GLOW_MATERIAL));
+  if (geo.anim) { const am = new THREE.Mesh(geo.anim, wrapMaterial(getItem(opts.skin))); am.castShadow = opts.shadow !== false; g.add(am); }
   let spin = null;
   if (def.spin) {
     // rotary barrel cluster: six outlined voxel rods around the bore axis

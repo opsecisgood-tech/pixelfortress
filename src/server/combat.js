@@ -138,7 +138,7 @@ export class Combat {
         const a = [pos[0] + dir[0] * r.t0, pos[1] + dir[1] * r.t0, pos[2] + dir[2] * r.t0];
         const z = [pos[0] + dir[0] * r.t1, pos[1] + dir[1] * r.t1, pos[2] + dir[2] * r.t1];
         let hole = open.get(bx);
-        if (!hole) { hole = { a, b: z, na: r.n0 || [-dir[0], -dir[1], -dir[2]], nb: r.n1 }; open.set(bx, hole); holesNow.push(hole); }
+        if (!hole) { hole = { a, b: z, na: r.n0 || [-dir[0], -dir[1], -dir[2]], nb: r.n1, box: bx.id }; open.set(bx, hole); holesNow.push(hole); }
         else { hole.b = z; if (r.n1) hole.nb = r.n1; }
         return false;
       });
@@ -149,7 +149,7 @@ export class Combat {
       if (pos[1] < (g.map.killY ?? -20) || pos[1] > 80 || pos[0] < b.minX - 12 || pos[0] > b.maxX + 12 || pos[2] < b.minZ - 12 || pos[2] > b.maxZ + 12) break;
     }
     pts.push([pos[0], pos[1], pos[2]]);
-    const holes = holesNow.slice(0, def.holesPerShot || 24).map((h) => g.addHole(h.a, h.b, def.holeRadius || 0.35, h.na, h.nb || [dir[0], dir[1], dir[2]], dir));
+    const holes = holesNow.slice(0, def.holesPerShot || 24).map((h) => g.addHole(h.a, h.b, def.holeRadius || 0.35, h.na, h.nb || [dir[0], dir[1], dir[2]], dir, h.box));
     g.event(['agb', p.id, pts.flat().map(round2), victims.map((q) => q.id), holes.flatMap((h) => [...h.a, ...h.b, ...h.na, ...h.nb].map(round2))]);
     for (const q of victims) this.damage(q, def.damage, p, def.id, { raw: true, point: centre(q), knock: 6 });
   }

@@ -15,19 +15,48 @@ export class World {
     this.holes = []; // round holes burnt through geometry (Admin Gun): { a:[x,y,z], b:[x,y,z], r }
   }
 
-  setHoles(list) { this.holes = list || []; }
+  setHoles(list) {
+    this.holes = (list || []).map((h) => ({
+      ...h,
+      min: [Math.min(h.a[0], h.b[0]) - h.r, Math.min(h.a[1], h.b[1]) - h.r, Math.min(h.a[2], h.b[2]) - h.r],
+      max: [Math.max(h.a[0], h.b[0]) + h.r, Math.max(h.a[1], h.b[1]) + h.r, Math.max(h.a[2], h.b[2]) + h.r],
+    }));
+  }
+  // squared distance from the hole's axis, or Infinity outside the cylinder's two end faces
+  static holeD2(h, x, y, z) {
+    const ax = h.a[0], ay = h.a[1], az = h.a[2];
+    const bx = h.b[0] - ax, by = h.b[1] - ay, bz = h.b[2] - az;
+    const l2 = bx * bx + by * by + bz * bz || 1;
+    const t = ((x - ax) * bx + (y - ay) * by + (z - az) * bz) / l2;
+    if (t < -0.05 || t > 1.05) return Infinity;
+    const dx = x - (ax + bx * t), dy = y - (ay + by * t), dz = z - (az + bz * t);
+    return dx * dx + dy * dy + dz * dz;
+  }
   // Is this point inside a hole (within its radius of the hole's axis segment)?
   inHole(x, y, z, pad = 0) {
+    for (const h of this.holes) if (World.holeD2(h, x, y, z) < (h.r - pad) * (h.r - pad)) return true;
+    return false;
+  }
+  // A box doesn't block a region if the part of the box inside that region lies wholly inside one hole
+  // (the hole cylinder is convex, so checking the 8 corners of the overlap is enough). This makes holes
+  // real gaps: players fall through holes in floors and fit through big enough holes in walls.
+  holeCovers(b, x0, y0, z0, x1, y1, z1) {
+    if (!this.holes.length) return false;
+    const ix0 = Math.max(b.minX, x0), iy0 = Math.max(b.minY, y0), iz0 = Math.max(b.minZ, z0);
+    const ix1 = Math.min(b.maxX, x1), iy1 = Math.min(b.maxY, y1), iz1 = Math.min(b.maxZ, z1);
+    if (ix0 > ix1 || iy0 > iy1 || iz0 > iz1) return false;
     for (const h of this.holes) {
-      const ax = h.a[0], ay = h.a[1], az = h.a[2];
-      const bx = h.b[0] - ax, by = h.b[1] - ay, bz = h.b[2] - az;
-      const l2 = bx * bx + by * by + bz * bz || 1;
-      const t = Math.max(0, Math.min(1, ((x - ax) * bx + (y - ay) * by + (z - az) * bz) / l2));
-      const dx = x - (ax + bx * t), dy = y - (ay + by * t), dz = z - (az + bz * t);
-      if (dx * dx + dy * dy + dz * dz < (h.r - pad) * (h.r - pad)) return true;
+      if (h.box !== undefined && h.box !== b.id) continue; // a hole only opens the object it was burnt into
+      if (ix0 < h.min[0] || ix1 > h.max[0] || iy0 < h.min[1] || iy1 > h.max[1] || iz0 < h.min[2] || iz1 > h.max[2]) continue;
+      const r2 = h.r * h.r;
+      let all = true;
+      for (let c = 0; c < 8 && all; c++) if (World.holeD2(h, c & 1 ? ix1 : ix0, c & 2 ? iy1 : iy0, c & 4 ? iz1 : iz0) >= r2) all = false;
+      if (all) return true;
     }
     return false;
   }
+  // Does box b block a body occupying this region?
+  solid(b, x0, y0, z0, x1, y1, z1) { return b.col && !this.holeCovers(b, x0, y0, z0, x1, y1, z1); }
 
   addBox(src) {
     const b = {
@@ -82,7 +111,7 @@ export class World {
 
   // True if a solid (player-blocking) box overlaps.
   overlapsSolid(minX, minY, minZ, maxX, maxY, maxZ) {
-    return this.query(minX, minY, minZ, maxX, maxY, maxZ, (b) => b.col);
+    return this.query(minX, minY, minZ, maxX, maxY, maxZ, (b) => b.col && !this.holeCovers(b, minX, minY, minZ, maxX, maxY, maxZ));
   }
 
   // Ray cast against shot-blocking boxes. Returns { t, normal:[x,y,z], box } or null. Shots (not
@@ -154,7 +183,7 @@ export class World {
   floorBelow(x, z, yStart, r = 0.05) {
     let best = -Infinity;
     this.query(x - r, -1000, z - r, x + r, yStart, z + r, (b) => {
-      if (b.col && b.maxY <= yStart + 1e-3 && b.maxY > best) best = b.maxY;
+      if (b.col && b.maxY <= yStart + 1e-3 && b.maxY > best && !this.holeCovers(b, x - r, b.maxY - 0.05, z - r, x + r, b.maxY, z + r)) best = b.maxY;
     });
     return best;
   }
@@ -163,7 +192,7 @@ export class World {
   groundBox(x, y, z, r) {
     let found = null, top = -Infinity;
     this.query(x - r, y - 0.08, z - r, x + r, y + 0.02, z + r, (b) => {
-      if (b.col && b.maxY <= y + 0.03 && b.maxY > top) { top = b.maxY; found = b; }
+      if (b.col && b.maxY <= y + 0.03 && b.maxY > top && !this.holeCovers(b, x - r, y - 0.08, z - r, x + r, y + 0.02, z + r)) { top = b.maxY; found = b; }
     });
     return found;
   }

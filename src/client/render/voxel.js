@@ -86,6 +86,7 @@ const OUTLINE = 0x17181b;
  * map(i, j, layer) -> [x, y, z] in metres for the voxel centre; size: voxel edge length.
  * Returns { solid: BufferGeometry, glow: BufferGeometry|null }
  */
+export const ANIM_BIT = 0x2000000; // pattern colour flag: this voxel belongs to an animated wrap
 export function voxelizeSprite(sprite, pal, opts) {
   const { size, glowKeys = new Set(), outline = true, seed = 1 } = opts;
   // pad by one pixel so outlines never fall off the canvas
@@ -115,13 +116,20 @@ export function voxelizeSprite(sprite, pal, opts) {
   }
   // 2) colours per pixel with automatic highlight / shade
   const rnd = mulberry32(seed);
-  const patGlow = new Set();
+  const patGlow = new Set(), patAnim = new Set();
   const colAt = (x, y) => {
     const k = key[y * W + x];
     if (k === '__ol') return OUTLINE;
     let c = pal[k] ?? 0xff00ff;
     if (k === 'hl') return 0xf6f6f2;
-    if (opts.pattern) { const pc = opts.pattern(x - 1, y - 1, k, c); if (pc != null) { c = pc & 0xffffff; if (pc > 0xffffff) patGlow.add(y * W + x); } }
+    if (opts.pattern) {
+      const pc = opts.pattern(x - 1, y - 1, k, c);
+      if (pc != null) {
+        c = pc & 0xffffff;
+        if (pc & ANIM_BIT) patAnim.add(y * W + x); // animated wrap: drawn by the wrap shader
+        else if (pc > 0xffffff) patGlow.add(y * W + x);
+      }
+    }
     const up = y > 0 ? key[(y - 1) * W + x] : null;
     const dn = y < H - 1 ? key[(y + 1) * W + x] : null;
     let f = 1 + (rnd() - 0.5) * 0.07;
@@ -142,9 +150,10 @@ export function voxelizeSprite(sprite, pal, opts) {
     const d = Math.min(maxD, depth[y * W + x] | 1);
     const c = colAt(x, y);
     const glow = glowKeys.has(k) || patGlow.has(y * W + x);
-    for (let l = -(d - 1) / 2; l <= (d - 1) / 2; l++) { put(x, y, l, 1); cells.push([x, y, l, c, glow]); }
+    const anim = patAnim.has(y * W + x);
+    for (let l = -(d - 1) / 2; l <= (d - 1) / 2; l++) { put(x, y, l, 1); cells.push([x, y, l, c, glow, anim]); }
   }
-  const builders = { solid: newBuilder(), glow: newBuilder() };
+  const builders = { solid: newBuilder(), glow: newBuilder(), anim: newBuilder() };
   const half = size / 2;
   const tmpC = new THREE.Color();
   // faces: [dx, dy(sprite rows), dl, normalSign axis]
@@ -156,9 +165,9 @@ export function voxelizeSprite(sprite, pal, opts) {
     { n: [0, 0, 1], d: [-1, 0, 0], shade: 0.86 },
     { n: [0, 0, -1], d: [1, 0, 0], shade: 0.86 },
   ];
-  for (const [x, y, l, c, glow] of cells) {
+  for (const [x, y, l, c, glow, anim] of cells) {
     const centre = map(x, y, l);
-    const b = glow ? builders.glow : builders.solid;
+    const b = anim ? builders.anim : glow ? builders.glow : builders.solid;
     for (const f of FACES) {
       if (ok(x + f.d[0], y + f.d[1], l + f.d[2])) continue;
       tmpC.setHex(shadeHex(c, glow ? 1 : f.shade));
@@ -168,7 +177,7 @@ export function voxelizeSprite(sprite, pal, opts) {
       addQuad(b, centre, [nx, ny, nz], half, tmpC);
     }
   }
-  return { solid: finish(builders.solid), glow: finish(builders.glow) };
+  return { solid: finish(builders.solid), glow: finish(builders.glow), anim: finish(builders.anim) };
 }
 
 function newBuilder() { return { pos: [], nor: [], col: [], idx: [], n: 0 }; }

@@ -85,7 +85,7 @@ def('revolver', {
 def('admingun', {
   name: 'The Admin Gun', slot: 0, type: 'hitscan', category: 'Admin',
   description: 'Charge for three seconds, then release a heat-seeking beam that pierces everything, destroys every enemy it touches and burns holes through walls.',
-  damage: 1000, fireInterval: 0.9, clip: -1, chargeShot: 3, adminBeam: true, holeRadius: 0.35, holesPerShot: 24,
+  damage: 1000, fireInterval: 0.9, clip: -1, chargeShot: 3, adminBeam: true, holeRadius: 0.8, holesPerShot: 24,
   range: 160, effectiveRange: 160, minFalloff: 1,
   seek: { cone: 0.55, range: 90, turn: 0.07, step: 0.5 },
   recoil: { pitch: 0.12, yaw: 0.02 }, kick: 2.2, tracer: 0xfff0a0, botRange: 40, adminOnly: true,
