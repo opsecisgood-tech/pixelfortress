@@ -3,7 +3,9 @@
 import { BTN } from '../../shared/constants.js';
 import { DEFAULT_MOBILE_LAYOUT, saveSettings } from '../settings.js';
 
-const LABELS = { fire: 'FIRE', jump: 'JUMP', reload: 'R', ability: 'E', crouch: 'C', weapon: '⇄', alt: 'ALT', sprint: 'RUN' };
+const LABELS = { fire: 'FIRE', jump: 'JUMP', reload: 'R', ability: 'E', crouch: 'C', weapon: '⇄', alt: 'ALT', sprint: 'RUN', minionPrev: '◀ K', minionNext: 'L ▶', minionFree: 'J ✕' };
+// Soul-Stealer minion buttons: K back, L forward, J free
+const MINION = { minionPrev: 'prev', minionNext: 'next', minionFree: 'free' };
 
 export class TouchControls {
   constructor(root, settings) {
@@ -33,6 +35,7 @@ export class TouchControls {
       const b = el('div', `touch-btn tb-${id}`);
       b.textContent = LABELS[id];
       b.dataset.id = id;
+      if (MINION[id]) b.classList.add('tb-minion');
       this.buttons[id] = b;
       this.root.appendChild(b);
     }
@@ -87,6 +90,13 @@ export class TouchControls {
     this.root.style.display = on ? 'block' : 'none';
   }
 
+  // the minion buttons only appear while you hold minions (always while editing the layout)
+  setMinionButtons(on) {
+    if (on === this.minionOn) return;
+    this.minionOn = on;
+    this.root.classList.toggle('has-minions', on);
+  }
+
   setEditing(on) {
     this.editing = on;
     this.root.classList.toggle('editing', on);
@@ -124,6 +134,7 @@ export class TouchControls {
         this.held.add(id);
         if (id === 'weapon') this.actions.push({ type: 'cycle', dir: 1 });
         if (id === 'sprint') this.sprintToggle = !this.sprintToggle;
+        if (MINION[id]) this.actions.push({ type: 'minion', a: MINION[id] });
         // fire button doubles as a look pad
         if (id === 'fire' && this.look.id === null) { this.look = { id: t.identifier, x: t.clientX, y: t.clientY }; }
         continue;

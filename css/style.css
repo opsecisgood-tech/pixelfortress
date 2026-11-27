@@ -1031,4 +1031,9 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .minion-panel .mn-row.on { background: rgba(255,110,30,.35); box-shadow: inset 2px 0 0 #ffb040; }
 .minion-panel .mn-row.dead { opacity: .45; }
 .minion-panel .mn-sub { margin-top: 5px; font-weight: 400; font-size: 11px; color: #d9b8a0; line-height: 1.35; }
-@media (max-width: 700px) { .minion-panel { top: 30%; left: 8px; min-width: 130px; font-size: 11px; } }
+@media (max-width: 700px), (max-height: 500px) { .minion-panel { top: 72px; left: 8px; min-width: 120px; max-width: 180px; padding: 5px 7px; font-size: 10px; } .minion-panel .mn-sub { font-size: 9px; } }
+
+/* Soul-Stealer minion buttons on touch screens: hidden until you hold minions */
+.touch-root .touch-btn.tb-minion { display: none; font-size: 13px; background: rgba(120,30,10,.55); border-color: rgba(255,140,50,.75); color: #ffd6b0; }
+.touch-root.has-minions .touch-btn.tb-minion, .touch-root.editing .touch-btn.tb-minion { display: grid; }
+.touch-root .touch-btn.tb-minion.down { background: rgba(255,140,50,.85); color: #111; }

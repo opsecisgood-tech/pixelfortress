@@ -2,8 +2,10 @@
 import { getClass } from '../shared/config/classes.js';
 import { shotDirections } from '../shared/weaponLogic.js';
 import { rayAabb, round2 } from '../shared/math.js';
+import { eyeHeight } from '../shared/movement.js';
 
-export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt', 'sticky', 'hopshell', 'cluster', 'bomblet'];
+export const PROJECTILE_KINDS = ['rivet', 'syringe', 'flare', 'shell', 'charge', 'detcharge', 'arrow', 'bolt', 'sticky', 'hopshell', 'cluster', 'bomblet', 'soulhead'];
+export const SOUL_HEAD_VARIANTS = 9; // which class's head a soul head wears (random per pellet)
 export const MAX_STICKIES = 8;
 
 // Shared muzzle offset so client-predicted projectiles line up with server ones.
@@ -35,9 +37,12 @@ export class Projectiles {
         explode: pr.explode || null, damage: def.damage, ignite: !!pr.ignite, fuseExplode: !!pr.fuseExplode,
         crit: def.crit, critMult: def.critMult, key: ev.shot,
         stick: !!pr.stick, noAutoExplode: !!pr.noAutoExplode, armTime: pr.armTime || 0, passPlayers: !!pr.passPlayers,
+        seek: pr.seek || null, burn: def.burn || null, variant: pr.kind === 'soulhead' ? Math.floor(Math.random() * SOUL_HEAD_VARIANTS) : 0,
       });
     }
     if (pr.kind === 'sticky') this.capStickies(p.id);
+    // the Soul-Stealer's blast (sound + muzzle flame on other screens; a minion's own screen too)
+    if (def.fireTrail) this.g.event(['sf', p.id, def.id], p.ms, p.minionOf != null ? null : p.id);
   }
 
   // Keep at most MAX_STICKIES per owner: the oldest ones fizzle out.
@@ -76,6 +81,7 @@ export class Projectiles {
       bounce: o.bounce || 0, explode: o.explode, damage: o.damage, ignite: o.ignite, fuseExplode: o.fuseExplode,
       stick: !!o.stick, stuck: false, crit: o.crit || {}, critMult: o.critMult || 1, key: o.key || 0, detonate: false,
       noAutoExplode: !!o.noAutoExplode, armTime: o.armTime || 0, passPlayers: !!o.passPlayers,
+      seek: o.seek || null, burn: o.burn || null, variant: o.variant || 0, target: null, retarget: 0,
     };
     this.list.set(id, pr);
     return pr;
@@ -127,6 +133,7 @@ export class Projectiles {
         continue;
       }
       pr.vy -= pr.gravity * dt;
+      if (pr.seek) this.steer(pr, dt);
       const steps = Math.max(1, Math.ceil(Math.hypot(pr.vx, pr.vy, pr.vz) * dt / 0.6));
       const sdt = dt / steps;
       for (let s = 0; s < steps && this.list.has(pr.id); s++) {
@@ -163,6 +170,46 @@ export class Projectiles {
     }
   }
 
+  // Homing (soul heads): lock on to the enemy closest to straight ahead that it can see, and turn toward
+  // their chest at a limited rate, keeping its speed.
+  steer(pr, dt) {
+    const g = this.g, S = pr.seek;
+    const sp = Math.hypot(pr.vx, pr.vy, pr.vz);
+    if (sp < 1e-3) return;
+    const dx0 = pr.vx / sp, dy0 = pr.vy / sp, dz0 = pr.vz / sp;
+    const chest = (q) => [q.ms.x, q.ms.y + eyeHeight(q.ms) * 0.72, q.ms.z];
+    const valid = (q) => q && q.alive && q.team !== pr.team && !q.cloak?.on;
+    if (g.time >= pr.retarget || !valid(pr.target)) {
+      pr.retarget = g.time + 0.12;
+      let best = null, bestScore = Infinity;
+      for (const q of g.players.values()) {
+        if (!valid(q)) continue;
+        const c = chest(q);
+        const tx = c[0] - pr.x, ty = c[1] - pr.y, tz = c[2] - pr.z;
+        const d = Math.hypot(tx, ty, tz);
+        if (d > S.range || d < 1e-3) continue;
+        const ang = Math.acos(Math.max(-1, Math.min(1, (tx * dx0 + ty * dy0 + tz * dz0) / d)));
+        if (ang > S.cone) continue;
+        const score = ang * 8 + d * 0.1;
+        if (score >= bestScore || !g.world.los([pr.x, pr.y, pr.z], c)) continue;
+        bestScore = score; best = q;
+      }
+      pr.target = best;
+    }
+    const q = pr.target;
+    if (!q) return;
+    const c = chest(q);
+    let tx = c[0] - pr.x, ty = c[1] - pr.y, tz = c[2] - pr.z;
+    const d = Math.hypot(tx, ty, tz) || 1;
+    tx /= d; ty /= d; tz /= d;
+    const ang = Math.acos(Math.max(-1, Math.min(1, tx * dx0 + ty * dy0 + tz * dz0)));
+    const k = ang > 1e-4 ? Math.min(1, (S.turn * dt) / ang) : 1;
+    let nx = dx0 + (tx - dx0) * k, ny = dy0 + (ty - dy0) * k, nz = dz0 + (tz - dz0) * k;
+    const l = Math.hypot(nx, ny, nz) || 1;
+    nx /= l; ny /= l; nz /= l;
+    pr.vx = nx * sp; pr.vy = ny * sp; pr.vz = nz * sp;
+  }
+
   onHitPlayer(pr, q) {
     const owner = this.g.players.get(pr.owner) || null;
     if (pr.kind === 'sticky') { pr.vx *= -0.15; pr.vz *= -0.15; pr.vy = Math.min(pr.vy, 0); pr.ignore = q.id; return; } // bombs bounce off players
@@ -171,6 +218,7 @@ export class Projectiles {
     if (pr.crit.vsBurning && q.burn) { dmg *= pr.critMult; crit = true; }
     this.g.combat.damage(q, dmg, owner, pr.weaponId, { crit, point: [pr.x, pr.y, pr.z], isFire: pr.ignite });
     if (pr.ignite && q.alive) this.g.combat.ignite(q, owner, 6, 5);
+    if (pr.burn && q.alive) this.g.combat.ignite(q, owner, pr.burn.dps, pr.burn.time, pr.weaponId);
     this.g.event(['i', pr.kind, round2(pr.x), round2(pr.y), round2(pr.z), 0, 0, 0, `${pr.owner}:${pr.key}`, 2], [pr.x, pr.y, pr.z]);
     this.remove(pr);
   }
@@ -208,7 +256,7 @@ export class Projectiles {
   snapshot() {
     const out = [];
     for (const pr of this.list.values()) {
-      out.push([pr.id, PROJECTILE_KINDS.indexOf(pr.kind), round2(pr.x), round2(pr.y), round2(pr.z), round2(pr.vx), round2(pr.vy), round2(pr.vz), pr.owner, pr.key, pr.team, round2(pr.gravity)]);
+      out.push([pr.id, PROJECTILE_KINDS.indexOf(pr.kind), round2(pr.x), round2(pr.y), round2(pr.z), round2(pr.vx), round2(pr.vy), round2(pr.vz), pr.owner, pr.key, pr.team, round2(pr.gravity), pr.variant]);
     }
     return out;
   }

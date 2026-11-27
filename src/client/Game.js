@@ -18,6 +18,7 @@ import { getItem } from '../shared/config/cosmetics.js';
 import { dirFromAngles, anglesFromDir, damp, clamp, wrapAngle } from '../shared/math.js';
 import { GlowParticles, BeamFX } from './render/GlowFX.js';
 import { patchHoles, setHoleUniforms, HoleRims } from './render/Holes.js';
+import { soulHead } from './render/SoulHeads.js';
 
 const CLASS_BY_INDEX = CLASS_IDS.reduce((a, id) => { a[CLASSES[id].index] = id; return a; }, {});
 const tmpV = new THREE.Vector3();
@@ -315,6 +316,7 @@ export class Game {
         bobScale: this.settings.reduceMotion ? 0.2 : this.settings.viewBob, aspect: this.r.aspect,
       });
     }
+    this.input.touch?.setMinionButtons?.(!!me?.mn?.l?.length || n.ctl >= 0);
     ui.hud.update(this.hudState());
     this.r.renderGame(!!(me && me.alive) && !scoped && !n.locked());
   }
@@ -383,13 +385,8 @@ export class Game {
     const muzzle = this.r.vm.muzzleWorld(cam, new THREE.Vector3());
     const eye = [n.ms.x, n.ms.y + (n.ms.crouch ? CROUCH_EYE_HEIGHT : EYE_HEIGHT), n.ms.z];
     if (def.fireTrail) {
-      // burning pellets: work out where each one lands, then draw fire contrails from the muzzle
-      const ends = shotDirections(ev.y, ev.p, ev.spread, def.pellets, ev.seed).map((d) => {
-        const h = n.world.raycast(eye[0], eye[1], eye[2], d[0], d[1], d[2], def.range);
-        const t = h ? h.t : def.range;
-        return [eye[0] + d[0] * t, eye[1] + d[1] * t, eye[2] + d[2] * t, h ? 0 : 2, h?.normal];
-      });
-      this.fireTrail([muzzle.x, muzzle.y, muzzle.z], ends, dirFromAngles(ev.y, ev.p));
+      // soul heads come from the server (they home in on enemies): just the fiery muzzle blast here
+      this.soulBlast([muzzle.x, muzzle.y, muzzle.z], dirFromAngles(ev.y, ev.p));
       this.shake = Math.max(this.shake, 0.25);
     } else if (def.type === 'hitscan' || def.type === 'repair') {
       const dirs = shotDirections(ev.y, ev.p, ev.spread, def.pellets, ev.seed);
@@ -421,7 +418,8 @@ export class Game {
     void cmd;
   }
 
-  projectileMesh(kind, team) {
+  projectileMesh(kind, team, variant = 0) {
+    if (kind === 'soulhead') return soulHead(variant);
     const g = new THREE.Group();
     const col = TEAM_COLORS_HEX[team];
     switch (kind) {
@@ -808,7 +806,7 @@ export class Game {
     if (snap) {
       const age = Math.max(0, Math.min(0.25, now - snap.st));
       for (const p of snap.pr) {
-        const [id, ki, x, y, z, vx, vy, vz, owner, key, team, g] = p;
+        const [id, ki, x, y, z, vx, vy, vz, owner, key, team, g, variant] = p;
         const kind = PROJECTILE_KINDS[ki];
         const pkey = `${owner}:${key}`;
         if (owner === n.myId && this.predicted.has(pkey) && kind !== 'detcharge') {
@@ -819,8 +817,20 @@ export class Game {
         }
         live.add(id);
         let m = this.projMeshes.get(id);
-        if (!m) { m = this.projectileMesh(kind, team); this.mapObjects.add(m); this.projMeshes.set(id, m); }
+        let fresh = false;
+        if (!m) { m = this.projectileMesh(kind, team, variant); this.mapObjects.add(m); this.projMeshes.set(id, m); fresh = true; }
         const stuck = vx === 0 && vy === 0 && vz === 0;
+        if (kind === 'soulhead') {
+          // homing heads curve between snapshots: glide toward the extrapolated spot, trail flames
+          const tx = x + vx * age, ty = y + vy * age, tz = z + vz * age;
+          if (fresh) { const o = this.muzzleOf(owner); m.position.set(...(o || [tx, ty, tz])); }
+          const k = 1 - Math.exp(-dt * 22);
+          m.position.set(m.position.x + (tx - m.position.x) * k, m.position.y + (ty - m.position.y) * k, m.position.z + (tz - m.position.z) * k);
+          m.lookAt(m.position.x + vx, m.position.y + vy, m.position.z + vz);
+          const P = m.position;
+          for (let i = 0; i < 2; i++) this.glow.spawn({ x: P.x + (Math.random() - 0.5) * 0.15, y: P.y + (Math.random() - 0.5) * 0.15, z: P.z + (Math.random() - 0.5) * 0.15, vx: -vx * 0.05, vy: 0.6 + Math.random() * 0.5, vz: -vz * 0.05, life: 0.3 + Math.random() * 0.25, size: 0.2, end: 0.15, color: [0xffc050, 0xff3a0a], drag: 2 });
+          continue;
+        }
         m.position.set(x + vx * age, y + vy * age - 0.5 * g * age * age, z + vz * age);
         if (!stuck) m.lookAt(m.position.x + vx, m.position.y + vy - g * age, m.position.z + vz);
         if (kind === 'hopshell' && Math.random() < 0.6) this.effects.spawn({ x: m.position.x, y: m.position.y, z: m.position.z, life: 0.45, size: 0.11, end: 0.5, color: 0xffffff, g: -0.5, drag: 2 });
@@ -1076,7 +1086,6 @@ export class Game {
           if (R) R.rig.onFire();
           this.audio.weaponFire(wid, [m.x, m.y, m.z], false);
           if (def.type === 'repair') break;
-          if (def.fireTrail) { this.fireTrail([m.x, m.y, m.z], ends); break; }
           this.effects.muzzle(m, null, def.type);
           for (const end of ends) {
             if (def.pellets === 1 || Math.random() < 0.5) this.effects.tracer([m.x, m.y, m.z], end, def.tracer, 0.02);
@@ -1087,6 +1096,15 @@ export class Game {
           break;
         }
         case 'ss': this.onSoulSteal(e); break;
+        case 'sf': {
+          // someone fired the Soul-Stealer (its heads arrive in snapshots)
+          if (e[1] === me && !n.locked()) break;
+          const R = this.rigs.get(e[1]);
+          const m = this.muzzleOf(e[1]);
+          if (R) R.rig.onFire();
+          if (m) { this.soulBlast(m); this.audio.weaponFire('soulstealer', m, false); }
+          break;
+        }
         case 'sm': this.onMinionChange(e); break;
         case 'sw': { const R = this.rigs.get(e[1]); if (R) { R.rig.onSwing(); this.audio.swing(this.rigPos(e[1]), false, WEAPONS[e[2]]?.damage >= 55); } break; }
         case 'mh': {
@@ -1114,6 +1132,7 @@ export class Game {
           if (hit === 1) { this.effects.burst(x, y, z, 12, { color: [0xff9a30, 0xffffff], speed: 4, life: 0.4, size: 0.08 }); break; }
           if (hit === 3) break;
           this.effects.impact([x, y, z], [nx, ny, nz], hit === 2 ? 'flesh' : 'world');
+          if (kind === 'soulhead') this.glow.burst(x, y, z, 12, { color: [0xffc050, 0xff3a0a], speed: 2.4, life: 0.45, size: 0.22, end: 0.1, drag: 3, up: 0.8 });
           if (kind === 'flare') this.effects.burst(x, y, z, 10, { color: [0xffa030, 0xffe070], speed: 3, life: 0.5, size: 0.08 });
           break;
         }
@@ -1162,29 +1181,10 @@ export class Game {
 
   // ---------------------------------------------------------------- the Admin Gun
   // ---------------------------------------------------------------- Soul-Stealer Shotgun
-  // Fire contrails: an orange tracer per pellet wrapped in rising flame particles, embers where they land.
-  fireTrail(m, ends, dir = null) {
+  // The Soul-Stealer's muzzle blast: an orange flash and a puff of flame.
+  soulBlast(m, dir = null) {
     this.effects.muzzle({ x: m[0], y: m[1], z: m[2] }, dir, 'hitscan', 0xff7a1a);
-    this.glow.burst(m[0], m[1], m[2], 6, { color: [0xffd070, 0xff4a10], speed: 1.6, life: 0.25, size: 0.16, end: 0.2, drag: 4 });
-    const lowFx = (this.r.quality?.particles ?? 1) < 1;
-    for (const end of ends) {
-      this.effects.tracer(m, end, 0xff7a1a, 0.05, 0.16);
-      this.effects.tracer(m, end, 0xffe0a0, 0.018, 0.08);
-      const dx = end[0] - m[0], dy = end[1] - m[1], dz = end[2] - m[2];
-      const len = Math.hypot(dx, dy, dz);
-      const n = Math.min(lowFx ? 5 : 10, Math.ceil(len / 1.1));
-      for (let i = 0; i < n; i++) {
-        const k = (i + Math.random()) / n;
-        this.glow.spawn({
-          x: m[0] + dx * k, y: m[1] + dy * k, z: m[2] + dz * k,
-          vx: (Math.random() - 0.5) * 0.4, vy: 0.5 + Math.random() * 0.8, vz: (Math.random() - 0.5) * 0.4,
-          life: 0.35 + Math.random() * 0.4, size: 0.16 + 0.16 * (1 - k), end: 0.15, color: [0xffc050, 0xff3a0a], drag: 2,
-        });
-      }
-      if (end[3] === 2) continue; // flew off into the distance
-      this.effects.burst(end[0], end[1], end[2], 3, { color: [0xffb040, 0xff5a10, 0xffe0a0], speed: 2.4, life: 0.4, size: 0.05, g: 8, dir: end[4] || null, cone: 1, up: 0.4 });
-      this.glow.spawn({ x: end[0], y: end[1], z: end[2], vy: 0.6, life: 0.3, size: 0.3, end: 0.1, color: [0xffa030, 0xff2a00] });
-    }
+    this.glow.burst(m[0], m[1], m[2], 10, { color: [0xffd070, 0xff4a10], speed: 1.8, life: 0.3, size: 0.2, end: 0.2, drag: 4 });
   }
 
   // A soul torn out of a fallen player streams to the shotgun's holder.

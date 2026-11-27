@@ -14,7 +14,7 @@ export const KEY_LABELS = {
   minionPrev: 'Minion: previous', minionNext: 'Minion: next', minionFree: 'Minion: free',
 };
 
-export const MOBILE_BUTTONS = ['fire', 'jump', 'reload', 'ability', 'crouch', 'weapon', 'alt', 'sprint'];
+export const MOBILE_BUTTONS = ['fire', 'jump', 'reload', 'ability', 'crouch', 'weapon', 'alt', 'sprint', 'minionPrev', 'minionNext', 'minionFree'];
 
 export const DEFAULT_MOBILE_LAYOUT = {
   joystick: { x: 0.14, y: 0.72, s: 1 },
@@ -26,6 +26,10 @@ export const DEFAULT_MOBILE_LAYOUT = {
   weapon: { x: 0.95, y: 0.38, s: 0.8 },
   alt: { x: 0.7, y: 0.66, s: 0.85 },
   sprint: { x: 0.05, y: 0.45, s: 0.8 },
+  // Soul-Stealer minion controls (only shown while you hold minions)
+  minionPrev: { x: 0.6, y: 0.27, s: 0.72 },
+  minionNext: { x: 0.7, y: 0.27, s: 0.72 },
+  minionFree: { x: 0.8, y: 0.27, s: 0.72 },
 };
 
 export const GRAPHICS_PRESETS = {

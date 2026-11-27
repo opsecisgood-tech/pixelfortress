@@ -154,3 +154,21 @@ test('soul-stealer: a minion that dies is freed and respawns normally', () => {
   for (let i = 0; i < 30 * 8; i++) { cmd(g, 1, 0); g.tick(); }
   assert.ok(foe.alive && foe.minionOf == null);
 });
+
+test('soul-stealer: soul heads home in on an enemy standing well off to the side', () => {
+  const { g, me, foe } = setup();
+  assert.equal(WEAPONS.soulstealer.projectile.kind, 'soulhead');
+  g.handleMessage(1, { t: 'chat', text: '/adminshotgun' });
+  for (let i = 0; i < 20; i++) { cmd(g, 1, 0); g.tick(); }
+  foe.hp = 5000; foe.maxHp = 5000;
+  // facing -Z down the road; the enemy stands ~30 degrees to the left, 9 m away
+  const at = () => { me.ms.x = 32; me.ms.z = 4; me.ms.y = 0.03; me.ms.vx = me.ms.vz = 0; foe.ms.x = 27.5; foe.ms.z = -3.8; foe.ms.y = 0.03; foe.ms.vx = foe.ms.vz = 0; foe.spawnProtectUntil = 0; };
+  at();
+  for (let i = 0; i < 4; i++) { at(); cmd(g, 1, i === 1 ? BTN.FIRE : 0); g.tick(); }
+  const heads = [...g.projectiles.list.values()].filter((pr) => pr.kind === 'soulhead');
+  assert.equal(heads.length, WEAPONS.soulstealer.pellets, 'one head per pellet');
+  assert.ok(heads.every((pr) => pr.variant >= 0 && pr.variant < 9));
+  for (let i = 0; i < 30 * 1.5; i++) { at(); cmd(g, 1, 0); g.tick(); }
+  assert.ok(5000 - foe.hp >= WEAPONS.soulstealer.damage * 3, `most heads curved into the target (took ${5000 - foe.hp})`);
+  assert.equal(foe.burn?.src, 'soulstealer');
+});
