@@ -1017,38 +1017,3 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; text-transform: uppe
 .tr-flag { margin-top: 8px; }
 .tr-flag .good { color: var(--good); }
 .tr-btns { margin-top: 14px; }
-
-/* ---------------------------------------------------------------- the Titan */
-.titan-hud { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; font-family: var(--verdana); }
-.th-gems { display: flex; gap: 6px; pointer-events: auto; }
-.th-gem { position: relative; width: 64px; padding: 6px 4px 5px; border-radius: 6px; background: rgba(20,16,12,.78); border: 2px solid #3a3226; color: #8a8070; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; font: 700 10px var(--verdana); text-transform: uppercase; }
-.th-gem i { width: 18px; height: 18px; transform: rotate(45deg); background: #2a2218; border: 2px solid #4a3e2a; margin: 3px 0 4px; }
-.th-gem b { font-size: 10px; letter-spacing: .02em; }
-.th-gem kbd { font: 700 10px var(--verdana); color: #6a6052; background: rgba(0,0,0,.35); padding: 0 4px; border-radius: 3px; }
-.th-gem.owned { color: #f3ead6; border-color: var(--gc); box-shadow: 0 0 10px -2px var(--gc); }
-.th-gem.owned i { background: var(--gc); border-color: #fff8; box-shadow: 0 0 12px var(--gc); }
-.th-gem.owned kbd { color: #f3ead6; }
-.th-gem.active { animation: thpulse .8s ease-in-out infinite alternate; }
-.th-gem.cooling i { opacity: .45; }
-.th-gem .cd { position: absolute; top: 4px; right: 6px; font: 700 12px var(--verdana); font-style: normal; color: #fff; text-shadow: 0 1px 2px #000; }
-.th-snap { --gc: #fff0c0; width: 70px; }
-.th-snap.owned i { background: conic-gradient(#3cff72, #b44cff, #ffe03a, #ff8a1a, #4a78ff, #ff3b3b, #3cff72); }
-.th-snap.spent { opacity: .45; }
-.th-info { display: flex; gap: 14px; font: 700 12px var(--verdana); color: #e8dfca; text-shadow: 0 1px 3px #000; }
-@keyframes thpulse { from { box-shadow: 0 0 6px -2px var(--gc); } to { box-shadow: 0 0 22px 2px var(--gc); } }
-.titan-track { position: fixed; right: 18px; top: 120px; z-index: 6; min-width: 230px; padding: 10px 12px; border-radius: 6px; background: rgba(40,18,4,.72); border: 1px solid #ff8a1a88; box-shadow: 0 0 18px #ff8a1a44; font: 700 12px var(--verdana); color: #ffe2c0; pointer-events: none; }
-.titan-track h4 { font: 700 12px var(--verdana); color: #ffb060; text-transform: uppercase; margin-bottom: 6px; letter-spacing: .05em; }
-.titan-track div { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-.titan-track div b { flex: 1; }
-.titan-track div span { color: #ffb878; font-size: 11px; }
-.titan-track div em { font-style: normal; color: #fff; min-width: 34px; text-align: right; }
-.titan-track div.dead { opacity: .5; }
-.titan-track .arr { display: inline-block; color: #ff8a1a; font-style: normal; width: 12px; text-align: center; }
-.titan-tint { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
-.titan-label { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); z-index: 6; pointer-events: none; font: 400 26px var(--display); color: #fff; text-shadow: 0 2px 8px #000; letter-spacing: .06em; }
-.titan-banner { position: fixed; left: 50%; top: 30%; transform: translateX(-50%); z-index: 7; pointer-events: none; text-align: center; opacity: 0; }
-.titan-banner b { display: block; font: 400 54px var(--display); letter-spacing: .08em; }
-.titan-banner span { display: block; font: 700 15px var(--verdana); color: #f3ead6; text-shadow: 0 2px 6px #000; margin-top: 4px; }
-.titan-banner.show { animation: thbanner 2.8s ease-out forwards; }
-@keyframes thbanner { 0% { opacity: 0; transform: translateX(-50%) scale(1.25); } 10% { opacity: 1; transform: translateX(-50%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) scale(.98); } }
-@media (max-width: 760px) { .th-gem { width: 48px; font-size: 8px; } .th-gem b { display: none; } .titan-hud { bottom: 150px; } }

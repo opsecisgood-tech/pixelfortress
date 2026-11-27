@@ -3,7 +3,7 @@
 // recoil kick per weapon, magazine & shell reloads, melee swings, rotary spin, ability gestures, scope.
 import * as THREE from 'three';
 import { buildWeapon, WEAPON_MODELS } from './WeaponModels.js';
-import { buildArmMesh, FIST_MOVES, nextFistMove , buildGauntlet, setGauntletStones } from './CharacterModel.js';
+import { buildArmMesh, FIST_MOVES, nextFistMove } from './CharacterModel.js';
 import { TEAM_COLORS_HEX } from '../../shared/constants.js';
 import { WEAPONS } from '../../shared/config/weapons.js';
 import { damp } from '../../shared/math.js';
@@ -30,8 +30,6 @@ export class Viewmodel {
     this.st = { bobT: 0, kick: 0, kickRot: 0, swing: -1, reload: -1, reloadDur: 1, equip: 1, swayX: 0, swayY: 0, tilt: 0, land: 0, ability: 0, spin: 0, abilityKind: '' };
     this.visible = true;
   }
-
-  setStones(mask) { if (this.gauntlet) setGauntletStones(this.gauntlet, mask, 0.5); }
 
   setLoadout(classId, team, weaponId, skin, gloves) {
     const key = `${classId}|${team}|${weaponId}|${skin}|${gloves}`;
@@ -84,16 +82,6 @@ export class Viewmodel {
       if (twoHand) { this.armL.position.set(-0.01, -0.04, md.muzzle3[2] * 0.45); this.armL.rotation.set(0.45, -0.7, 0); }
       else { this.armL.position.set(-0.03, -0.08, 0.04); this.armL.rotation.set(0.35, -0.35, 0); }
       this.holder.add(this.armL);
-    }
-    // the Titan wears the gem gauntlet on his left fist
-    this.gauntlet = null;
-    if (classId === 'titan') {
-      const sv = 0.75 / 14;
-      const gt = buildGauntlet(sv);
-      gt.group.position.y = -(14 / 2 - 1.8) * sv;
-      this.armL.children[0].add(gt.group);
-      this.gauntlet = gt;
-      gt.light.distance = 1.2;
     }
     this.armLBase = this.armL.userData.free ? this.armL.position.clone() : null;
     this.armLRot = this.armL.rotation.clone();

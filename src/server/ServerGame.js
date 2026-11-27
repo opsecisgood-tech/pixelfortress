@@ -25,8 +25,6 @@ import { Abilities } from './abilities.js';
 import { TeamDeathmatch } from './modes/tdm.js';
 import { CaptureTheFlag } from './modes/ctf.js';
 import { Duel } from './modes/duel.js';
-import { TitanSystem } from './titan.js';
-import { STONES, STONE_INFO } from '../shared/config/titan.js';
 import { BotController, BOT_NAMES } from './bots/Bot.js';
 import { round2, round3, wrapAngle } from '../shared/math.js';
 
@@ -100,8 +98,6 @@ export class ServerGame {
     this.combat = new Combat(this);
     this.projectiles = new Projectiles(this);
     this.abilities = new Abilities(this);
-    this.titans ||= new TitanSystem(this);
-    this.titans.clear();
     this.mode = this.modeId === 'ctf' ? new CaptureTheFlag(this) : this.modeCfg.duel ? new Duel(this) : new TeamDeathmatch(this);
     this.pickups = this.map.pickups.map((p, i) => ({ ...p, idx: i, respawnAt: 0, active: true }));
     this.scores = [0, 0];
@@ -124,7 +120,6 @@ export class ServerGame {
     this.mode.reset();
     this.projectiles.clear();
     this.abilities.clear();
-    this.titans.clear();
     for (const p of this.players.values()) {
       p.stats = emptyStats();
       p.carrying = -1;
@@ -173,7 +168,6 @@ export class ServerGame {
     this.opts.audit?.({ ev: 'admin', name: p.name, uid: p.uid || null, verified: !!p.verified, text });
     switch ((cmd || '').toLowerCase()) {
       case 'help':
-        say('Titan: /titan PLAYER (transform) · /untitan PLAYER · /gem PLAYER [time|power|mind|soul|space|reality|all].');
         say('Admin: /gift PLAYER ITEM · /allhats · /allwraps (skins + gloves) · /nocd (abilities + weapons). /keys N · /addkeys N · /items · /nocd · /god · /ammo · /speed X · /heal · /class NAME · /tp PLAYER · /kill PLAYER · /kick PLAYER · /bots N · /map ID [tdm|ctf] · /restart · /end · /admin (status)');
         return;
       case 'admin': say(`Admin status · nocd ${A.nocd ? 'on' : 'off'} · god ${A.god ? 'on' : 'off'} · ammo ${A.ammo ? 'on' : 'off'} · speed x${A.speed}`); return;
@@ -201,25 +195,6 @@ export class ServerGame {
         this.opts.audit?.({ ev: 'gift', name: p.name, uid: p.uid || null, verified: !!p.verified, to: q.name, toUid: q.uid || null, item: it.id });
         return;
       }
-      case 'titan': case 'untitan': case 'gem': {
-        const name = args[0];
-        if (!name) { say(cmd === 'gem' ? 'Usage: /gem PLAYER [time|power|mind|soul|space|reality|all]' : `Usage: /${cmd} PLAYER`); return; }
-        const q = findPlayer(name);
-        if (!q) { say(`No player called "${name}" in this match.`); return; }
-        if (cmd === 'titan') {
-          if (q.titan) { say(`${q.name} is already the Titan. Use /untitan ${q.name} to change them back.`); return; }
-          this.titans.transform(q);
-          this.broadcast({ t: 'notice', text: `${q.name} has become the Titan.` });
-          return;
-        }
-        if (!q.titan) { say(`${q.name} is not the Titan. Use /titan ${q.name} first.`); return; }
-        if (cmd === 'untitan') { this.titans.revert(q); this.broadcast({ t: 'notice', text: `${q.name} is no longer the Titan.` }); return; }
-        const want = String(args[1] || 'all').toLowerCase();
-        if (want === 'all') { let n = 0; while (this.titans.award(q)) n++; say(n ? `Gave ${q.name} ${n} gem(s).` : `${q.name} already has every gem.`); return; }
-        if (!STONES.includes(want)) { say(`Gems: ${STONES.join(', ')}, all`); return; }
-        say(this.titans.award(q, want) ? `Gave ${q.name} the ${STONE_INFO[want].name} gem.` : `${q.name} already has the ${STONE_INFO[want].name} gem.`);
-        return;
-      }
       case 'nocd': toggle('nocd', 'No cooldowns (abilities and weapons)'); return;
       case 'god': toggle('god', 'God mode'); return;
       case 'ammo': toggle('ammo', 'Infinite ammo'); return;
@@ -228,7 +203,6 @@ export class ServerGame {
       case 'class': {
         const id = String(args[0] || '').toLowerCase();
         if (!CLASS_IDS.includes(id)) { say(`Classes: ${CLASS_IDS.join(', ')}`); return; }
-        if (p.titan) this.titans.revert(p);
         p.nextClassId = id;
         if (p.alive) { const pos = [p.ms.x, p.ms.y, p.ms.z, p.ms.yaw]; this.spawnPlayer(p, true); p.ms.x = pos[0]; p.ms.y = pos[1]; p.ms.z = pos[2]; p.ms.yaw = pos[3]; }
         say(`Class: ${getClass(id).displayName}`);
@@ -312,7 +286,6 @@ export class ServerGame {
   }
 
   removePlayer(p, allowReconnect) {
-    this.titans.onLeave(p);
     this.mode.onPlayerLeave(p);
     this.abilities.removeOwned(p.id);
     this.players.delete(p.id);
@@ -350,7 +323,6 @@ export class ServerGame {
       case 'cos': if (p) { p.loadouts = sanitizeLoadouts(msg.loadouts); this.sendRoster(); } return;
       case 'wpn': if (p) p.weaponPicks = sanitizeWeaponLoadouts(msg.weapons); return; // applied at the next spawn
       case 'host': if (connId === this.hostConn) this.onHostCommand(msg); return;
-      case 'titan': if (p) this.titans.action(p, msg); return;
       default:
     }
   }
@@ -550,7 +522,6 @@ export class ServerGame {
   // ------------------------------------------------------------------ requests
   requestClass(p, classId) {
     if (!CLASS_IDS.includes(classId)) return;
-    if (p.titan) { this.send(p.connId, { t: 'notice', text: 'You are the Titan. An admin can change you back with /untitan.' }); return; }
     if (!p.isBot) this.makeRoomForClass(p.team, classId, p.id);
     if (!classAllowed([...this.players.values()], p.team, classId, getClass(classId).limit, p.id)) {
       this.send(p.connId, { t: 'notice', text: `${getClass(classId).displayName} limit reached for your team.` });
@@ -641,7 +612,6 @@ export class ServerGame {
     if (p.rallyUntil > this.time) moveMult *= CLASSES.soldier.ability.rallyMoveMult;
     if (p.admin?.speed) moveMult *= p.admin.speed;
     if (p.slowUntil > this.time) moveMult *= CLASSES.juggernaut.ability.slowMult;
-    moveMult *= this.titans.moveMult(p);
     const frozen = this.state === MATCH_STATE.PREROUND;
     return moveParamsFor(cls, { moveMult, frozen, canSprint: !(def.spinUp && wst.spin > 0) });
   }
@@ -669,14 +639,11 @@ export class ServerGame {
     p.lastProcAt = now;
     p.cmdBudget = Math.min(p.cmdBudget + Math.max(TICK_DT, real), 0.5);
     let processed = 0;
-    // Mind gem: a controlling Titan's commands drive the target; the target's own input is ignored
-    const target = this.titans.commandTarget(p);
-    const ignored = this.titans.ignoresInput(p);
     while (p.cmdQueue.length && p.cmdBudget > -0.06 && processed < 40) {
       const cmd = p.cmdQueue.shift();
       p.cmdBudget -= cmd.dt;
       processed++;
-      if (!ignored) this.runCommand(target, cmd);
+      this.runCommand(p, cmd);
       p.lastSeq = cmd.seq;
     }
     // an idle player can't bank time for a later burst
@@ -687,10 +654,6 @@ export class ServerGame {
 
   runCommand(p, cmd) {
     if (!p.alive) { p.ms.prevButtons = cmd.b; p.ws.prevButtons = cmd.b; return; }
-    // grabbed / stunned / time-bent players (Titan gems)
-    const fc = this.titans.filterCommand(p, cmd);
-    if (!fc) { p.ms.prevButtons = cmd.b; p.ws.prevButtons = cmd.b; p.prevAbilityBtn = !!(cmd.b & BTN.ABILITY); return; }
-    cmd = fc;
     const params = this.moveParams(p);
     stepMovement(p.ms, cmd, this.world, params);
     p.lagTime = cmd.lt;
@@ -702,11 +665,11 @@ export class ServerGame {
     if (p.ms.doubleJumped) this.event(['dj', p.id], p.ms);
     // ability (edge)
     const abilityBtn = !!(cmd.b & BTN.ABILITY);
-    if (abilityBtn && !p.prevAbilityBtn && !p.titan && this.state !== MATCH_STATE.PREROUND && this.state !== MATCH_STATE.ENDED) this.abilities.use(p);
+    if (abilityBtn && !p.prevAbilityBtn && this.state !== MATCH_STATE.PREROUND && this.state !== MATCH_STATE.ENDED) this.abilities.use(p);
     p.prevAbilityBtn = abilityBtn;
     // alt-fire edge: detonate sticky bombs / toggle the spy's cloak
     const altBtn = !!(cmd.b & BTN.ALT);
-    if (altBtn && !p.prevAltBtn && !p.titan && this.state !== MATCH_STATE.ENDED) {
+    if (altBtn && !p.prevAltBtn && this.state !== MATCH_STATE.ENDED) {
       if (p.weapons.includes('stickylauncher') && this.projectiles.detonateStickies(p.id) > 0) this.event(['sd', p.id], p.ms);
       if (p.classId === 'spy') this.abilities.toggleCloak(p);
     }
@@ -804,8 +767,6 @@ export class ServerGame {
     p.revealedUntil = 0;
     p.rallyUntil = 0;
     p.slowUntil = 0;
-    p.stunUntil = 0; p.sapUntil = 0; p.grabbedBy = 0;
-    this.titans.onSpawn(p);
     p.cloak.on = false; p.cloak.meter = 1; p.cloak.attackAt = 0;
     p.ability.activeUntil = 0;
     p.ability.active = false;
@@ -839,7 +800,6 @@ export class ServerGame {
 
     this.projectiles.update(dt);
     this.abilities.update(dt);
-    this.titans.update(dt);
     this.combat.updateBeams(dt);
     this.mode.update(dt);
     this.updatePickups();
@@ -1059,7 +1019,6 @@ export class ServerGame {
       Math.ceil(q.hp), this.playerFlags(q), q.ws.slot, CLASSES[q.classId].index, q.healTarget,
       q.disguise ? q.disguise.team * 16 + CLASSES[q.disguise.classId].index : -1,
       q.disguise ? q.disguise.fakeId : 0,
-      this.titans.fxBits(q), Math.round((q.timeScale ?? 1) * 100), q.titan ? 1 + this.titans.mask(q) : 0,
     ]);
     const proj = this.projectiles.snapshot();
     const turrets = this.abilities.snapshotTurrets();
@@ -1068,7 +1027,7 @@ export class ServerGame {
     const pickups = this.pickups.filter((p) => !p.active).map((p) => p.idx);
     const common = {
       t: 's', st: round3(this.time), ms: this.state, tl: Math.max(0, Math.round(this.timeLeft * 10) / 10),
-      sc: this.scores, pr: proj, tu: turrets, ch: charges, fl: flags, pk: pickups, ti: this.titans.snapshot(),
+      sc: this.scores, pr: proj, tu: turrets, ch: charges, fl: flags, pk: pickups,
       pt: this.state === MATCH_STATE.PREROUND ? Math.round(this.stateTime * 10) / 10 : 0,
     };
     const odd = this.tickCount % 2 === 0;
@@ -1097,8 +1056,6 @@ export class ServerGame {
         sl: p.slowUntil > this.time ? round2(p.slowUntil - this.time) : 0,
         ck: p.classId === 'spy' ? [round2(p.cloak.meter), p.cloak.on ? 1 : 0, Math.max(0, round2(p.cloak.attackAt - this.time))] : null,
         cls: p.classId, ncls: p.nextClassId, team: p.team, carry: p.carrying, wp: p.weapons,
-        tt: this.titans.me(p), mb: p.mindBy || 0, fx: this.titans.fxBits(p), ts: round3(p.timeScale ?? 1),
-        lock: (p.stunUntil > this.time || p.grabbedBy || p.mindBy || p.titan?.control) ? 1 : 0,
       };
       this.send(p.connId, { ...common, p: plist, me });
     }

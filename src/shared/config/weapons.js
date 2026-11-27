@@ -448,12 +448,6 @@ def('fists', {
   damage: 55, fireInterval: 0.8, auto: true,
   melee: { range: 1.9, angle: 0.6, windup: 0.12 }, crit: { fromBehind: true }, crosshair: 'melee', botRange: 2, deployTime: 0.3,
 });
-def('titanfist', {
-  name: 'Gem Gauntlet', slot: 2, type: 'melee', category: 'Fists',
-  description: 'The Titan\'s bare fist and gauntlet.',
-  damage: 75, fireInterval: 0.75, auto: true,
-  melee: { range: 2.3, angle: 0.65, windup: 0.14 }, crit: {}, crosshair: 'melee', botRange: 2.2, deployTime: 0.3,
-});
 def('kukri', {
   name: 'Kukri', slot: 2, type: 'melee', category: 'Melee',
   description: 'Curved forward-weighted blade.',
@@ -478,11 +472,6 @@ export const ABILITY_SOURCES = {
   fall: { id: 'fall', name: 'Fall' },
   world: { id: 'world', name: 'Environment' },
   spawnshield: { id: 'spawnshield', name: 'Spawn Shield' },
-  powerpunch: { id: 'powerpunch', name: 'Power Punch' },
-  gemgrab: { id: 'gemgrab', name: 'Gem Grab' },
-  illusion: { id: 'illusion', name: 'Reality Illusion' },
-  snap: { id: 'snap', name: 'The Snap' },
-  admin: { id: 'admin', name: 'Admin' },
 };
 
 export const WEAPONS = W;

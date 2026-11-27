@@ -132,22 +132,6 @@ The signed-in account that owns the verified username **owner** gets admin comma
 - Guests can't use the name "owner".
 - On dedicated servers, admin commands and gifts are written to the player log.
 
-### The Titan (owner only)
-
-`/titan PLAYER` turns any player into the Titan, a towering purple warlord in gold armour. It replaces their class, weapons and cosmetics completely; `/untitan PLAYER` changes them back. The Titan starts with an empty gem gauntlet and claims one random new gem with every confirmed kill. Each gem is a power:
-
-| Gem | Key | Power |
-| --- | --- | --- |
-| Time | 1 (Z / X set strength) | Speed up or slow down the aimed player: movement, weapons and cooldowns. Ramps in and out smoothly. |
-| Power | P / G | P: Power Punch (120 damage, huge knockback, ragdoll stun). G: Grab and hold, G again or wait to throw. |
-| Mind | 2 | Take control of an enemy for 7 seconds; the camera rides behind them. 2 again releases. |
-| Soul | 3 | Reveal every enemy through walls with a tracker (name, status, distance, direction) and sap nearby enemies (slower, half damage). The Titan also senses enemies within 16 m at all times. |
-| Space | F | Place an entrance and an exit portal; walking into the entrance brings the Titan out of the exit. Only the Titan can use them. |
-| Reality | R | Aim at a prop to copy it, then aim at the ground to place up to four illusions of it. An enemy who touches one takes 45 damage and the illusion shatters. |
-| Snap | E | With all six gems: once per match, half of everyone else (picked at random) turns to dust. |
-
-Helpers: `/gem PLAYER [gem|all]` hands out gems, and the gem bar on screen can be clicked on touch devices.
-
 ## Accounts (optional)
 
 Players can sign in with Google or with an email and password, and their progress syncs to the cloud. This uses Firebase and stays switched off until you add your own Firebase project's settings to `src/client/auth/config.js`. Follow [docs/ACCOUNTS.md](docs/ACCOUNTS.md) for the steps. For unique usernames with a ✓, a player log and bans on a dedicated server, see [docs/VERIFIED_NAMES.md](docs/VERIFIED_NAMES.md).

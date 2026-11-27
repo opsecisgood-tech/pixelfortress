@@ -347,8 +347,6 @@ export class Combat {
     const self = attacker && attacker.id === victim.id;
     if (attacker && !self && attacker.team === victim.team && !g.modeCfg.friendlyFire) return 0;
     if (victim.admin?.god) return 0;
-    // Soul gem: sapped attackers deal reduced damage
-    if (attacker && !self) amount *= g.titans.damageMult(attacker);
     let dmg = amount;
     if (!opts.raw) {
       let frontline = false;
@@ -408,7 +406,6 @@ export class Combat {
     if (!victim.alive) return;
     victim.alive = false;
     victim.hp = 0;
-    g.titans.onDeath(victim);
     victim.healTarget = -1;
     victim.disguise = null;
     victim.burn = null;
@@ -459,8 +456,6 @@ export class Combat {
         if (!assister) assister = a;
       }
       if (counted) g.mode.onKill(killer, victim);
-      // the Titan claims a gem for every confirmed kill
-      g.titans.onKill(killer, victim);
       // key rewards: record kills between two real players only (bots never count)
       if (counted && !killer.isBot && !victim.isBot && killer.team !== victim.team) {
         (g.humanKills ||= []).push({ killer: killer.id, victim: victim.id, team: killer.team, killerTeam: killer.team, victimTeam: victim.team });

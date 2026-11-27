@@ -14,7 +14,6 @@ import { WEAPONS } from '../../shared/config/weapons.js';
 import { TEAM_COLORS_HEX, TEAM_DARK_HEX } from '../../shared/constants.js';
 import { getClass } from '../../shared/config/classes.js';
 import { mulberry32, damp } from '../../shared/math.js';
-import { STONES, STONE_INFO } from '../../shared/config/titan.js';
 
 // ---------------------------------------------------------------- body proportions (pixels)
 const PROPORTIONS = {
@@ -27,8 +26,6 @@ const PROPORTIONS = {
   incinerator: { head: [8, 8, 8], body: [9, 12, 5], arm: [4, 12, 4], leg: [4, 12, 4], height: 1.86 },
   demolitionist: { head: [8, 8, 8], body: [9, 12, 5], arm: [4, 12, 4], leg: [4, 12, 4], height: 1.86 },
   soldier: { head: [8, 8, 8], body: [10, 12, 6], arm: [4, 12, 4], leg: [4, 12, 4], height: 1.92 },
-  // the Titan (admin transformation): towering, broad-chested, heavy arms
-  titan: { head: [8, 8, 8], body: [12, 14, 7], arm: [5, 14, 5], leg: [5, 13, 5], height: 2.42 },
 };
 
 // ---------------------------------------------------------------- painting helpers
@@ -85,8 +82,6 @@ function styleFor(classId, team) {
     incinerator: { skin: 0x26262a, hair: 0x26262a, shirt: team ? 0x4a6e9e : 0xa8443a, pants: team ? 0x4a6e9e : 0xa8443a, boots: 0x1e1e20, sleeve: team ? 0x4a6e9e : 0xa8443a, vest: 0x232323, mask: 0x222224 },
     demolitionist: { skin: 0x6e4630, hair: 0x1c1c1e, shirt: team ? 0x41679a : 0xa23a32, pants: team ? 0x41679a : 0xa23a32, boots: 0x2a2420, sleeve: team ? 0x41679a : 0xa23a32, vest: 0x3a3c3e },
     soldier: { skin: 0xd8a27c, hair: 0x3a2a1e, shirt: team ? 0x3f6aa0 : 0xa8382e, pants: 0x34332e, boots: 0x1e1a16, sleeve: team ? 0x3f6aa0 : 0xa8382e, vest: 0x5a5c40, helmet: 0x4c5236 },
-    // lilac skin, deep-blue armoured suit with gold, charcoal trousers and boots (same for both teams)
-    titan: { skin: 0x9a7cc0, hair: 0x9a7cc0, shirt: 0x24307a, pants: 0x2c2c32, boots: 0x18181b, sleeve: 0x9a7cc0, vest: 0x24307a, gold: 0xd2a63c },
   }[classId];
   return { ...S, tc, td };
 }
@@ -256,7 +251,7 @@ function paintPart(classId, team, part, dims, gloves, bare) {
 // Hand-tuned looks for the Scout (cap, headset, tee, satchel, wraps, socks), Spy (pinstripe suit, balaclava),
 // Marksman (slouch hat, amber shades, open vest over a rolled-sleeve shirt, jeans) and Demolitionist
 // (knit cap, eye patch, armoured vest with grenade pods, rolled undershirt, gaiters).
-const SIGNATURE = new Set(['scout', 'spy', 'marksman', 'demolitionist', 'incinerator', 'juggernaut', 'mechanic', 'doctor', 'soldier', 'titan']);
+const SIGNATURE = new Set(['scout', 'spy', 'marksman', 'demolitionist', 'incinerator', 'juggernaut', 'mechanic', 'doctor', 'soldier']);
 function signaturePaint(classId, part, c, L, st, rnd, dims, glove, bare) {
   const [w, h] = dims;
   const sides = ['right', 'front', 'left', 'back'];
@@ -265,46 +260,7 @@ function signaturePaint(classId, part, c, L, st, rnd, dims, glove, bare) {
   const pin = (y0, y1) => { for (const f of sides) { const [x, y, fw] = L[f]; for (let i = 1; i < fw; i += 2) P(c, x + i, y + y0, 1, y1 - y0, st.stripe); } };
   const [fx, fy, fw, fh] = L.front;
   const [bx, by, bw] = L.back;
-  if (classId === 'titan') {
-    const sk = st.skin, dk = (f) => hex(shadeNum(sk, f));
-    if (part === 'head') {
-      // bald lilac head: heavy brow ridge, small deep-set pale eyes, broad nose, set mouth and the ridged chin
-      fill(sk, 0.05);
-      const [tx, ty, tw, th] = L.top; noise(c, tx, ty, tw, th, shadeNum(sk, 1.05), 0.04, rnd);
-      P(c, fx, fy + 1, fw, 1, dk(0.86)); P(c, fx, fy + 2, fw, 1, dk(0.66));
-      P(c, fx + 1, fy + 3, 2, 1, '#d8e2ff'); P(c, fx + 5, fy + 3, 2, 1, '#d8e2ff');
-      P(c, fx + 2, fy + 3, 1, 1, '#3c5cb4'); P(c, fx + 5, fy + 3, 1, 1, '#3c5cb4');
-      P(c, fx + 3, fy + 3, 2, 2, dk(0.84)); P(c, fx + 3, fy + 4, 2, 1, dk(0.74));
-      P(c, fx + 1, fy + 4, 1, 3, dk(0.8)); P(c, fx + 6, fy + 4, 1, 3, dk(0.8));
-      P(c, fx + 2, fy + 5, 4, 1, dk(0.56));
-      for (let x = 2; x <= 5; x++) P(c, fx + x, fy + 6, 1, 2, x % 2 ? dk(0.7) : dk(0.95));
-      P(c, fx + 1, fy + 7, 6, 1, dk(0.78));
-      for (const f of ['right', 'left']) { const [x, y, ww] = L[f]; P(c, x, y + 2, ww, 1, dk(0.8)); P(c, x + Math.floor(ww / 2), y + 3, 1, 2, dk(0.82)); for (let i = 0; i < ww; i += 2) P(c, x + i, y + 6, 1, 2, dk(0.84)); }
-    } else if (part === 'body') {
-      // deep-blue armoured suit: gold collar sweeping to the shoulders, raised chest panels, gold belt
-      fill(st.shirt, 0.06);
-      const g = st.gold;
-      rows(0, 2, g); rows(2, 1, shadeNum(g, 0.75));
-      const mid = Math.floor(fw / 2);
-      for (let i = 0; i < 4; i++) { P(c, fx + mid - 1 - i, fy + 2 + i, 1, 1, hex(g)); P(c, fx + mid + i, fy + 2 + i, 1, 1, hex(g)); }
-      noise(c, fx + 2, fy + 5, mid - 3, 4, shadeNum(st.shirt, 1.18), 0.05, rnd); noise(c, fx + mid + 1, fy + 5, mid - 3, 4, shadeNum(st.shirt, 1.18), 0.05, rnd);
-      P(c, fx + mid, fy + 3, 1, h - 6, hex(shadeNum(st.shirt, 0.7)));
-      for (const f of ['right', 'left']) { const [x, y, ww] = L[f]; noise(c, x, y + 3, ww, h - 6, shadeNum(st.shirt, 0.78), 0.05, rnd); }
-      rows(h - 3, 2, g); rows(h - 1, 1, shadeNum(st.pants, 1));
-      P(c, fx + mid - 1, fy + h - 3, 3, 2, hex(shadeNum(g, 0.7)));
-    } else if (part === 'arm') {
-      // bare, heavily muscled arms
-      fill(sk, 0.06);
-      rows(2, 1, shadeNum(sk, 0.86)); rows(6, 1, shadeNum(sk, 0.9)); rows(9, 1, shadeNum(sk, 0.88));
-      for (const f of ['right', 'left']) { const [x, y, ww] = L[f]; P(c, x + 1, y + 3, ww - 2, 3, hex(shadeNum(sk, 1.08))); }
-      const [tx, ty, tw, th] = L.top; noise(c, tx, ty, tw, th, st.gold, 0.06, rnd);
-    } else if (part === 'leg') {
-      fill(st.pants, 0.07);
-      for (const f of ['right', 'left']) { const [x, y, ww] = L[f]; P(c, x + Math.floor(ww / 2), y, 1, h - 5, hex(shadeNum(st.pants, 0.7))); }
-      rows(h - 6, 1, st.gold); rows(h - 5, 5, st.boots); rows(h - 1, 1, shadeNum(st.boots, 0.7));
-      const [ox, oy, ow, oh] = L.bottom; noise(c, ox, oy, ow, oh, st.boots, 0.05, rnd);
-    }
-  } else if (classId === 'scout') {
+  if (classId === 'scout') {
     if (part === 'head') {
       fill(st.skin, 0.05);
       const [tx, ty, tw, th] = L.top; noise(c, tx, ty, tw, th, st.hair, 0.15, rnd);
@@ -795,7 +751,6 @@ function shadeNum(hexNum, f) {
 
 const overlayCache = new Map();
 function overlayTexture(classId, team, part, dims) {
-  if (classId === 'titan') return null; // armour is modelled in voxels instead
   const key = `${classId}|${team}|${part}`;
   if (!overlayCache.has(key)) overlayCache.set(key, paintOverlay(classId, team, part, dims));
   return overlayCache.get(key);
@@ -997,94 +952,9 @@ function accessories(classId, team, j, s, prop, cos) {
       A(j.torso, 0, -2.2, -(bd / 2 + 0.7), 4.4, 3.6, 0.5, vest); A(j.torso, 0, -3.9, -(bd / 2 + 0.7), 3.2, 0.6, 0.5, vest);
       break;
     }
-    case 'titan': {
-      const gold = 0xd2a63c, goldD = 0x9c7424, goldL = 0xf0cc6a;
-      // gold collar sweeping out into layered shoulder plates
-      A(j.torso, 0, bh - 0.5, -(bd / 2 + 0.35), bw - 2.4, 1.4, 0.7, gold);
-      A(j.torso, 0, bh - 0.5, bd / 2 + 0.35, bw - 2.4, 1.4, 0.7, gold);
-      A(j.torso, 0, bh + 0.25, 0, 5, 0.9, bd - 0.6, goldD);
-      for (const sx of [-1, 1]) {
-        A(j.torso, sx * (bw / 2 + 0.9), bh - 0.2, 0, 3.6, 1.6, bd + 1.4, gold);
-        A(j.torso, sx * (bw / 2 + 1.0), bh + 0.75, 0, 3.0, 0.7, bd + 0.6, goldL);
-        A(j.torso, sx * (bw / 2 + 1.2), bh - 1.4, 0, 2.8, 1.0, bd + 1.2, goldD);
-        // chest straps
-        A(j.torso, sx * (bw / 2 - 1.2), bh - 4.5, -(bd / 2 + 0.3), 1.2, 5, 0.5, 0x161c4c);
-      }
-      // raised chest plate and belt with a heavy buckle
-      A(j.torso, 0, bh - 5, -(bd / 2 + 0.3), bw - 5, 4, 0.5, 0x2c3a92);
-      A(j.torso, 0, 1.0, 0, bw + 0.8, 1.6, bd + 0.8, gold);
-      A(j.torso, 0, 1.0, -(bd / 2 + 0.6), 3.4, 2.2, 0.6, goldD);
-      A(j.torso, 0, 1.0, -(bd / 2 + 0.95), 1.6, 1.1, 0.2, goldL);
-      // knee guards and boot cuffs
-      for (const L of [j.legL, j.legR]) {
-        A(L, 0, -6.4, -(prop.leg[2] / 2 + 0.45), prop.leg[0] + 0.8, 3.4, 1.2, gold);
-        A(L, 0, -5.2, -(prop.leg[2] / 2 + 0.9), prop.leg[0] - 1.2, 1.2, 0.5, goldL);
-        A(L, 0, -(prop.leg[1] - 4.4), 0, prop.leg[0] + 0.7, 0.8, prop.leg[2] + 0.7, goldD);
-      }
-      // the gauntlet on the left hand
-      const gt = buildGauntlet(s);
-      gt.group.position.y = -(prop.arm[1] - prop.arm[0] / 2 - 1.8) * s;
-      j.armL.add(gt.group);
-      j.gauntlet = gt;
-      break;
-    }
     default:
   }
   return hat;
-}
-
-// ---------------------------------------------------------------- the Titan's gauntlet
-// Gold glove with six gem sockets (four knuckles, thumb, back of the hand). Built in skin pixels around
-// the centre of the fist: +Y up the arm, -Z the knuckles. Used by the third-person rig and the viewmodel.
-const GEM_SPOTS = {
-  space: [-1.95, -1.25, -3.2, 0.95, 0.95, 0.4], reality: [-0.65, -1.25, -3.2, 0.95, 0.95, 0.4],
-  power: [0.65, -1.25, -3.2, 0.95, 0.95, 0.4], soul: [1.95, -1.25, -3.2, 0.95, 0.95, 0.4],
-  time: [3.5, 0.3, -1.2, 0.4, 1.1, 1.1], mind: [-3.05, 0.25, 0, 0.4, 1.6, 1.6],
-};
-const socketMat = new THREE.MeshLambertMaterial({ color: 0x3a2a12 });
-const gemMats = new Map();
-export function gemMaterial(stone) {
-  if (!gemMats.has(stone)) gemMats.set(stone, new THREE.MeshBasicMaterial({ color: STONE_INFO[stone].color }));
-  return gemMats.get(stone);
-}
-export function buildGauntlet(s) {
-  const group = new THREE.Group();
-  let n = 0;
-  const B = (x, y, z, w, h, d, col) => {
-    const g = 0.012 * ((n++ % 11) + 1);
-    const m = new THREE.Mesh(boxGeo((w + g) * s, (h + g) * s, (d + g) * s), typeof col === 'number' ? colorMat(col) : col);
-    m.position.set(x * s, y * s, z * s);
-    m.castShadow = true;
-    group.add(m);
-    return m;
-  };
-  const gold = 0xe8b848, goldD = 0xb0842c, goldL = 0xffe08a;
-  B(0, 3.5, 0, 6.0, 2.4, 6.0, goldD);           // bracer
-  B(0, 3.5, -3.05, 4.2, 1.4, 0.3, goldL);
-  B(0, 0, 0, 5.8, 3.7, 5.8, gold);              // the hand
-  B(0, -1.25, -2.95, 5.4, 1.4, 0.5, goldD);     // knuckle ridge
-  for (let i = 0; i < 3; i++) B(-1.3 + 1.3 * i, -2.05, -2.98, 0.22, 1.7, 0.55, goldD);
-  B(3.0, 0.25, -1.2, 0.9, 2.8, 1.9, gold);      // thumb
-  B(-2.95, 1.6, 0, 0.4, 0.5, 4.4, goldL);       // plate edge on the back of the hand
-  const gems = {};
-  for (const st of STONES) { const [x, y, z, w, h, d] = GEM_SPOTS[st]; gems[st] = B(x, y, z, w, h, d, socketMat); }
-  const light = new THREE.PointLight(0xffffff, 0, 2.2 * Math.max(1, s / 0.07), 2);
-  light.position.set(0, -1, -4 * s);
-  group.add(light);
-  return { group, gems, light, mask: -1 };
-}
-// Light up the sockets for the gems the Titan holds; the glow grows with every gem.
-export function setGauntletStones(gt, mask, intensity = 1) {
-  if (!gt || gt.mask === mask) return;
-  gt.mask = mask;
-  let n = 0, last = null;
-  for (const [i, st] of STONES.entries()) {
-    const owned = !!(mask & (1 << i));
-    gt.gems[st].material = owned ? gemMaterial(st) : socketMat;
-    if (owned) { n++; last = st; }
-  }
-  gt.light.intensity = n ? (0.6 + n * 0.45) * intensity : 0;
-  gt.light.color.setHex(n === 6 ? 0xfff0d0 : last ? STONE_INFO[last].color : 0xffffff);
 }
 
 // Placeholder "weapon" for gloves (nothing in the hand, but a muzzle anchor for effects).
@@ -1152,8 +1022,6 @@ const ANIM_STYLES = {
   incinerator: { cadence: 2.0, stride: 0.8, lean: [0.16, 0.24], airLean: 0.08, bob: 0.04, sway: 0.03, twist: 0.09, arms: 0.7, jump: [-0.85, 0.55, 0.2], land: 0.4, fire: { kick: 0.2, torso: 0.02, decay: 6, sweep: 0.16 } },
   // loose swagger; launchers lob up and rock him back
   demolitionist: { cadence: 1.9, stride: 0.85, lean: [0.08, 0.18], airLean: 0.06, bob: 0.05, sway: 0.07, twist: 0.08, arms: 0.8, jump: [-0.7, 0.8, 0.3], land: 0.45, fire: { kick: 0.9, torso: 0.16, decay: 5, lift: 0.32 } },
-  // the Titan: slow, deliberate, ground-shaking steps
-  titan: { cadence: 1.4, stride: 0.6, lean: [0.05, 0.12], airLean: 0, bob: 0.05, stomp: true, sway: 0.06, twist: 0.05, arms: 0.5, jump: [-0.55, 0.3, 0.12], land: 0.65, fire: { kick: 0.3, torso: 0.06, decay: 6 } },
 };
 
 // ---------------------------------------------------------------- rig
@@ -1265,13 +1133,6 @@ export class CharacterRig {
     w.scale.setScalar(sc);
     this.weapon = w;
     this.j.handR.add(w);
-  }
-
-  // Titan only: which gems are in the gauntlet (bit mask in STONES order)
-  setStones(mask) { setGauntletStones(this.j.gauntlet, mask); }
-  gauntletWorld(out = new THREE.Vector3()) {
-    if (!this.j.gauntlet) return this.root.getWorldPosition(out);
-    return this.j.gauntlet.group.getWorldPosition(out);
   }
 
   muzzleWorld(out = new THREE.Vector3()) {
@@ -1547,11 +1408,6 @@ function poseAngles(id, t) {
     case 'warm': { const r = sn(t * 10) * 0.12; return pose(1.3 + r, 1.3 - r, -0.35, 0.35, { torso: 0.12, headX: 0.25 }); }
     case 'attention': return pose(2.6, 0.02, 0.95, 0.05, { headX: -0.12 });
     case 'detonate': { const d = (sn(t * 3) * 0.5 + 0.5); return pose(0.6 + d * 0.6, 0.6 + d * 0.6, -0.2, 0.2, { torso: 0.2 + d * 0.3, hop: (1 - d) * 0.8 }); }
-    // Titan: raise the completed gauntlet high for the Snap; push it forward to cast a gem power
-    case 'snap': return pose(0.3, 3.05 + sn(t * 30) * 0.02, -0.15, -0.3, { headX: -0.35, torso: 0.08 });
-    case 'cast': return pose(0.35, 1.65, -0.1, 0.12, { headX: 0.05 });
-    // grabbed: limbs flail while held up
-    case 'held': return pose(2.4 + sn(t * 14) * 0.5, 2.4 - sn(t * 14) * 0.5, 0.6, -0.6, { torso: 0.15 });
     default: return pose(0.2, 0.2, 0, 0);
   }
 }

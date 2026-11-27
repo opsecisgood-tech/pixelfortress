@@ -8,7 +8,6 @@ import { WEAPONS } from '../../shared/config/weapons.js';
 import { createMoveState, stepMovement, moveParamsFor, MOVE_SYNC_FIELDS } from '../../shared/movement.js';
 import { createWeaponState, stepWeapons, unpackWeaponState } from '../../shared/weaponLogic.js';
 import { lerp, lerpAngle } from '../../shared/math.js';
-import { TITAN, TFX } from '../../shared/config/titan.js';
 
 export class NetClient {
   constructor(transport, hello) {
@@ -135,9 +134,7 @@ export class NetClient {
     const before = [this.ms.x, this.ms.y, this.ms.z];
     this.applyServerState(me);
     this.pending = this.pending.filter((c) => c.seq > me.ack);
-    // grabbed / stunned / mind-controlled / controlling someone: the server drives this body, so show its
-    // state as-is instead of replaying local input on top of it
-    if (me.alive && !me.lock) {
+    if (me.alive) {
       for (const cmd of this.pending) this.predict(cmd, true);
       const ex = before[0] - this.ms.x, ey = before[1] - this.ms.y, ez = before[2] - this.ms.z;
       const err = Math.hypot(ex, ey, ez);
@@ -172,7 +169,6 @@ export class NetClient {
     if (this.me?.ry > 0) moveMult *= getClass('soldier').ability.rallyMoveMult;
     if (this.me?.adm?.speed) moveMult *= this.me.adm.speed;
     if (this.me?.sl > 0) moveMult *= getClass('juggernaut').ability.slowMult;
-    if (this.me?.fx & TFX.SAP) moveMult *= TITAN.soul.sapMove;
     return moveParamsFor(cls, { moveMult, frozen: this.latest?.ms === MATCH_STATE.PREROUND, canSprint: !(def.spinUp && w.spin > 0) });
   }
 
@@ -192,10 +188,6 @@ export class NetClient {
 
   predict(cmd, replay) {
     if (!this.world || !this.ws) return [];
-    if (this.me?.lock) return [];
-    // Time gem: this player's time runs faster or slower (the server scales the same way)
-    const ts = this.me?.ts ?? 1;
-    if (Math.abs(ts - 1) > 1e-3) cmd = { ...cmd, dt: cmd.dt * ts };
     stepMovement(this.ms, cmd, this.world, this.moveParams());
     const evs = stepWeapons(this.ws, cmd, this.weaponCtx());
     return replay ? [] : evs;

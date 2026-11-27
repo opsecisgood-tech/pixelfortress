@@ -478,51 +478,6 @@ export class AudioEngine {
     for (const [f, o] of seqs[kind] || []) this.tone(d, t + o, 0.22, { type: kind === 'defeat' ? 'triangle' : 'square', f, vol: 0.1 });
   }
 
-  // The Titan's gem powers. pos = world position (null = non-positional, e.g. your own gems).
-  titan(kind, pos, o = {}) {
-    if (!this.ready()) return;
-    const t = this.ctx.currentTime;
-    const d = this.out(pos, kind === 'snap' || kind === 'stone' ? 0.9 : 0.75);
-    const T = (dt, dur, opt) => this.tone(d, t + dt, dur, opt);
-    const N = (dt, dur, opt) => this.noise(d, t + dt, dur, opt);
-    switch (kind) {
-      case 'transform':
-        T(0, 1.4, { type: 'sawtooth', f: 55, f2: 110, vol: 0.22, attack: 0.05 }); T(0, 1.4, { type: 'square', f: 82, f2: 165, vol: 0.08, attack: 0.08 });
-        N(0, 1.2, { f: 300, f2: 2400, q: 0.8, vol: 0.35, attack: 0.1 }); [261, 392, 523, 784].forEach((f, i) => T(0.5 + i * 0.12, 0.6, { type: 'triangle', f, vol: 0.12 }));
-        break;
-      case 'revert': N(0, 0.8, { f: 2400, f2: 200, q: 0.8, vol: 0.3 }); T(0, 0.8, { type: 'sine', f: 330, f2: 110, vol: 0.2 }); break;
-      case 'stone': {
-        // a bright chime per gem: each gem has its own pitch
-        const base = [392, 262, 523, 330, 440, 294][o.idx ?? 0];
-        [1, 1.5, 2, 3].forEach((m, i) => T(i * 0.07, 1.2 - i * 0.15, { type: 'sine', f: base * m, vol: 0.18 / (i + 1) }));
-        T(0, 1.4, { type: 'triangle', f: base / 2, vol: 0.15, attack: 0.02 });
-        N(0, 0.6, { type: 'highpass', f: 5000, vol: 0.12, attack: 0.01 });
-        break;
-      }
-      case 'time': {
-        const up = (o.val ?? 1) > 1;
-        T(0, 0.9, { type: 'sine', f: up ? 300 : 900, f2: up ? 1200 : 220, vol: 0.2 }); T(0.05, 0.9, { type: 'triangle', f: up ? 450 : 1300, f2: up ? 1800 : 330, vol: 0.1 });
-        for (let i = 0; i < 6; i++) N(i * (up ? 0.08 : 0.16), 0.03, { type: 'highpass', f: 6000, vol: 0.1 });
-        break;
-      }
-      case 'mind': T(0, 1.1, { type: 'sine', f: 520, f2: 260, vol: 0.18, attack: 0.05 }); T(0, 1.1, { type: 'sine', f: 527, f2: 263, vol: 0.18, attack: 0.05 }); N(0, 0.9, { f: 1200, q: 6, vol: 0.12 }); break;
-      case 'punch': N(0, 0.35, { type: 'lowpass', f: 900, f2: 90, vol: 0.9 }); T(0, 0.4, { type: 'sine', f: 120, f2: 35, vol: 0.6 }); T(0.02, 0.5, { type: 'sawtooth', f: 220, f2: 60, vol: 0.12 }); break;
-      case 'grab': T(0, 0.6, { type: 'sawtooth', f: 90, f2: 140, vol: 0.12 }); N(0, 0.5, { f: 800, f2: 1600, q: 3, vol: 0.2 }); break;
-      case 'throw': N(0, 0.4, { f: 400, f2: 2000, q: 1, vol: 0.4 }); T(0, 0.3, { type: 'sine', f: 180, f2: 60, vol: 0.4 }); break;
-      case 'drop': N(0, 0.2, { f: 600, vol: 0.15 }); break;
-      case 'sample': T(0, 0.25, { type: 'square', f: 880, f2: 1320, vol: 0.06 }); T(0.08, 0.25, { type: 'square', f: 1320, f2: 1760, vol: 0.05 }); break;
-      case 'illusion': T(0, 0.6, { type: 'sine', f: 660, f2: 220, vol: 0.14 }); N(0, 0.4, { f: 3000, q: 4, vol: 0.12 }); break;
-      case 'shatter': N(0, 0.6, { type: 'highpass', f: 2500, vol: 0.5 }); for (let i = 0; i < 5; i++) T(i * 0.04, 0.2, { type: 'triangle', f: 1800 + Math.random() * 2000, vol: 0.08 }); T(0, 0.4, { type: 'sine', f: 200, f2: 60, vol: 0.3 }); break;
-      case 'portal': N(0, 0.9, { f: 200, f2: 1400, q: 2, vol: 0.3, attack: 0.1 }); T(0, 0.9, { type: 'sine', f: 110, f2: 220, vol: 0.2 }); break;
-      case 'warp': N(0, 0.45, { f: 3000, f2: 300, q: 1.5, vol: 0.45 }); T(0, 0.45, { type: 'sine', f: 880, f2: 110, vol: 0.2 }); break;
-      case 'soul': T(0, 2.0, { type: 'sine', f: 65, f2: 55, vol: 0.4, attack: 0.05 }); [196, 247, 294, 392].forEach((f, i) => T(0.1, 1.6, { type: 'triangle', f, vol: 0.07, attack: 0.25 + i * 0.05 })); N(0, 1.5, { f: 600, f2: 3000, q: 0.7, vol: 0.2, attack: 0.2 }); break;
-      case 'snapwind': T(0, 2.0, { type: 'sawtooth', f: 60, f2: 240, vol: 0.15, attack: 0.3 }); T(0, 2.0, { type: 'sine', f: 120, f2: 960, vol: 0.12, attack: 0.5 }); N(0, 1.9, { f: 400, f2: 6000, q: 0.6, vol: 0.2, attack: 0.6 }); break;
-      case 'snap': N(0, 0.06, { type: 'highpass', f: 3000, vol: 1.0, attack: 0.001 }); T(0, 0.08, { type: 'square', f: 2400, f2: 900, vol: 0.25 }); N(0.08, 2.5, { f: 2000, f2: 150, q: 0.5, vol: 0.35, attack: 0.05 }); T(0.1, 3, { type: 'sine', f: 55, f2: 30, vol: 0.4 }); break;
-      case 'dust': N(0, 1.6, { f: 3000, f2: 600, q: 0.4, vol: 0.25, attack: 0.2 }); break;
-      default:
-    }
-  }
-
   announce(text) {
     if (!this.settings.announcer || typeof speechSynthesis === 'undefined') return;
     try {
